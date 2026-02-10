@@ -21,24 +21,25 @@ async def _post_init(app: Application) -> None:
 
     # Set command menu (visible in Telegram UI).
     # Note: Telegram bot commands are not access-controlled by Telegram itself; handlers still enforce permissions.
+    # Show who can use which command in the command menu descriptions.
     commands = [
-        BotCommand("start", "Start the bot / open a link"),
-        BotCommand("getlink", "Generate normal/premium links (reply to message/file)"),
-        BotCommand("batch", "Create channel-post range batch links"),
-        BotCommand("custombatch", "Create batch by sending files, then generate links"),
-        BotCommand("addadmin", "Add an admin (owner only)"),
-        BotCommand("removeadmin", "Remove an admin (owner only)"),
-        BotCommand("addpremium", "Grant premium to a user"),
-        BotCommand("removepremium", "Remove premium from a user"),
-        BotCommand("gencode", "Generate one-time premium token"),
-        BotCommand("redeem", "Redeem token for premium"),
-        BotCommand("forcech", "Manage force-join channels"),
-        BotCommand("broadcast", "Broadcast a message to all users (reply + /broadcast)"),
-        BotCommand("stats", "View bot stats"),
-        BotCommand("setcaption", "Set default caption"),
-        BotCommand("removecaption", "Remove default caption"),
-        BotCommand("settime", "Auto-delete delivered files/messages after time"),
-        BotCommand("setstartimg", "Set image URL for /start welcome message"),
+        BotCommand("start", "Start / open link (User)"),
+        BotCommand("redeem", "Redeem token (User)"),
+        BotCommand("getlink", "Generate links (Admin/Owner)"),
+        BotCommand("batch", "Channel batch links (Admin/Owner)"),
+        BotCommand("custombatch", "Custom file batch (Admin/Owner)"),
+        BotCommand("addadmin", "Add admin (Owner)"),
+        BotCommand("removeadmin", "Remove admin (Owner)"),
+        BotCommand("addpremium", "Grant premium (Admin/Owner)"),
+        BotCommand("removepremium", "Remove premium (Admin/Owner)"),
+        BotCommand("gencode", "Generate token(s) (Admin/Owner)"),
+        BotCommand("forcech", "Force-join channels (Admin/Owner)"),
+        BotCommand("broadcast", "Broadcast message (Admin/Owner)"),
+        BotCommand("stats", "Bot stats (Admin/Owner)"),
+        BotCommand("setcaption", "Set default caption (Admin/Owner)"),
+        BotCommand("removecaption", "Remove caption (Admin/Owner)"),
+        BotCommand("settime", "Auto-delete delivered msgs (Admin/Owner)"),
+        BotCommand("setstartimg", "Set /start image URL (Admin/Owner)"),
     ]
     try:
         await app.bot.set_my_commands(commands)
