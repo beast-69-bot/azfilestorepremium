@@ -1,0 +1,135 @@
+# Admin-Controlled File Distribution Bot (Normal + Premium)
+
+Python Telegram bot that:
+- Stores files on Telegram (via `file_id`)
+- Generates two deep-links per file (Normal + Premium)
+- Enforces force-join channels on every access
+- Enforces premium gating in real time
+- Supports one-time tokens to grant 1-day premium
+- Supports batch links (Normal + Premium)
+- Adds a global default caption for link-delivered files
+
+No referral system.
+
+## Roles
+- Owner: full control, can add/remove admins, has all admin permissions
+- Admin: upload files, generate links, manage premium users, generate tokens, set/remove captions, broadcast, view stats
+- User: can access files only via generated links, must join required channels, can redeem tokens for premium
+
+## Core Access Rules
+- Each stored file has two different deep links (Normal and Premium).
+- Normal link: requires force-join; accessible by normal + premium users
+- Premium link: requires force-join + active premium; accessible only by premium users
+- Channel joining is mandatory for both link types.
+- Links can be forwarded, but access checks are enforced on every open (force-join + premium gating).
+
+## Setup (Windows / PowerShell)
+
+1. Create `.env` from `.env.example`
+2. Install deps:
+```powershell
+python -m venv .venv
+.\\.venv\\Scripts\\Activate.ps1
+pip install -r requirements.txt
+```
+3. Run:
+```powershell
+python main.py
+```
+
+## Environment Variables
+- `BOT_TOKEN`: BotFather token
+- `OWNER_ID`: your Telegram numeric user id
+- `LINK_SECRET`: reserved for future link signing/hardening; set to a long random string
+- `DB_PATH`: optional, defaults to `data/bot.db`
+
+## Command List
+- `/start` and deep links: user opens `https://t.me/<bot_username>?start=<code>`
+- `/getlink`
+- `/batch`
+- `/custombatch`
+- `/addadmin`
+- `/removeadmin`
+- `/addpremium`
+- `/removepremium`
+- `/gencode`
+- `/redeem`
+- `/forcech`
+- `/broadcast`
+- `/stats`
+- `/setcaption`
+- `/removecaption`
+
+## Usage (Owner/Admin)
+
+### Upload File (Fastest)
+1. Send any `document`/`video`/`audio`/`photo` to the bot in private chat (as Owner/Admin).
+2. Bot will save it and reply with two deep links (Normal + Premium).
+
+### /getlink
+- Reply to a file message: `/getlink`
+- Or use a stored id: `/getlink <file_id>`
+
+### /batch
+1. Send `/batch` to start batch mode.
+2. Send multiple files to the bot.
+3. Send `/batch` again to finalize and get one Normal link and one Premium link for the whole batch.
+
+### /custombatch
+1. Send `/custombatch`
+2. Tap buttons to select recent stored files
+3. Tap "Generate Links"
+
+### Admin Management (Owner Only)
+- `/addadmin <user_id>`
+- `/removeadmin <user_id>`
+
+### Premium Management
+- `/addpremium <user_id> [days]`
+- `/removepremium <user_id>`
+
+### Token System
+- Admin generates: `/gencode`
+- User redeems: `/redeem <token>`
+Token rules:
+- One-time use
+- Redeemable by one user only
+- Grants 1 day premium
+- Becomes invalid after use
+
+### Force Channels
+- `/forcech add <channel_id> [invite_link]`
+- `/forcech remove <channel_id>`
+- `/forcech list`
+
+Important:
+- The bot must be able to verify membership via `getChatMember`.
+- Add the bot to every required channel.
+- For channels where the bot cannot verify (missing permissions, not a member/admin, etc.), the bot will deny access (fail-closed).
+- For private channels, you should provide `invite_link` so users can join.
+
+### Caption System
+- Set default caption: `/setcaption <text>` (or reply to a text message with `/setcaption`)
+- Remove caption: `/removecaption`
+- Caption is automatically applied when sending files via any generated link (single or batch).
+
+### Broadcast
+- Reply to any message, then send `/broadcast`
+
+### Stats
+- `/stats`
+
+## Deployment Notes
+- This bot runs in polling mode by default (`main.py`).
+- For production VPS use, keep it running under a process manager (Windows Task Scheduler, NSSM, systemd on Linux).
+- Webhook mode is not implemented in this template; polling is simpler and reliable for most deployments.
+
+## Database
+SQLite at `DB_PATH` (default `data/bot.db`) stores:
+- Users and premium expiry
+- Admin list
+- Files (Telegram `file_id` based)
+- Links (deep-link codes for normal/premium and file/batch targets)
+- Tokens (one-time, premium grants)
+- Force channels
+- Caption setting
