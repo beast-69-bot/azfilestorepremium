@@ -76,6 +76,15 @@ class Database:
             );
             CREATE INDEX IF NOT EXISTS idx_files_unique ON files(file_unique_id);
 
+            CREATE TABLE IF NOT EXISTS messages (
+              id          INTEGER PRIMARY KEY AUTOINCREMENT,
+              from_chat_id INTEGER NOT NULL,
+              message_id  INTEGER NOT NULL,
+              added_by    INTEGER NOT NULL,
+              added_at    INTEGER NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_messages_src ON messages(from_chat_id, message_id);
+
             CREATE TABLE IF NOT EXISTS batches (
               id         INTEGER PRIMARY KEY AUTOINCREMENT,
               created_by INTEGER NOT NULL,
@@ -94,7 +103,7 @@ class Database:
 
             CREATE TABLE IF NOT EXISTS links (
               code         TEXT PRIMARY KEY,
-              target_type  TEXT NOT NULL, -- file|batch
+              target_type  TEXT NOT NULL, -- file|batch|msg
               target_id    INTEGER NOT NULL,
               access       TEXT NOT NULL, -- normal|premium
               created_by   INTEGER NOT NULL,
@@ -299,6 +308,33 @@ class Database:
         for r in rows:
             out.append({"id": int(r[0]), "file_type": r[1], "file_name": r[2], "added_at": int(r[3])})
         return out
+
+    # Messages (non-file content stored by reference for copy_message)
+    async def save_message(self, from_chat_id: int, message_id: int, added_by: int) -> int:
+        now = _now()
+        cur = await self.conn.execute(
+            "INSERT INTO messages(from_chat_id, message_id, added_by, added_at) VALUES(?, ?, ?, ?)",
+            (int(from_chat_id), int(message_id), int(added_by), now),
+        )
+        await self.conn.commit()
+        return int(cur.lastrowid)
+
+    async def get_message(self, msg_id: int) -> Optional[dict[str, Any]]:
+        cur = await self.conn.execute(
+            "SELECT id, from_chat_id, message_id, added_by, added_at FROM messages WHERE id=?",
+            (int(msg_id),),
+        )
+        row = await cur.fetchone()
+        await cur.close()
+        if not row:
+            return None
+        return {
+            "id": int(row[0]),
+            "from_chat_id": int(row[1]),
+            "message_id": int(row[2]),
+            "added_by": int(row[3]),
+            "added_at": int(row[4]),
+        }
 
     # Batches
     async def create_batch(self, created_by: int, file_ids: list[int]) -> int:

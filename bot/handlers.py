@@ -181,6 +181,23 @@ async def _deliver_by_code(update: Update, context: ContextTypes.DEFAULT_TYPE, c
         await db.mark_link_used(code)
         return
 
+    if link["target_type"] == "msg":
+        msg_row = await db.get_message(link["target_id"])
+        if not msg_row:
+            await chat.send_message("Message not found.")
+            return
+        try:
+            await context.bot.copy_message(
+                chat_id=chat.id,
+                from_chat_id=msg_row["from_chat_id"],
+                message_id=msg_row["message_id"],
+            )
+        except Exception:
+            await chat.send_message("Unable to deliver this message (it may have been deleted or inaccessible).")
+            return
+        await db.mark_link_used(code)
+        return
+
     await chat.send_message("Unsupported link type.")
 
 
@@ -264,6 +281,7 @@ async def getlink(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     db: Database = context.application.bot_data["db"]
     target_file_id: Optional[int] = None
+    target_msg_id: Optional[int] = None
 
     if update.effective_message and update.effective_message.reply_to_message:
         rmsg = update.effective_message.reply_to_message
@@ -277,6 +295,13 @@ async def getlink(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 file_name=media.get("file_name"),
                 added_by=update.effective_user.id,
             )
+        elif update.effective_user:
+            # Any other message type: store a reference and deliver via copy_message.
+            target_msg_id = await db.save_message(
+                from_chat_id=rmsg.chat_id,
+                message_id=rmsg.message_id,
+                added_by=update.effective_user.id,
+            )
 
     if target_file_id is None and context.args:
         try:
@@ -284,18 +309,21 @@ async def getlink(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         except ValueError:
             target_file_id = None
 
-    if target_file_id is None:
-        await update.effective_chat.send_message("Reply to a file or use /getlink <file_id>.")
-        return
-
-    if not await db.get_file(target_file_id):
-        await update.effective_chat.send_message("File not found.")
+    if target_file_id is None and target_msg_id is None:
+        await update.effective_chat.send_message("Reply to a message (file or normal message) or use /getlink <file_id>.")
         return
 
     normal_code = new_code()
     prem_code = new_code()
-    await db.create_link(normal_code, "file", target_file_id, "normal", update.effective_user.id)
-    await db.create_link(prem_code, "file", target_file_id, "premium", update.effective_user.id)
+    if target_file_id is not None:
+        if not await db.get_file(target_file_id):
+            await update.effective_chat.send_message("File not found.")
+            return
+        await db.create_link(normal_code, "file", target_file_id, "normal", update.effective_user.id)
+        await db.create_link(prem_code, "file", target_file_id, "premium", update.effective_user.id)
+    else:
+        await db.create_link(normal_code, "msg", target_msg_id, "normal", update.effective_user.id)
+        await db.create_link(prem_code, "msg", target_msg_id, "premium", update.effective_user.id)
 
     await update.effective_chat.send_message(
         f"Normal link: {_deep_link(context, normal_code)}\n"
