@@ -23,6 +23,20 @@ from bot.security import new_code, new_token
 DAY_SECONDS = 24 * 60 * 60
 MAX_CHANNEL_BATCH_POSTS = 200
 SETTINGS_AUTODELETE_SECONDS = "autodelete_seconds"
+SETTINGS_START_IMG_URL = "start_img_url"
+
+
+def _welcome_text() -> str:
+    return (
+        "🔐 *Secure File Access*\n"
+        "Normal + Premium content system.\n\n"
+        "📌 *How to use*\n"
+        "• Open the link you received (deep link)\n"
+        "• Join required channels when asked\n\n"
+        "⭐ *Premium*\n"
+        "• Redeem token: `/redeem <token>`\n\n"
+        "ℹ️ Note: Files can be accessed only via generated links."
+    )
 
 
 def _now() -> int:
@@ -213,17 +227,17 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.effective_user or not update.effective_chat:
         return
     if not args:
-        await update.effective_chat.send_message(
-            "🔐 *Secure File Access*\n"
-            "Normal + Premium content system.\n\n"
-            "📌 *How to use*\n"
-            "• Open the link you received (deep link)\n"
-            "• Join required channels when asked\n\n"
-            "⭐ *Premium*\n"
-            "• Redeem token: `/redeem <token>`\n\n"
-            "ℹ️ Note: Files can be accessed only via generated links.",
-            parse_mode="Markdown",
-        )
+        db: Database = context.application.bot_data["db"]
+        img_url = await db.get_setting(SETTINGS_START_IMG_URL)
+        text = _welcome_text()
+        if img_url:
+            try:
+                await update.effective_chat.send_photo(photo=img_url, caption=text, parse_mode="Markdown")
+                return
+            except Exception:
+                # Fallback to text-only if URL is invalid/unreachable.
+                pass
+        await update.effective_chat.send_message(text, parse_mode="Markdown")
         return
     code = args[0].strip()
     await _deliver_by_code(update, context, code)
@@ -1061,6 +1075,35 @@ async def settime(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.effective_chat.send_message(f"✅ Auto-delete enabled: messages will be deleted after `{seconds}` seconds.", parse_mode="Markdown")
 
 
+async def setstartimg(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await _upsert_user(update, context)
+    if not await _is_admin_or_owner(update, context):
+        await update.effective_chat.send_message("🚫 Access denied. (Admin/Owner only)")
+        return
+    if not context.args:
+        await update.effective_chat.send_message(
+            "🖼️ *Start Image*\n\n"
+            "Set an image URL that will be shown with `/start` message.\n\n"
+            "✅ Usage:\n"
+            "• `/setstartimg <image_url>`\n"
+            "• `/setstartimg off`",
+            parse_mode="Markdown",
+        )
+        return
+    raw = context.args[0].strip()
+    if raw.lower() in ("off", "remove", "none", "disable", "disabled"):
+        db: Database = context.application.bot_data["db"]
+        await db.set_setting(SETTINGS_START_IMG_URL, None)
+        await update.effective_chat.send_message("✅ Start image removed.")
+        return
+    if not (raw.startswith("https://") or raw.startswith("http://")):
+        await update.effective_chat.send_message("❌ Invalid URL. Must start with http:// or https://")
+        return
+    db: Database = context.application.bot_data["db"]
+    await db.set_setting(SETTINGS_START_IMG_URL, raw)
+    await update.effective_chat.send_message("✅ Start image set. Now `/start` will show the image.")
+
+
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     if not await _is_admin_or_owner(update, context):
@@ -1123,6 +1166,7 @@ def build_handlers(app: Application) -> None:
     app.add_handler(CommandHandler("setcaption", setcaption))
     app.add_handler(CommandHandler("removecaption", removecaption))
     app.add_handler(CommandHandler("settime", settime))
+    app.add_handler(CommandHandler("setstartimg", setstartimg))
 
     app.add_handler(CommandHandler("redeem", redeem))
 

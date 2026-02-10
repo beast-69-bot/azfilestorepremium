@@ -60,6 +60,7 @@ python main.py
 - `/setcaption`
 - `/removecaption`
 - `/settime`
+- `/setstartimg`
 
 ## Usage (Owner/Admin)
 
@@ -126,6 +127,10 @@ Important:
 ### Auto-Delete Delivered Messages
 - `/settime <seconds|5m|1h|off>`
 - When enabled, bot will auto-delete files/messages it delivers via links after the configured time.
+
+### Start Welcome Image
+- `/setstartimg <image_url|off>`
+- When set, the bot will show the image with the `/start` welcome message (text is sent as caption).
 
 ### Broadcast
 - Reply to any message, then send `/broadcast`
