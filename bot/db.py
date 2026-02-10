@@ -101,9 +101,19 @@ class Database:
             );
             CREATE INDEX IF NOT EXISTS idx_batch_items_batch ON batch_items(batch_id, ord);
 
+            CREATE TABLE IF NOT EXISTS channel_batches (
+              id          INTEGER PRIMARY KEY AUTOINCREMENT,
+              channel_id  INTEGER NOT NULL,
+              start_msg_id INTEGER NOT NULL,
+              end_msg_id  INTEGER NOT NULL,
+              created_by  INTEGER NOT NULL,
+              created_at  INTEGER NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_channel_batches_channel ON channel_batches(channel_id, start_msg_id, end_msg_id);
+
             CREATE TABLE IF NOT EXISTS links (
               code         TEXT PRIMARY KEY,
-              target_type  TEXT NOT NULL, -- file|batch|msg
+              target_type  TEXT NOT NULL, -- file|batch|msg|chbatch
               target_id    INTEGER NOT NULL,
               access       TEXT NOT NULL, -- normal|premium
               created_by   INTEGER NOT NULL,
@@ -354,6 +364,34 @@ class Database:
         rows = await cur.fetchall()
         await cur.close()
         return [int(r[0]) for r in rows]
+
+    # Channel batches (range of posts by message_id)
+    async def create_channel_batch(self, created_by: int, channel_id: int, start_msg_id: int, end_msg_id: int) -> int:
+        now = _now()
+        cur = await self.conn.execute(
+            "INSERT INTO channel_batches(channel_id, start_msg_id, end_msg_id, created_by, created_at) VALUES(?, ?, ?, ?, ?)",
+            (int(channel_id), int(start_msg_id), int(end_msg_id), int(created_by), now),
+        )
+        await self.conn.commit()
+        return int(cur.lastrowid)
+
+    async def get_channel_batch(self, batch_id: int) -> Optional[dict[str, Any]]:
+        cur = await self.conn.execute(
+            "SELECT id, channel_id, start_msg_id, end_msg_id, created_by, created_at FROM channel_batches WHERE id=?",
+            (int(batch_id),),
+        )
+        row = await cur.fetchone()
+        await cur.close()
+        if not row:
+            return None
+        return {
+            "id": int(row[0]),
+            "channel_id": int(row[1]),
+            "start_msg_id": int(row[2]),
+            "end_msg_id": int(row[3]),
+            "created_by": int(row[4]),
+            "created_at": int(row[5]),
+        }
 
     # Links
     async def create_link(self, code: str, target_type: str, target_id: int, access: str, created_by: int) -> None:

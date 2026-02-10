@@ -71,9 +71,15 @@ python main.py
 - Or use a stored id: `/getlink <file_id>`
 
 ### /batch
-1. Send `/batch` to start batch mode.
-2. Send multiple files to the bot.
-3. Send `/batch` again to finalize and get one Normal link and one Premium link for the whole batch.
+Channel post range batch:
+1. Send `/batch`
+2. Bot will ask for the STARTING channel post link (example `https://t.me/<channel>/123` or `https://t.me/c/<id>/123`)
+3. Send the ENDING channel post link
+4. Bot verifies it is admin in that channel, then generates 2 links:
+   - Normal batch link (force-join required)
+   - Premium batch link (force-join + premium required)
+
+Cancel: `/batch cancel`
 
 ### /custombatch
 1. Send `/custombatch`

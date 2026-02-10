@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import asyncio
 import time
 from typing import Any, Optional
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ChatMemberStatus
+from telegram.error import RetryAfter
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
@@ -19,6 +21,7 @@ from bot.security import new_code, new_token
 
 
 DAY_SECONDS = 24 * 60 * 60
+MAX_CHANNEL_BATCH_POSTS = 200
 
 
 def _now() -> int:
@@ -98,6 +101,64 @@ async def _send_file(chat_id: int, file_row: dict[str, Any], caption: Optional[s
         await context.bot.send_photo(chat_id=chat_id, photo=fid, caption=caption)
     else:
         await context.bot.send_document(chat_id=chat_id, document=fid, caption=caption)
+
+async def _bot_is_admin(chat_id: int, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    try:
+        me = await context.bot.get_me()
+        member = await context.bot.get_chat_member(chat_id=chat_id, user_id=me.id)
+        return member.status in (ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.OWNER)
+    except Exception:
+        return False
+
+
+def _parse_tme_post_link(raw: str) -> Optional[dict[str, Any]]:
+    """
+    Supported:
+      - https://t.me/<username>/<msg_id>
+      - https://t.me/c/<internal_id>/<msg_id>  (private channels/groups)
+    Returns: {"chat": <username|chat_id:int>, "msg_id": int}
+    """
+    s = (raw or "").strip()
+    if "t.me/" not in s:
+        return None
+    # normalize
+    s = s.replace("http://", "https://")
+    try:
+        after = s.split("t.me/", 1)[1]
+    except Exception:
+        return None
+    after = after.split("?", 1)[0].strip("/")
+    parts = after.split("/")
+    if len(parts) < 2:
+        return None
+
+    if parts[0] == "c" and len(parts) >= 3:
+        # /c/<internal_id>/<msg_id>
+        internal_id = parts[1]
+        mid = parts[2]
+        if not internal_id.isdigit() or not mid.isdigit():
+            return None
+        chat_id = int(f"-100{internal_id}")
+        return {"chat": chat_id, "msg_id": int(mid)}
+
+    # /<username>/<msg_id>
+    username = parts[0]
+    mid = parts[1]
+    if not mid.isdigit():
+        return None
+    return {"chat": username, "msg_id": int(mid)}
+
+
+async def _resolve_chat_id(chat_ref: Any, context: ContextTypes.DEFAULT_TYPE) -> Optional[int]:
+    if isinstance(chat_ref, int):
+        return chat_ref
+    if isinstance(chat_ref, str) and chat_ref:
+        try:
+            chat = await context.bot.get_chat(chat_ref)
+            return int(chat.id)
+        except Exception:
+            return None
+    return None
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -198,6 +259,35 @@ async def _deliver_by_code(update: Update, context: ContextTypes.DEFAULT_TYPE, c
         await db.mark_link_used(code)
         return
 
+    if link["target_type"] == "chbatch":
+        chb = await db.get_channel_batch(link["target_id"])
+        if not chb:
+            await chat.send_message("Batch not found.")
+            return
+        if not await _bot_is_admin(chb["channel_id"], context):
+            await chat.send_message("Bot is not admin in the source channel. Ask admin to add the bot as admin, then try again.")
+            return
+        start_id = int(chb["start_msg_id"])
+        end_id = int(chb["end_msg_id"])
+        total = end_id - start_id + 1
+        if total <= 0 or total > MAX_CHANNEL_BATCH_POSTS:
+            await chat.send_message("Batch range invalid or too large.")
+            return
+        for mid in range(start_id, end_id + 1):
+            try:
+                await context.bot.copy_message(chat_id=chat.id, from_chat_id=chb["channel_id"], message_id=mid)
+            except RetryAfter as e:
+                await asyncio.sleep(float(getattr(e, "retry_after", 1.0)))
+                try:
+                    await context.bot.copy_message(chat_id=chat.id, from_chat_id=chb["channel_id"], message_id=mid)
+                except Exception:
+                    pass
+            except Exception:
+                # Skip missing/deleted/inaccessible posts silently to keep batches usable.
+                pass
+        await db.mark_link_used(code)
+        return
+
     await chat.send_message("Unsupported link type.")
 
 
@@ -245,9 +335,6 @@ async def admin_media_ingest(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if not media or not update.effective_chat or not update.effective_user:
         return
     db: Database = context.application.bot_data["db"]
-
-    # If batch mode is active, only collect files (do not generate links).
-    state = context.user_data.get("batch_state")
     file_db_id = await db.save_file(
         tg_file_id=media["file_id"],
         file_unique_id=media.get("unique_id"),
@@ -255,11 +342,6 @@ async def admin_media_ingest(update: Update, context: ContextTypes.DEFAULT_TYPE)
         file_name=media.get("file_name"),
         added_by=update.effective_user.id,
     )
-
-    if state is not None:
-        state.setdefault("file_ids", []).append(file_db_id)
-        await update.effective_chat.send_message(f"Added to batch: `{file_db_id}`")
-        return
 
     normal_code = new_code()
     prem_code = new_code()
@@ -339,31 +421,89 @@ async def batch(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.effective_chat or not update.effective_user:
         return
 
-    state = context.user_data.get("batch_state")
-    if not state:
-        context.user_data["batch_state"] = {"file_ids": []}
-        await update.effective_chat.send_message(
-            "Batch mode started. Send files now, then send /batch again to generate the links."
-        )
+    if context.args and context.args[0].lower() == "cancel":
+        context.user_data.pop("chbatch_state", None)
+        await update.effective_chat.send_message("Batch cancelled.")
         return
 
-    file_ids = state.get("file_ids") or []
-    if not file_ids:
-        context.user_data.pop("batch_state", None)
-        await update.effective_chat.send_message("Batch cancelled (no files).")
+    # Channel-range batch (start/end post links).
+    context.user_data["chbatch_state"] = {"step": "start"}
+    await update.effective_chat.send_message(
+        "Send the STARTING channel post link.\n"
+        "Example: https://t.me/channelusername/123 or https://t.me/c/123456789/123\n"
+        "Cancel: /batch cancel"
+    )
+
+
+async def batch_link_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    # Handles the link inputs for /batch channel-range creation.
+    if not update.effective_message or not update.effective_user or not update.effective_chat:
+        return
+    state = context.user_data.get("chbatch_state")
+    if not state:
+        return
+    if not await _is_admin_or_owner(update, context):
+        return
+
+    text = (update.effective_message.text or "").strip()
+    parsed = _parse_tme_post_link(text)
+    if not parsed:
+        await update.effective_chat.send_message("Invalid link. Send a valid t.me post link, or /batch cancel.")
+        return
+
+    chat_id = await _resolve_chat_id(parsed["chat"], context)
+    if chat_id is None:
+        await update.effective_chat.send_message("Could not resolve channel from link. Make sure the link is correct and the bot can access the channel.")
+        return
+
+    msg_id = int(parsed["msg_id"])
+    if msg_id <= 0:
+        await update.effective_chat.send_message("Invalid message id in link.")
+        return
+
+    if state.get("step") == "start":
+        state["channel_id"] = int(chat_id)
+        state["start_msg_id"] = int(msg_id)
+        state["step"] = "end"
+        await update.effective_chat.send_message("Now send the ENDING channel post link.")
+        return
+
+    if state.get("step") != "end":
+        context.user_data.pop("chbatch_state", None)
+        await update.effective_chat.send_message("Batch state corrupted. Run /batch again.")
+        return
+
+    if int(chat_id) != int(state.get("channel_id", 0)):
+        await update.effective_chat.send_message("Start and end links must be from the same channel.")
+        return
+
+    start_id = int(state["start_msg_id"])
+    end_id = int(msg_id)
+    if end_id < start_id:
+        await update.effective_chat.send_message("End link must be after start link.")
+        return
+
+    total = end_id - start_id + 1
+    if total > MAX_CHANNEL_BATCH_POSTS:
+        await update.effective_chat.send_message(f"Range too large. Max allowed posts: {MAX_CHANNEL_BATCH_POSTS}.")
+        return
+
+    if not await _bot_is_admin(int(chat_id), context):
+        context.user_data.pop("chbatch_state", None)
+        await update.effective_chat.send_message("Bot is not admin in that channel. First make the bot admin, then run /batch again.")
         return
 
     db: Database = context.application.bot_data["db"]
-    batch_id = await db.create_batch(update.effective_user.id, file_ids)
-    context.user_data.pop("batch_state", None)
+    chbatch_id = await db.create_channel_batch(update.effective_user.id, int(chat_id), start_id, end_id)
 
     normal_code = new_code()
     prem_code = new_code()
-    await db.create_link(normal_code, "batch", batch_id, "normal", update.effective_user.id)
-    await db.create_link(prem_code, "batch", batch_id, "premium", update.effective_user.id)
+    await db.create_link(normal_code, "chbatch", chbatch_id, "normal", update.effective_user.id)
+    await db.create_link(prem_code, "chbatch", chbatch_id, "premium", update.effective_user.id)
 
+    context.user_data.pop("chbatch_state", None)
     await update.effective_chat.send_message(
-        f"Batch created (ID `{batch_id}`, {len(file_ids)} files)\n"
+        f"Channel batch created ({total} posts)\n"
         f"Normal link: {_deep_link(context, normal_code)}\n"
         f"Premium link: {_deep_link(context, prem_code)}"
     )
@@ -679,6 +819,9 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 def build_handlers(app: Application) -> None:
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(recheck_callback, pattern=r"^(recheck:|noop)"))
+
+    # /batch uses non-command text inputs (start/end post links).
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, batch_link_input), group=0)
 
     app.add_handler(CommandHandler("getlink", getlink))
     app.add_handler(CommandHandler("batch", batch))
