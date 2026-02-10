@@ -233,3 +233,13 @@ SQLite at `DB_PATH` (default `data/bot.db`) stores:
 - Tokens (one-time, premium grants)
 - Force channels
 - Caption setting
+
+## Welcome Banner (1:1)
+Square welcome banner SVG:
+- `assets/welcome_banner.svg`
+
+Export to PNG (1024x1024) examples:
+```bash
+# Linux (Inkscape)
+inkscape assets/welcome_banner.svg --export-type=png --export-filename=assets/welcome_banner.png --export-width=1024 --export-height=1024
+```
