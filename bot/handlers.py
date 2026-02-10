@@ -343,6 +343,24 @@ async def admin_media_ingest(update: Update, context: ContextTypes.DEFAULT_TYPE)
         added_by=update.effective_user.id,
     )
 
+    # If custombatch mode is active, only collect files and show a confirmation prompt.
+    cb_state = context.user_data.get("custombatch_state")
+    if cb_state is not None:
+        cb_state.setdefault("file_ids", []).append(file_db_id)
+        prev_prompt = cb_state.get("prompt_message_id")
+        if prev_prompt:
+            try:
+                await context.bot.delete_message(chat_id=update.effective_chat.id, message_id=int(prev_prompt))
+            except Exception:
+                pass
+        count = len(cb_state.get("file_ids") or [])
+        msg = await update.effective_chat.send_message(
+            f"{count} file save ho gayi.\nLink generate karu ya process cancel karu?",
+            reply_markup=_custombatch_prompt_keyboard(),
+        )
+        cb_state["prompt_message_id"] = msg.message_id
+        return
+
     normal_code = new_code()
     prem_code = new_code()
     await db.create_link(normal_code, "file", file_db_id, "normal", update.effective_user.id)
@@ -519,25 +537,20 @@ async def custombatch(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     if not await _is_admin_or_owner(update, context):
         await update.effective_chat.send_message("Not allowed.")
         return
-    db: Database = context.application.bot_data["db"]
-    files = await db.list_recent_files(limit=15)
-    context.user_data["custom_sel"] = set()
-    await update.effective_chat.send_message(
-        "Select files for Custom Batch:",
-        reply_markup=_custombatch_keyboard(files, set()),
+    # Start a temporary "collect files" flow.
+    context.user_data["custombatch_state"] = {"file_ids": [], "prompt_message_id": None}
+    await update.effective_chat.send_message("Files / media bhejo. Main unko custom batch me add karta rahunga.")
+
+
+def _custombatch_prompt_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton(text="Generate Link", callback_data="cbgen"),
+                InlineKeyboardButton(text="Cancel Process", callback_data="cbcancel"),
+            ]
+        ]
     )
-
-
-def _custombatch_keyboard(files: list[dict[str, Any]], selected: set[int]) -> InlineKeyboardMarkup:
-    rows: list[list[InlineKeyboardButton]] = []
-    for f in files:
-        fid = int(f["id"])
-        name = f.get("file_name") or f.get("file_type") or "file"
-        action = "Remove" if fid in selected else "Add"
-        rows.append([InlineKeyboardButton(text=f"{action} #{fid} ({name})", callback_data=f"cbsel:{fid}")])
-    rows.append([InlineKeyboardButton(text="Generate Links", callback_data="cbdone")])
-    rows.append([InlineKeyboardButton(text="Cancel", callback_data="cbcancel")])
-    return InlineKeyboardMarkup(rows)
 
 
 async def custombatch_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -549,41 +562,42 @@ async def custombatch_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         await q.edit_message_text("Not allowed.")
         return
 
-    db: Database = context.application.bot_data["db"]
-    selected: set[int] = context.user_data.get("custom_sel") or set()
     data = q.data or ""
-
-    if data.startswith("cbsel:"):
-        fid = int(data.split(":", 1)[1])
-        if fid in selected:
-            selected.remove(fid)
-        else:
-            selected.add(fid)
-        context.user_data["custom_sel"] = selected
-        files = await db.list_recent_files(limit=15)
-        await q.edit_message_reply_markup(reply_markup=_custombatch_keyboard(files, selected))
+    state = context.user_data.get("custombatch_state")
+    if not state:
+        try:
+            await q.edit_message_text("No active custom batch. Use /custombatch first.")
+        except Exception:
+            pass
         return
 
     if data == "cbcancel":
-        context.user_data.pop("custom_sel", None)
-        await q.edit_message_text("Custom batch cancelled.")
+        context.user_data.pop("custombatch_state", None)
+        try:
+            await q.delete_message()
+        except Exception:
+            try:
+                await q.edit_message_text("Custom batch cancelled.")
+            except Exception:
+                pass
         return
 
-    if data == "cbdone":
-        if not selected:
-            await q.edit_message_text("No files selected.")
+    if data == "cbgen":
+        file_ids = state.get("file_ids") or []
+        if not file_ids:
+            await q.edit_message_text("No files received yet. Send files first, or cancel.")
             return
-        file_ids = sorted(list(selected))
-        batch_id = await db.create_batch(update.effective_user.id, file_ids)
-        context.user_data.pop("custom_sel", None)
+        db: Database = context.application.bot_data["db"]
+        batch_id = await db.create_batch(update.effective_user.id, list(file_ids))
 
         normal_code = new_code()
         prem_code = new_code()
         await db.create_link(normal_code, "batch", batch_id, "normal", update.effective_user.id)
         await db.create_link(prem_code, "batch", batch_id, "premium", update.effective_user.id)
 
+        context.user_data.pop("custombatch_state", None)
         await q.edit_message_text(
-            f"Custom batch created (ID `{batch_id}`, {len(file_ids)} files)\n"
+            f"Custom batch created ({len(file_ids)} files)\n"
             f"Normal link: {_deep_link(context, normal_code)}\n"
             f"Premium link: {_deep_link(context, prem_code)}"
         )
@@ -826,7 +840,7 @@ def build_handlers(app: Application) -> None:
     app.add_handler(CommandHandler("getlink", getlink))
     app.add_handler(CommandHandler("batch", batch))
     app.add_handler(CommandHandler("custombatch", custombatch))
-    app.add_handler(CallbackQueryHandler(custombatch_callback, pattern=r"^(cbsel:\d+|cbdone|cbcancel)$"))
+    app.add_handler(CallbackQueryHandler(custombatch_callback, pattern=r"^(cbgen|cbcancel)$"))
     app.add_handler(CommandHandler("addadmin", addadmin))
     app.add_handler(CommandHandler("removeadmin", removeadmin))
     app.add_handler(CommandHandler("addpremium", addpremium))

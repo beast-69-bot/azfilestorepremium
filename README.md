@@ -83,8 +83,11 @@ Cancel: `/batch cancel`
 
 ### /custombatch
 1. Send `/custombatch`
-2. Tap buttons to select recent stored files
-3. Tap "Generate Links"
+2. Bot will say: "Files / media bhejo..."
+3. Send multiple files/media to the bot
+4. After each file, bot shows a confirmation message with buttons:
+   - "Generate Link" to finalize and generate Normal + Premium batch links
+   - "Cancel Process" to cancel and clear the temporary list
 
 ### Admin Management (Owner Only)
 - `/addadmin <user_id>`
