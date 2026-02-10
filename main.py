@@ -1,7 +1,7 @@
 import logging
 
 from dotenv import load_dotenv
-from telegram import LinkPreviewOptions
+from telegram import BotCommand, LinkPreviewOptions
 from telegram.ext import Application, Defaults
 
 from bot.config import Config
@@ -18,6 +18,30 @@ async def _post_init(app: Application) -> None:
 
     me = await app.bot.get_me()
     app.bot_data["bot_username"] = me.username
+
+    # Set command menu (visible in Telegram UI).
+    # Note: Telegram bot commands are not access-controlled by Telegram itself; handlers still enforce permissions.
+    commands = [
+        BotCommand("start", "Start the bot / open a link"),
+        BotCommand("getlink", "Generate normal/premium links (reply to message/file)"),
+        BotCommand("batch", "Create channel-post range batch links"),
+        BotCommand("custombatch", "Create batch by sending files, then generate links"),
+        BotCommand("addadmin", "Add an admin (owner only)"),
+        BotCommand("removeadmin", "Remove an admin (owner only)"),
+        BotCommand("addpremium", "Grant premium to a user"),
+        BotCommand("removepremium", "Remove premium from a user"),
+        BotCommand("gencode", "Generate one-time premium token"),
+        BotCommand("redeem", "Redeem token for premium"),
+        BotCommand("forcech", "Manage force-join channels"),
+        BotCommand("broadcast", "Broadcast a message to all users (reply + /broadcast)"),
+        BotCommand("stats", "View bot stats"),
+        BotCommand("setcaption", "Set default caption"),
+        BotCommand("removecaption", "Remove default caption"),
+    ]
+    try:
+        await app.bot.set_my_commands(commands)
+    except Exception as e:
+        logging.getLogger(__name__).warning("Failed to set bot commands: %r", e)
 
 
 async def _post_shutdown(app: Application) -> None:
