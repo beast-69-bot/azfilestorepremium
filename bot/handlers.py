@@ -79,10 +79,10 @@ def _join_keyboard(channels: list[dict[str, Any]], recheck_code: str) -> InlineK
         if not url and ch.get("username"):
             url = f"https://t.me/{ch['username']}"
         if url:
-            rows.append([InlineKeyboardButton(text=f"Join: {title}", url=url)])
+            rows.append([InlineKeyboardButton(text=f"📣 Join: {title}", url=url)])
         else:
-            rows.append([InlineKeyboardButton(text=f"Required: {title}", callback_data="noop")])
-    rows.append([InlineKeyboardButton(text="I've Joined (Recheck)", callback_data=f"recheck:{recheck_code}")])
+            rows.append([InlineKeyboardButton(text=f"🔒 Required: {title}", callback_data="noop")])
+    rows.append([InlineKeyboardButton(text="✅ I've Joined (Recheck)", callback_data=f"recheck:{recheck_code}")])
     return InlineKeyboardMarkup(rows)
 
 
@@ -168,8 +168,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
     if not args:
         await update.effective_chat.send_message(
-            "Access files only via generated links.\n"
-            "Redeem premium token: /redeem <token>"
+            "🔐 *Secure File Access*\n"
+            "Normal + Premium content system.\n\n"
+            "📌 *How to use*\n"
+            "• Open the link you received (deep link)\n"
+            "• Join required channels when asked\n\n"
+            "⭐ *Premium*\n"
+            "• Redeem token: `/redeem <token>`\n\n"
+            "ℹ️ Note: Files can be accessed only via generated links.",
+            parse_mode="Markdown",
         )
         return
     code = args[0].strip()
@@ -201,19 +208,27 @@ async def _deliver_by_code(update: Update, context: ContextTypes.DEFAULT_TYPE, c
 
     link = await db.get_link(code)
     if not link:
-        await chat.send_message("Invalid link.")
+        await chat.send_message("❌ Invalid or expired link.")
         return
 
     ok_join, channels = await _joined_all_force_channels(user.id, context)
     if not ok_join:
         await chat.send_message(
-            "You must join all required channels to access this content.",
+            "🚫 *Access Locked*\n\n"
+            "You must join all required channels to continue.\n"
+            "After joining, tap *Recheck* ✅.",
+            parse_mode="Markdown",
             reply_markup=_join_keyboard(channels, code),
         )
         return
 
     if link["access"] == "premium" and not await db.is_premium_active(user.id):
-        await chat.send_message("Premium required for this link. Redeem a token with /redeem <token>.")
+        await chat.send_message(
+            "⭐ *Premium Required*\n\n"
+            "This link is for premium users only.\n"
+            "Redeem a token: `/redeem <token>`",
+            parse_mode="Markdown",
+        )
         return
 
     caption = await db.get_setting("caption")
@@ -221,7 +236,7 @@ async def _deliver_by_code(update: Update, context: ContextTypes.DEFAULT_TYPE, c
     if link["target_type"] == "file":
         file_row = await db.get_file(link["target_id"])
         if not file_row:
-            await chat.send_message("File not found.")
+            await chat.send_message("❌ File not found (may have been removed).")
             return
         await _send_file(chat.id, file_row, caption, context)
         await db.mark_link_used(code)
@@ -230,10 +245,10 @@ async def _deliver_by_code(update: Update, context: ContextTypes.DEFAULT_TYPE, c
     if link["target_type"] == "batch":
         file_ids = await db.get_batch_file_ids(link["target_id"])
         if not file_ids:
-            await chat.send_message("Batch is empty.")
+            await chat.send_message("❌ Batch is empty.")
             return
         if len(file_ids) > 100:
-            await chat.send_message("Batch too large.")
+            await chat.send_message("⚠️ Batch too large to deliver.")
             return
         for fid in file_ids:
             file_row = await db.get_file(fid)
@@ -245,7 +260,7 @@ async def _deliver_by_code(update: Update, context: ContextTypes.DEFAULT_TYPE, c
     if link["target_type"] == "msg":
         msg_row = await db.get_message(link["target_id"])
         if not msg_row:
-            await chat.send_message("Message not found.")
+            await chat.send_message("❌ Message not found (may have been removed).")
             return
         try:
             await context.bot.copy_message(
@@ -254,7 +269,7 @@ async def _deliver_by_code(update: Update, context: ContextTypes.DEFAULT_TYPE, c
                 message_id=msg_row["message_id"],
             )
         except Exception:
-            await chat.send_message("Unable to deliver this message (it may have been deleted or inaccessible).")
+            await chat.send_message("❌ Unable to deliver this message (deleted or inaccessible).")
             return
         await db.mark_link_used(code)
         return
@@ -262,16 +277,16 @@ async def _deliver_by_code(update: Update, context: ContextTypes.DEFAULT_TYPE, c
     if link["target_type"] == "chbatch":
         chb = await db.get_channel_batch(link["target_id"])
         if not chb:
-            await chat.send_message("Batch not found.")
+            await chat.send_message("❌ Batch not found.")
             return
         if not await _bot_is_admin(chb["channel_id"], context):
-            await chat.send_message("Bot is not admin in the source channel. Ask admin to add the bot as admin, then try again.")
+            await chat.send_message("🚫 Bot is not admin in the source channel.\n\nPehle bot ko admin banao, phir try karo.")
             return
         start_id = int(chb["start_msg_id"])
         end_id = int(chb["end_msg_id"])
         total = end_id - start_id + 1
         if total <= 0 or total > MAX_CHANNEL_BATCH_POSTS:
-            await chat.send_message("Batch range invalid or too large.")
+            await chat.send_message("⚠️ Batch range invalid or too large.")
             return
         for mid in range(start_id, end_id + 1):
             try:
@@ -288,7 +303,7 @@ async def _deliver_by_code(update: Update, context: ContextTypes.DEFAULT_TYPE, c
         await db.mark_link_used(code)
         return
 
-    await chat.send_message("Unsupported link type.")
+    await chat.send_message("❌ Unsupported link type.")
 
 
 def _extract_media_file(update: Update) -> Optional[dict[str, str]]:
@@ -355,7 +370,8 @@ async def admin_media_ingest(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 pass
         count = len(cb_state.get("file_ids") or [])
         msg = await update.effective_chat.send_message(
-            f"{count} file save ho gayi.\nLink generate karu ya process cancel karu?",
+            f"✅ *{count}* file save ho gayi.\n\nLink generate karu ya process cancel karu?",
+            parse_mode="Markdown",
             reply_markup=_custombatch_prompt_keyboard(),
         )
         cb_state["prompt_message_id"] = msg.message_id
@@ -367,16 +383,20 @@ async def admin_media_ingest(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await db.create_link(prem_code, "file", file_db_id, "premium", update.effective_user.id)
 
     await update.effective_chat.send_message(
-        f"Saved file as ID `{file_db_id}`\n"
-        f"Normal link: {_deep_link(context, normal_code)}\n"
-        f"Premium link: {_deep_link(context, prem_code)}"
+        "✅ *File Saved Successfully*\n\n"
+        f"🆔 File ID: `{file_db_id}`\n\n"
+        "🔓 *Normal Link:*\n"
+        f"{_deep_link(context, normal_code)}\n\n"
+        "⭐ *Premium Link:*\n"
+        f"{_deep_link(context, prem_code)}",
+        parse_mode="Markdown",
     )
 
 
 async def getlink(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     if not await _is_admin_or_owner(update, context):
-        await update.effective_chat.send_message("Not allowed.")
+        await update.effective_chat.send_message("🚫 Access denied. (Admin/Owner only)")
         return
 
     db: Database = context.application.bot_data["db"]
@@ -410,14 +430,19 @@ async def getlink(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             target_file_id = None
 
     if target_file_id is None and target_msg_id is None:
-        await update.effective_chat.send_message("Reply to a message (file or normal message) or use /getlink <file_id>.")
+        await update.effective_chat.send_message(
+            "ℹ️ *How to use /getlink*\n\n"
+            "1) Reply to any message/file and send `/getlink`\n"
+            "2) Or use: `/getlink <file_id>`",
+            parse_mode="Markdown",
+        )
         return
 
     normal_code = new_code()
     prem_code = new_code()
     if target_file_id is not None:
         if not await db.get_file(target_file_id):
-            await update.effective_chat.send_message("File not found.")
+            await update.effective_chat.send_message("❌ File not found.")
             return
         await db.create_link(normal_code, "file", target_file_id, "normal", update.effective_user.id)
         await db.create_link(prem_code, "file", target_file_id, "premium", update.effective_user.id)
@@ -426,8 +451,12 @@ async def getlink(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await db.create_link(prem_code, "msg", target_msg_id, "premium", update.effective_user.id)
 
     await update.effective_chat.send_message(
-        f"Normal link: {_deep_link(context, normal_code)}\n"
-        f"Premium link: {_deep_link(context, prem_code)}"
+        "✅ *Links Generated*\n\n"
+        "🔓 *Normal Link:*\n"
+        f"{_deep_link(context, normal_code)}\n\n"
+        "⭐ *Premium Link:*\n"
+        f"{_deep_link(context, prem_code)}",
+        parse_mode="Markdown",
     )
 
 
@@ -612,11 +641,17 @@ async def batch_ingest(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 async def custombatch(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     if not await _is_admin_or_owner(update, context):
-        await update.effective_chat.send_message("Not allowed.")
+        await update.effective_chat.send_message("🚫 Access denied. (Admin/Owner only)")
         return
     # Start a temporary "collect files" flow.
     context.user_data["custombatch_state"] = {"file_ids": [], "prompt_message_id": None}
-    await update.effective_chat.send_message("Files / media bhejo. Main unko custom batch me add karta rahunga.")
+    await update.effective_chat.send_message(
+        "🧩 *Custom Batch Mode Started*\n\n"
+        "📤 Files / media bhejo.\n"
+        "Main unko custom batch me add karta rahunga.\n\n"
+        "❌ Cancel anytime: press *Cancel Process* button.",
+        parse_mode="Markdown",
+    )
 
 
 def _custombatch_prompt_keyboard() -> InlineKeyboardMarkup:
@@ -636,14 +671,14 @@ async def custombatch_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         return
     await q.answer()
     if not await _is_admin_or_owner(update, context):
-        await q.edit_message_text("Not allowed.")
+        await q.edit_message_text("🚫 Access denied. (Admin/Owner only)")
         return
 
     data = q.data or ""
     state = context.user_data.get("custombatch_state")
     if not state:
         try:
-            await q.edit_message_text("No active custom batch. Use /custombatch first.")
+            await q.edit_message_text("ℹ️ No active custom batch.\n\nStart it with: /custombatch")
         except Exception:
             pass
         return
@@ -654,7 +689,7 @@ async def custombatch_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             await q.delete_message()
         except Exception:
             try:
-                await q.edit_message_text("Custom batch cancelled.")
+                await q.edit_message_text("❌ Custom batch cancelled.")
             except Exception:
                 pass
         return
@@ -662,7 +697,7 @@ async def custombatch_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     if data == "cbgen":
         file_ids = state.get("file_ids") or []
         if not file_ids:
-            await q.edit_message_text("No files received yet. Send files first, or cancel.")
+            await q.edit_message_text("⚠️ No files received yet.\n\nSend files first, or cancel.")
             return
         db: Database = context.application.bot_data["db"]
         batch_id = await db.create_batch(update.effective_user.id, list(file_ids))
@@ -674,9 +709,16 @@ async def custombatch_callback(update: Update, context: ContextTypes.DEFAULT_TYP
 
         context.user_data.pop("custombatch_state", None)
         await q.edit_message_text(
-            f"Custom batch created ({len(file_ids)} files)\n"
-            f"Normal link: {_deep_link(context, normal_code)}\n"
-            f"Premium link: {_deep_link(context, prem_code)}"
+            "✅ *Custom Batch Created Successfully!*\n\n"
+            f"📦 Total Files: {len(file_ids)}\n\n"
+            "🔓 *Normal Access Link:*\n"
+            f"{_deep_link(context, normal_code)}\n\n"
+            "⭐ *Premium Access Link:*\n"
+            f"{_deep_link(context, prem_code)}\n\n"
+            "ℹ️ Rules:\n"
+            "• Required channels join karna mandatory hai\n"
+            "• Premium link sirf premium users ke liye kaam karega",
+            parse_mode="Markdown",
         )
         return
 
@@ -685,86 +727,98 @@ async def addadmin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     cfg = context.application.bot_data["cfg"]
     if not _is_owner(update, cfg):
-        await update.effective_chat.send_message("Owner only.")
+        await update.effective_chat.send_message("🚫 Owner only.")
         return
     if not context.args:
-        await update.effective_chat.send_message("Usage: /addadmin <user_id>")
+        await update.effective_chat.send_message("ℹ️ Usage: `/addadmin <user_id>`", parse_mode="Markdown")
         return
     try:
         uid = int(context.args[0])
     except ValueError:
-        await update.effective_chat.send_message("Invalid user_id.")
+        await update.effective_chat.send_message("❌ Invalid user_id.")
         return
     db: Database = context.application.bot_data["db"]
     await db.add_admin(uid, update.effective_user.id)
-    await update.effective_chat.send_message(f"Added admin: `{uid}`")
+    await update.effective_chat.send_message(f"✅ Admin added: `{uid}`", parse_mode="Markdown")
 
 
 async def removeadmin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     cfg = context.application.bot_data["cfg"]
     if not _is_owner(update, cfg):
-        await update.effective_chat.send_message("Owner only.")
+        await update.effective_chat.send_message("🚫 Owner only.")
         return
     if not context.args:
-        await update.effective_chat.send_message("Usage: /removeadmin <user_id>")
+        await update.effective_chat.send_message("ℹ️ Usage: `/removeadmin <user_id>`", parse_mode="Markdown")
         return
     try:
         uid = int(context.args[0])
     except ValueError:
-        await update.effective_chat.send_message("Invalid user_id.")
+        await update.effective_chat.send_message("❌ Invalid user_id.")
         return
     db: Database = context.application.bot_data["db"]
     await db.remove_admin(uid)
-    await update.effective_chat.send_message(f"Removed admin: `{uid}`")
+    await update.effective_chat.send_message(f"✅ Admin removed: `{uid}`", parse_mode="Markdown")
 
 
 async def addpremium(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     if not await _is_admin_or_owner(update, context):
-        await update.effective_chat.send_message("Not allowed.")
+        await update.effective_chat.send_message("🚫 Access denied. (Admin/Owner only)")
         return
     if not context.args:
-        await update.effective_chat.send_message("Usage: /addpremium <user_id> [days]")
+        await update.effective_chat.send_message("ℹ️ Usage: `/addpremium <user_id> [days]`", parse_mode="Markdown")
         return
     try:
         uid = int(context.args[0])
         days = int(context.args[1]) if len(context.args) > 1 else 1
     except ValueError:
-        await update.effective_chat.send_message("Invalid args.")
+        await update.effective_chat.send_message("❌ Invalid args.")
         return
     db: Database = context.application.bot_data["db"]
     until = await db.add_premium_seconds(uid, max(1, days) * DAY_SECONDS)
-    await update.effective_chat.send_message(f"Premium added. User `{uid}` premium_until: `{until}` (unix)")
+    await update.effective_chat.send_message(
+        "✅ *Premium Granted*\n\n"
+        f"👤 User: `{uid}`\n"
+        f"⏳ Days: `{max(1, days)}`\n"
+        f"🕒 premium_until (unix): `{until}`",
+        parse_mode="Markdown",
+    )
 
 
 async def removepremium(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     if not await _is_admin_or_owner(update, context):
-        await update.effective_chat.send_message("Not allowed.")
+        await update.effective_chat.send_message("🚫 Access denied. (Admin/Owner only)")
         return
     if not context.args:
-        await update.effective_chat.send_message("Usage: /removepremium <user_id>")
+        await update.effective_chat.send_message("ℹ️ Usage: `/removepremium <user_id>`", parse_mode="Markdown")
         return
     try:
         uid = int(context.args[0])
     except ValueError:
-        await update.effective_chat.send_message("Invalid user_id.")
+        await update.effective_chat.send_message("❌ Invalid user_id.")
         return
     db: Database = context.application.bot_data["db"]
     await db.set_premium_until(uid, 0)
-    await update.effective_chat.send_message(f"Premium removed for `{uid}`.")
+    await update.effective_chat.send_message(f"✅ Premium removed for `{uid}`.", parse_mode="Markdown")
 
 
 async def gencode(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     if not await _is_admin_or_owner(update, context):
-        await update.effective_chat.send_message("Not allowed.")
+        await update.effective_chat.send_message("🚫 Access denied. (Admin/Owner only)")
         return
     db: Database = context.application.bot_data["db"]
     token = new_token()
     await db.create_token(token, update.effective_user.id, DAY_SECONDS)
-    await update.effective_chat.send_message(f"Token (1-day premium, one-time): `{token}`")
+    await update.effective_chat.send_message(
+        "🎟️ *Token Generated*\n\n"
+        f"`{token}`\n\n"
+        "⭐ Grants: 1 day premium\n"
+        "🔒 One-time use only",
+        parse_mode="Markdown",
+    )
 
 
 async def redeem(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -772,22 +826,26 @@ async def redeem(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.effective_chat or not update.effective_user:
         return
     if not context.args:
-        await update.effective_chat.send_message("Usage: /redeem <token>")
+        await update.effective_chat.send_message("ℹ️ Usage: `/redeem <token>`", parse_mode="Markdown")
         return
     token = context.args[0].strip()
     db: Database = context.application.bot_data["db"]
     grant = await db.redeem_token(token, update.effective_user.id)
     if not grant:
-        await update.effective_chat.send_message("Invalid or already-used token.")
+        await update.effective_chat.send_message("❌ Invalid or already-used token.")
         return
     until = await db.add_premium_seconds(update.effective_user.id, grant)
-    await update.effective_chat.send_message(f"Redeemed. Premium active until `{until}` (unix).")
+    await update.effective_chat.send_message(
+        "✅ *Token Redeemed Successfully*\n\n"
+        f"⭐ Premium active until (unix): `{until}`",
+        parse_mode="Markdown",
+    )
 
 
 async def forcech(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     if not await _is_admin_or_owner(update, context):
-        await update.effective_chat.send_message("Not allowed.")
+        await update.effective_chat.send_message("🚫 Access denied. (Admin/Owner only)")
         return
     db: Database = context.application.bot_data["db"]
 
@@ -795,30 +853,32 @@ async def forcech(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         chans = await db.list_force_channels()
         if not chans:
             await update.effective_chat.send_message(
-                "No force channels set.\n"
-                "Usage:\n"
-                "/forcech add <channel_id> [invite_link]\n"
-                "/forcech remove <channel_id>\n"
-                "/forcech list"
+                "📣 *Force Channels*\n\n"
+                "No required channels set.\n\n"
+                "✅ *Usage*\n"
+                "• `/forcech add <channel_id> [invite_link]`\n"
+                "• `/forcech remove <channel_id>`\n"
+                "• `/forcech list`",
+                parse_mode="Markdown",
             )
             return
         lines = []
         for ch in chans:
             extra = ch.get("invite_link") or (f"@{ch['username']}" if ch.get("username") else "")
             name = ch.get("title") or ""
-            lines.append(f"- `{ch['channel_id']}` {name} {extra}".strip())
-        await update.effective_chat.send_message("Force channels:\n" + "\n".join(lines))
+            lines.append(f"• `{ch['channel_id']}` {name} {extra}".strip())
+        await update.effective_chat.send_message("📣 *Force Channels*\n\n" + "\n".join(lines), parse_mode="Markdown")
         return
 
     sub = context.args[0].lower()
     if sub == "add":
         if len(context.args) < 2:
-            await update.effective_chat.send_message("Usage: /forcech add <channel_id> [invite_link]")
+            await update.effective_chat.send_message("ℹ️ Usage: `/forcech add <channel_id> [invite_link]`", parse_mode="Markdown")
             return
         try:
             cid = int(context.args[1])
         except ValueError:
-            await update.effective_chat.send_message("Invalid channel_id.")
+            await update.effective_chat.send_message("❌ Invalid channel_id.")
             return
         invite = context.args[2].strip() if len(context.args) > 2 else None
         title = None
@@ -830,68 +890,71 @@ async def forcech(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         except Exception:
             pass
         await db.add_force_channel(cid, invite, title, username, update.effective_user.id)
-        await update.effective_chat.send_message(f"Added/updated force channel `{cid}`.")
+        await update.effective_chat.send_message(f"✅ Force channel added/updated: `{cid}`", parse_mode="Markdown")
         return
 
     if sub == "remove":
         if len(context.args) < 2:
-            await update.effective_chat.send_message("Usage: /forcech remove <channel_id>")
+            await update.effective_chat.send_message("ℹ️ Usage: `/forcech remove <channel_id>`", parse_mode="Markdown")
             return
         try:
             cid = int(context.args[1])
         except ValueError:
-            await update.effective_chat.send_message("Invalid channel_id.")
+            await update.effective_chat.send_message("❌ Invalid channel_id.")
             return
         await db.remove_force_channel(cid)
-        await update.effective_chat.send_message(f"Removed force channel `{cid}`.")
+        await update.effective_chat.send_message(f"✅ Force channel removed: `{cid}`", parse_mode="Markdown")
         return
 
-    await update.effective_chat.send_message("Usage: /forcech add|remove|list ...")
+    await update.effective_chat.send_message("ℹ️ Usage: `/forcech add|remove|list ...`", parse_mode="Markdown")
 
 
 async def setcaption(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     if not await _is_admin_or_owner(update, context):
-        await update.effective_chat.send_message("Not allowed.")
+        await update.effective_chat.send_message("🚫 Access denied. (Admin/Owner only)")
         return
     text = " ".join(context.args).strip() if context.args else ""
     if not text and update.effective_message and update.effective_message.reply_to_message:
         text = (update.effective_message.reply_to_message.text or "").strip()
     if not text:
-        await update.effective_chat.send_message("Usage: /setcaption <text> (or reply to a text message)")
+        await update.effective_chat.send_message("ℹ️ Usage: `/setcaption <text>` (or reply to a text message)", parse_mode="Markdown")
         return
     db: Database = context.application.bot_data["db"]
     await db.set_setting("caption", text)
-    await update.effective_chat.send_message("Caption set.")
+    await update.effective_chat.send_message("✅ Default caption set.")
 
 
 async def removecaption(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     if not await _is_admin_or_owner(update, context):
-        await update.effective_chat.send_message("Not allowed.")
+        await update.effective_chat.send_message("🚫 Access denied. (Admin/Owner only)")
         return
     db: Database = context.application.bot_data["db"]
     await db.set_setting("caption", None)
-    await update.effective_chat.send_message("Caption removed.")
+    await update.effective_chat.send_message("🗑️ Default caption removed.")
 
 
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     if not await _is_admin_or_owner(update, context):
-        await update.effective_chat.send_message("Not allowed.")
+        await update.effective_chat.send_message("🚫 Access denied. (Admin/Owner only)")
         return
     db: Database = context.application.bot_data["db"]
     s = await db.stats()
-    await update.effective_chat.send_message("Stats:\n" + "\n".join([f"- {k}: `{v}`" for k, v in s.items()]))
+    await update.effective_chat.send_message(
+        "📊 *Bot Stats*\n\n" + "\n".join([f"• *{k}*: `{v}`" for k, v in s.items()]),
+        parse_mode="Markdown",
+    )
 
 
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     if not await _is_admin_or_owner(update, context):
-        await update.effective_chat.send_message("Not allowed.")
+        await update.effective_chat.send_message("🚫 Access denied. (Admin/Owner only)")
         return
     if not update.effective_message or not update.effective_message.reply_to_message:
-        await update.effective_chat.send_message("Reply to a message with /broadcast to send it to all users.")
+        await update.effective_chat.send_message("ℹ️ Reply to a message, then send: `/broadcast`", parse_mode="Markdown")
         return
     db: Database = context.application.bot_data["db"]
     user_ids = await db.list_user_ids()
@@ -904,7 +967,12 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             ok += 1
         except Exception:
             fail += 1
-    await update.effective_chat.send_message(f"Broadcast done. Sent: `{ok}`, failed: `{fail}`")
+    await update.effective_chat.send_message(
+        "📣 *Broadcast Completed*\n\n"
+        f"✅ Sent: `{ok}`\n"
+        f"⚠️ Failed: `{fail}`",
+        parse_mode="Markdown",
+    )
 
 
 def build_handlers(app: Application) -> None:
