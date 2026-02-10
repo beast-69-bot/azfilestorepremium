@@ -440,17 +440,27 @@ async def batch(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     if context.args and context.args[0].lower() == "cancel":
-        context.user_data.pop("chbatch_state", None)
-        await update.effective_chat.send_message("Batch cancelled.")
+        st = context.user_data.pop("chbatch_state", None)
+        if st and st.get("prompt_message_id"):
+            try:
+                await context.bot.delete_message(chat_id=update.effective_chat.id, message_id=int(st["prompt_message_id"]))
+            except Exception:
+                pass
+        await update.effective_chat.send_message("❌ Batch creation cancelled.")
         return
 
     # Channel-range batch (start/end post links).
-    context.user_data["chbatch_state"] = {"step": "start"}
-    await update.effective_chat.send_message(
-        "Send the STARTING channel post link.\n"
-        "Example: https://t.me/channelusername/123 or https://t.me/c/123456789/123\n"
-        "Cancel: /batch cancel"
+    msg = await update.effective_chat.send_message(
+        "📦 Channel Batch Mode Started\n\n"
+        "Step 1️⃣\n"
+        "Send the STARTING channel post link.\n\n"
+        "Examples:\n"
+        "https://t.me/channelusername/123\n"
+        "or\n"
+        "https://t.me/c/123456789/123\n\n"
+        "❌ Cancel: /batch cancel"
     )
+    context.user_data["chbatch_state"] = {"step": "start", "prompt_message_id": msg.message_id}
 
 
 async def batch_link_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -466,24 +476,36 @@ async def batch_link_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     text = (update.effective_message.text or "").strip()
     parsed = _parse_tme_post_link(text)
     if not parsed:
-        await update.effective_chat.send_message("Invalid link. Send a valid t.me post link, or /batch cancel.")
+        await _batch_ui_error(update, context, "Invalid post link format. Send a valid t.me post link, or /batch cancel.")
         return
 
     chat_id = await _resolve_chat_id(parsed["chat"], context)
     if chat_id is None:
-        await update.effective_chat.send_message("Could not resolve channel from link. Make sure the link is correct and the bot can access the channel.")
+        await _batch_ui_error(update, context, "Could not resolve channel from link. Check the link and try again.")
         return
 
     msg_id = int(parsed["msg_id"])
     if msg_id <= 0:
-        await update.effective_chat.send_message("Invalid message id in link.")
+        await _batch_ui_error(update, context, "Invalid post id in link.")
         return
+
+    # Clean UI: delete the admin's link message.
+    try:
+        await context.bot.delete_message(chat_id=update.effective_chat.id, message_id=update.effective_message.message_id)
+    except Exception:
+        pass
 
     if state.get("step") == "start":
         state["channel_id"] = int(chat_id)
         state["start_msg_id"] = int(msg_id)
         state["step"] = "end"
-        await update.effective_chat.send_message("Now send the ENDING channel post link.")
+        await _batch_ui_edit(
+            update,
+            context,
+            "✅ Starting post received.\n\n"
+            "Step 2️⃣\n"
+            "Now send the ENDING channel post link.",
+        )
         return
 
     if state.get("step") != "end":
@@ -492,24 +514,26 @@ async def batch_link_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         return
 
     if int(chat_id) != int(state.get("channel_id", 0)):
-        await update.effective_chat.send_message("Start and end links must be from the same channel.")
+        await _batch_ui_error(update, context, "Links are from different channels. Send the ENDING link from the same channel.")
         return
 
     start_id = int(state["start_msg_id"])
     end_id = int(msg_id)
     if end_id < start_id:
-        await update.effective_chat.send_message("End link must be after start link.")
+        await _batch_ui_error(update, context, "Ending post ID is smaller than Starting post ID. Send a valid ENDING link.")
         return
 
     total = end_id - start_id + 1
     if total > MAX_CHANNEL_BATCH_POSTS:
-        await update.effective_chat.send_message(f"Range too large. Max allowed posts: {MAX_CHANNEL_BATCH_POSTS}.")
+        await _batch_ui_error(update, context, f"Range too large. Max allowed posts: {MAX_CHANNEL_BATCH_POSTS}.")
         return
 
     if not await _bot_is_admin(int(chat_id), context):
         context.user_data.pop("chbatch_state", None)
-        await update.effective_chat.send_message("Bot is not admin in that channel. First make the bot admin, then run /batch again.")
+        await update.effective_chat.send_message("Bot is not admin in that channel. Pehle bot ko admin banao, phir /batch run karo.")
         return
+
+    await _batch_ui_edit(update, context, "🔄 Creating batch...\nPlease wait...")
 
     db: Database = context.application.bot_data["db"]
     chbatch_id = await db.create_channel_batch(update.effective_user.id, int(chat_id), start_id, end_id)
@@ -520,10 +544,63 @@ async def batch_link_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     await db.create_link(prem_code, "chbatch", chbatch_id, "premium", update.effective_user.id)
 
     context.user_data.pop("chbatch_state", None)
-    await update.effective_chat.send_message(
-        f"Channel batch created ({total} posts)\n"
-        f"Normal link: {_deep_link(context, normal_code)}\n"
-        f"Premium link: {_deep_link(context, prem_code)}"
+    await _batch_ui_edit(
+        update,
+        context,
+        "✅ Channel Batch Created Successfully!\n\n"
+        f"📦 Total Posts: {total}\n\n"
+        "🔓 Normal Access Link:\n"
+        f"{_deep_link(context, normal_code)}\n\n"
+        "⭐ Premium Access Link:\n"
+        f"{_deep_link(context, prem_code)}\n\n"
+        "ℹ️ Rules:\n"
+        "• Required channels join karna mandatory hai\n"
+        "• Premium link sirf premium users ke liye kaam karega",
+    )
+
+
+async def _batch_ui_edit(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str) -> None:
+    state = context.user_data.get("chbatch_state") or {}
+    chat_id = update.effective_chat.id if update.effective_chat else None
+    mid = state.get("prompt_message_id")
+    if chat_id and mid:
+        try:
+            await context.bot.edit_message_text(chat_id=chat_id, message_id=int(mid), text=text)
+            return
+        except Exception:
+            pass
+    # Fallback if edit not possible (message deleted etc.)
+    msg = await update.effective_chat.send_message(text)
+    state["prompt_message_id"] = msg.message_id
+    context.user_data["chbatch_state"] = state
+
+
+async def _batch_ui_error(update: Update, context: ContextTypes.DEFAULT_TYPE, err: str) -> None:
+    # Show a clear error without breaking the flow.
+    state = context.user_data.get("chbatch_state") or {}
+    step = state.get("step") or "start"
+    if step == "start":
+        await _batch_ui_edit(
+            update,
+            context,
+            "📦 Channel Batch Mode Started\n\n"
+            f"⚠️ Error: {err}\n\n"
+            "Step 1️⃣\n"
+            "Send the STARTING channel post link.\n\n"
+            "Examples:\n"
+            "https://t.me/channelusername/123\n"
+            "or\n"
+            "https://t.me/c/123456789/123\n\n"
+            "❌ Cancel: /batch cancel",
+        )
+        return
+    await _batch_ui_edit(
+        update,
+        context,
+        "✅ Starting post received.\n\n"
+        f"⚠️ Error: {err}\n\n"
+        "Step 2️⃣\n"
+        "Now send the ENDING channel post link.",
     )
 
 
