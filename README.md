@@ -124,6 +124,97 @@ Important:
 - For production VPS use, keep it running under a process manager (Windows Task Scheduler, NSSM, systemd on Linux).
 - Webhook mode is not implemented in this template; polling is simpler and reliable for most deployments.
 
+## VPS Setup Guide (Ubuntu + systemd, Polling)
+These steps assume Ubuntu 22.04/24.04 (similar for Debian).
+
+### 1) Create a server user (recommended)
+```bash
+adduser tg-bot
+usermod -aG sudo tg-bot
+```
+
+### 2) Install dependencies
+```bash
+sudo apt update
+sudo apt install -y git python3 python3-venv python3-pip
+```
+
+### 3) Clone and install
+```bash
+sudo -iu tg-bot
+git clone https://github.com/beast-69-bot/azfilestorepremium.git
+cd azfilestorepremium
+
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+### 4) Configure environment
+```bash
+cp .env.example .env
+nano .env
+```
+Set:
+- `BOT_TOKEN`
+- `OWNER_ID`
+- `LINK_SECRET` (long random string)
+- `DB_PATH` (keep default unless you want another location)
+
+Optional hardening:
+```bash
+chmod 600 .env
+```
+
+### 5) Create a systemd service
+Create `/etc/systemd/system/azfilestorepremium.service`:
+```ini
+[Unit]
+Description=AzFileStorePremium Telegram Bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=tg-bot
+WorkingDirectory=/home/tg-bot/azfilestorepremium
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/home/tg-bot/azfilestorepremium/.venv/bin/python /home/tg-bot/azfilestorepremium/main.py
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Enable + start:
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now azfilestorepremium
+```
+
+Logs:
+```bash
+sudo journalctl -u azfilestorepremium -f
+```
+
+### 6) Updating the bot on VPS
+```bash
+sudo -iu tg-bot
+cd azfilestorepremium
+git pull
+source .venv/bin/activate
+pip install -r requirements.txt
+sudo systemctl restart azfilestorepremium
+```
+
+### Common VPS Issues
+- Force-join checks fail:
+  - Add the bot to each required channel.
+  - If Telegram denies `getChatMember`, the bot denies access (fail-closed).
+- Token/links not working after rename:
+  - Deep links use `https://t.me/<bot_username>?start=...`; bot username change requires users to use new links.
+
 ## Database
 SQLite at `DB_PATH` (default `data/bot.db`) stores:
 - Users and premium expiry
