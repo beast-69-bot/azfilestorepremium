@@ -877,13 +877,43 @@ async def gencode(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.effective_chat.send_message("🚫 Access denied. (Admin/Owner only)")
         return
     db: Database = context.application.bot_data["db"]
-    token = new_token()
-    await db.create_token(token, update.effective_user.id, DAY_SECONDS)
+    count = 1
+    if context.args:
+        try:
+            count = int(context.args[0])
+        except ValueError:
+            count = 1
+    # Prevent abuse/spam and huge messages.
+    if count < 1:
+        count = 1
+    if count > 20:
+        count = 20
+
+    tokens: list[str] = []
+    for _ in range(count):
+        t = new_token()
+        await db.create_token(t, update.effective_user.id, DAY_SECONDS)
+        tokens.append(t)
+
+    if count == 1:
+        await update.effective_chat.send_message(
+            "🎟️ *Token Generated*\n\n"
+            f"`{tokens[0]}`\n\n"
+            "⭐ Grants: 1 day premium\n"
+            "🔒 One-time use only",
+            parse_mode="Markdown",
+        )
+        return
+
+    # Multi-token response
+    token_lines = "\n".join([f"`{t}`" for t in tokens])
     await update.effective_chat.send_message(
-        "🎟️ *Token Generated*\n\n"
-        f"`{token}`\n\n"
-        "⭐ Grants: 1 day premium\n"
-        "🔒 One-time use only",
+        "🎟️ *Tokens Generated*\n\n"
+        f"🧾 Total: *{count}*\n\n"
+        f"{token_lines}\n\n"
+        "⭐ Each grants: 1 day premium\n"
+        "🔒 Each is one-time use only\n\n"
+        "ℹ️ Users redeem: `/redeem <token>`",
         parse_mode="Markdown",
     )
 

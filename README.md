@@ -99,7 +99,7 @@ Cancel: `/batch cancel`
 - `/removepremium <user_id>`
 
 ### Token System
-- Admin generates: `/gencode`
+- Admin generates: `/gencode` or `/gencode <count>` (max 20 at a time)
 - User redeems: `/redeem <token>`
 Token rules:
 - One-time use
