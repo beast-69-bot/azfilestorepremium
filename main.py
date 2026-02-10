@@ -40,6 +40,8 @@ async def _post_init(app: Application) -> None:
         BotCommand("removecaption", "Remove caption (Admin/Owner)"),
         BotCommand("settime", "Auto-delete delivered msgs (Admin/Owner)"),
         BotCommand("setstartimg", "Set /start image URL (Admin/Owner)"),
+        BotCommand("getemojiid", "Extract Premium emoji IDs (Admin/Owner)"),
+        BotCommand("setuitemoji", "Store UI emoji ID mapping (Admin/Owner)"),
     ]
     try:
         await app.bot.set_my_commands(commands)

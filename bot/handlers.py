@@ -24,6 +24,7 @@ DAY_SECONDS = 24 * 60 * 60
 MAX_CHANNEL_BATCH_POSTS = 200
 SETTINGS_AUTODELETE_SECONDS = "autodelete_seconds"
 SETTINGS_START_IMG_URL = "start_img_url"
+SETTINGS_UI_EMOJI_PREFIX = "ui_emoji:"
 
 
 def _welcome_text() -> str:
@@ -1104,6 +1105,102 @@ async def setstartimg(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     await update.effective_chat.send_message("✅ Start image set. Now `/start` will show the image.")
 
 
+async def getemojiid(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """
+    Admin helper: reply to a message containing Telegram custom (Premium) emojis to extract custom_emoji_id values.
+    """
+    await _upsert_user(update, context)
+    if not await _is_admin_or_owner(update, context):
+        await update.effective_chat.send_message("🚫 Access denied. (Admin/Owner only)")
+        return
+    if not update.effective_message or not update.effective_message.reply_to_message:
+        await update.effective_chat.send_message("ℹ️ Reply to a message that contains Premium/custom emojis, then send: `/getemojiid`", parse_mode="Markdown")
+        return
+
+    msg = update.effective_message.reply_to_message
+    entities = []
+    if msg.entities:
+        entities.extend(list(msg.entities))
+    if msg.caption_entities:
+        entities.extend(list(msg.caption_entities))
+
+    ids: list[str] = []
+    for e in entities:
+        cid = getattr(e, "custom_emoji_id", None)
+        if cid:
+            ids.append(str(cid))
+
+    uniq = []
+    for cid in ids:
+        if cid not in uniq:
+            uniq.append(cid)
+
+    if not uniq:
+        await update.effective_chat.send_message(
+            "⚠️ No custom emoji IDs found in that message.\n\n"
+            "Tip: Premium/custom emojis are detectable only when they are *custom emoji entities* (not normal Unicode emojis).",
+            parse_mode="Markdown",
+        )
+        return
+
+    out = "\n".join([f"• `{cid}`" for cid in uniq])
+    await update.effective_chat.send_message(
+        "✅ *Custom Emoji IDs Found*\n\n"
+        f"{out}\n\n"
+        "Set for UI:\n"
+        "• `/setuitemoji <name> <custom_emoji_id>`\n"
+        "Example: `/setuitemoji lock 54545454545454545`",
+        parse_mode="Markdown",
+    )
+
+
+async def setuitemoji(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """
+    Stores a mapping of UI emoji name -> custom_emoji_id in settings.
+    (Actual UI replacement can be wired up later once you provide IDs.)
+    """
+    await _upsert_user(update, context)
+    if not await _is_admin_or_owner(update, context):
+        await update.effective_chat.send_message("🚫 Access denied. (Admin/Owner only)")
+        return
+    if len(context.args) < 1:
+        await update.effective_chat.send_message(
+            "🧩 *UI Emoji Settings*\n\n"
+            "✅ Usage:\n"
+            "• `/setuitemoji <name> <custom_emoji_id>`\n"
+            "• `/setuitemoji <name> off`\n\n"
+            "Example:\n"
+            "• `/setuitemoji lock 54545454545454545`",
+            parse_mode="Markdown",
+        )
+        return
+
+    name = context.args[0].strip().lower()
+    if not name or any(c not in "abcdefghijklmnopqrstuvwxyz0123456789_-" for c in name) or len(name) > 32:
+        await update.effective_chat.send_message("❌ Invalid name. Use letters/numbers/`_`/`-` (max 32).", parse_mode="Markdown")
+        return
+
+    if len(context.args) < 2:
+        await update.effective_chat.send_message("ℹ️ Missing value. Use: `/setuitemoji <name> <custom_emoji_id|off>`", parse_mode="Markdown")
+        return
+
+    val = context.args[1].strip()
+    key = f"{SETTINGS_UI_EMOJI_PREFIX}{name}"
+    db: Database = context.application.bot_data["db"]
+
+    if val.lower() in ("off", "remove", "none", "disable", "disabled"):
+        await db.set_setting(key, None)
+        await update.effective_chat.send_message(f"✅ UI emoji removed for `{name}`.", parse_mode="Markdown")
+        return
+
+    if not val.isdigit():
+        await update.effective_chat.send_message("❌ Invalid custom_emoji_id. It must be numeric.", parse_mode="Markdown")
+        return
+
+    await db.set_setting(key, val)
+    await update.effective_chat.send_message(f"✅ UI emoji set: `{name}` -> `{val}`", parse_mode="Markdown")
+
+
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     if not await _is_admin_or_owner(update, context):
@@ -1167,6 +1264,8 @@ def build_handlers(app: Application) -> None:
     app.add_handler(CommandHandler("removecaption", removecaption))
     app.add_handler(CommandHandler("settime", settime))
     app.add_handler(CommandHandler("setstartimg", setstartimg))
+    app.add_handler(CommandHandler("getemojiid", getemojiid))
+    app.add_handler(CommandHandler("setuitemoji", setuitemoji))
 
     app.add_handler(CommandHandler("redeem", redeem))
 
