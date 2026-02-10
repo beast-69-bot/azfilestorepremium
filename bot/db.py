@@ -28,6 +28,11 @@ class Database:
         assert self._conn is not None
         return self._conn
 
+    async def close(self) -> None:
+        if self._conn is not None:
+            await self._conn.close()
+            self._conn = None
+
     async def _ensure_schema(self) -> None:
         await self.conn.executescript(
             """

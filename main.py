@@ -1,4 +1,3 @@
-import asyncio
 import logging
 
 from dotenv import load_dotenv
@@ -11,11 +10,23 @@ from bot.handlers import build_handlers
 
 
 async def _post_init(app: Application) -> None:
+    # Runs inside PTB's event loop (safe place to init async dependencies).
+    cfg: Config = app.bot_data["cfg"]
+    db = Database(cfg.db_path)
+    await db.init()
+    app.bot_data["db"] = db
+
     me = await app.bot.get_me()
     app.bot_data["bot_username"] = me.username
 
 
-async def main() -> None:
+async def _post_shutdown(app: Application) -> None:
+    db = app.bot_data.get("db")
+    if db:
+        await db.close()
+
+
+def main() -> None:
     load_dotenv()
     logging.basicConfig(
         level=logging.INFO,
@@ -23,8 +34,6 @@ async def main() -> None:
     )
 
     cfg = Config.from_env()
-    db = Database(cfg.db_path)
-    await db.init()
 
     defaults = Defaults(link_preview_options=LinkPreviewOptions(is_disabled=True))
     app = (
@@ -32,20 +41,17 @@ async def main() -> None:
         .token(cfg.bot_token)
         .defaults(defaults)
         .post_init(_post_init)
+        .post_shutdown(_post_shutdown)
         .build()
     )
 
     app.bot_data["cfg"] = cfg
-    app.bot_data["db"] = db
 
     build_handlers(app)
 
     logging.getLogger(__name__).info("Bot starting (polling)...")
-    await app.run_polling(close_loop=False)
+    app.run_polling()
 
 
 if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except (KeyboardInterrupt, SystemExit):
-        pass
+    main()
