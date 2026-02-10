@@ -59,6 +59,7 @@ python main.py
 - `/stats`
 - `/setcaption`
 - `/removecaption`
+- `/settime`
 
 ## Usage (Owner/Admin)
 
@@ -121,6 +122,10 @@ Important:
 - Set default caption: `/setcaption <text>` (or reply to a text message with `/setcaption`)
 - Remove caption: `/removecaption`
 - Caption is automatically applied when sending files via any generated link (single or batch).
+
+### Auto-Delete Delivered Messages
+- `/settime <seconds|5m|1h|off>`
+- When enabled, bot will auto-delete files/messages it delivers via links after the configured time.
 
 ### Broadcast
 - Reply to any message, then send `/broadcast`

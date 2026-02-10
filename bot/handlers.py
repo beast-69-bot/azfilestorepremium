@@ -22,6 +22,7 @@ from bot.security import new_code, new_token
 
 DAY_SECONDS = 24 * 60 * 60
 MAX_CHANNEL_BATCH_POSTS = 200
+SETTINGS_AUTODELETE_SECONDS = "autodelete_seconds"
 
 
 def _now() -> int:
@@ -91,16 +92,61 @@ async def _send_file(chat_id: int, file_row: dict[str, Any], caption: Optional[s
     fid = file_row["tg_file_id"]
     if caption and len(caption) > 1024:
         caption = caption[:1020] + "..."
+    msg = None
     if t == "document":
-        await context.bot.send_document(chat_id=chat_id, document=fid, caption=caption)
+        msg = await context.bot.send_document(chat_id=chat_id, document=fid, caption=caption)
     elif t == "video":
-        await context.bot.send_video(chat_id=chat_id, video=fid, caption=caption)
+        msg = await context.bot.send_video(chat_id=chat_id, video=fid, caption=caption)
     elif t == "audio":
-        await context.bot.send_audio(chat_id=chat_id, audio=fid, caption=caption)
+        msg = await context.bot.send_audio(chat_id=chat_id, audio=fid, caption=caption)
     elif t == "photo":
-        await context.bot.send_photo(chat_id=chat_id, photo=fid, caption=caption)
+        msg = await context.bot.send_photo(chat_id=chat_id, photo=fid, caption=caption)
     else:
-        await context.bot.send_document(chat_id=chat_id, document=fid, caption=caption)
+        msg = await context.bot.send_document(chat_id=chat_id, document=fid, caption=caption)
+
+    if msg:
+        await _maybe_schedule_autodelete(msg.chat_id, msg.message_id, context)
+
+
+async def _maybe_schedule_autodelete(chat_id: int, message_id: int, context: ContextTypes.DEFAULT_TYPE) -> None:
+    db: Database = context.application.bot_data["db"]
+    raw = await db.get_setting(SETTINGS_AUTODELETE_SECONDS)
+    try:
+        seconds = int(raw) if raw is not None else 0
+    except ValueError:
+        seconds = 0
+    if seconds <= 0:
+        return
+
+    async def _job() -> None:
+        try:
+            await asyncio.sleep(seconds)
+            await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
+        except Exception:
+            pass
+
+    context.application.create_task(_job())
+
+
+def _parse_duration_seconds(s: str) -> Optional[int]:
+    s = (s or "").strip().lower()
+    if not s:
+        return None
+    if s in ("off", "0", "disable", "disabled", "none"):
+        return 0
+    mult = 1
+    if s.endswith("m"):
+        mult = 60
+        s = s[:-1]
+    elif s.endswith("h"):
+        mult = 60 * 60
+        s = s[:-1]
+    elif s.endswith("d"):
+        mult = 24 * 60 * 60
+        s = s[:-1]
+    if not s.isdigit():
+        return None
+    return int(s) * mult
 
 async def _bot_is_admin(chat_id: int, context: ContextTypes.DEFAULT_TYPE) -> bool:
     try:
@@ -263,11 +309,12 @@ async def _deliver_by_code(update: Update, context: ContextTypes.DEFAULT_TYPE, c
             await chat.send_message("❌ Message not found (may have been removed).")
             return
         try:
-            await context.bot.copy_message(
+            m = await context.bot.copy_message(
                 chat_id=chat.id,
                 from_chat_id=msg_row["from_chat_id"],
                 message_id=msg_row["message_id"],
             )
+            await _maybe_schedule_autodelete(m.chat_id, m.message_id, context)
         except Exception:
             await chat.send_message("❌ Unable to deliver this message (deleted or inaccessible).")
             return
@@ -290,11 +337,13 @@ async def _deliver_by_code(update: Update, context: ContextTypes.DEFAULT_TYPE, c
             return
         for mid in range(start_id, end_id + 1):
             try:
-                await context.bot.copy_message(chat_id=chat.id, from_chat_id=chb["channel_id"], message_id=mid)
+                m = await context.bot.copy_message(chat_id=chat.id, from_chat_id=chb["channel_id"], message_id=mid)
+                await _maybe_schedule_autodelete(m.chat_id, m.message_id, context)
             except RetryAfter as e:
                 await asyncio.sleep(float(getattr(e, "retry_after", 1.0)))
                 try:
-                    await context.bot.copy_message(chat_id=chat.id, from_chat_id=chb["channel_id"], message_id=mid)
+                    m = await context.bot.copy_message(chat_id=chat.id, from_chat_id=chb["channel_id"], message_id=mid)
+                    await _maybe_schedule_autodelete(m.chat_id, m.message_id, context)
                 except Exception:
                     pass
             except Exception:
@@ -361,6 +410,8 @@ async def admin_media_ingest(update: Update, context: ContextTypes.DEFAULT_TYPE)
     # If custombatch mode is active, only collect files and show a confirmation prompt.
     cb_state = context.user_data.get("custombatch_state")
     if cb_state is not None:
+        cb_state.setdefault("source_message_ids", []).append(update.effective_message.message_id)
+        cb_state["source_chat_id"] = update.effective_chat.id
         cb_state.setdefault("file_ids", []).append(file_db_id)
         prev_prompt = cb_state.get("prompt_message_id")
         if prev_prompt:
@@ -684,7 +735,15 @@ async def custombatch_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         return
 
     if data == "cbcancel":
-        context.user_data.pop("custombatch_state", None)
+        # Clear temp state and delete uploaded media messages (clean UI).
+        st = context.user_data.pop("custombatch_state", None) or {}
+        src_chat_id = st.get("source_chat_id")
+        for mid in st.get("source_message_ids") or []:
+            if src_chat_id:
+                try:
+                    await context.bot.delete_message(chat_id=int(src_chat_id), message_id=int(mid))
+                except Exception:
+                    pass
         try:
             await q.delete_message()
         except Exception:
@@ -707,7 +766,15 @@ async def custombatch_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         await db.create_link(normal_code, "batch", batch_id, "normal", update.effective_user.id)
         await db.create_link(prem_code, "batch", batch_id, "premium", update.effective_user.id)
 
-        context.user_data.pop("custombatch_state", None)
+        # Clear temp state and delete uploaded media messages (clean UI).
+        st = context.user_data.pop("custombatch_state", None) or {}
+        src_chat_id = st.get("source_chat_id")
+        for mid in st.get("source_message_ids") or []:
+            if src_chat_id:
+                try:
+                    await context.bot.delete_message(chat_id=int(src_chat_id), message_id=int(mid))
+                except Exception:
+                    pass
         await q.edit_message_text(
             "✅ *Custom Batch Created Successfully!*\n\n"
             f"📦 Total Files: {len(file_ids)}\n\n"
@@ -935,6 +1002,35 @@ async def removecaption(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     await update.effective_chat.send_message("🗑️ Default caption removed.")
 
 
+async def settime(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await _upsert_user(update, context)
+    if not await _is_admin_or_owner(update, context):
+        await update.effective_chat.send_message("🚫 Access denied. (Admin/Owner only)")
+        return
+    if not context.args:
+        await update.effective_chat.send_message(
+            "⏱️ *Auto-Delete Time*\n\n"
+            "Set time after which files/messages delivered via links will be auto-deleted.\n\n"
+            "✅ Usage:\n"
+            "• `/settime 60` (seconds)\n"
+            "• `/settime 5m`\n"
+            "• `/settime 1h`\n"
+            "• `/settime off`\n",
+            parse_mode="Markdown",
+        )
+        return
+    seconds = _parse_duration_seconds(context.args[0])
+    if seconds is None:
+        await update.effective_chat.send_message("❌ Invalid time. Examples: `60`, `5m`, `1h`, `off`", parse_mode="Markdown")
+        return
+    db: Database = context.application.bot_data["db"]
+    await db.set_setting(SETTINGS_AUTODELETE_SECONDS, str(int(seconds)))
+    if seconds <= 0:
+        await update.effective_chat.send_message("✅ Auto-delete disabled.")
+        return
+    await update.effective_chat.send_message(f"✅ Auto-delete enabled: messages will be deleted after `{seconds}` seconds.", parse_mode="Markdown")
+
+
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     if not await _is_admin_or_owner(update, context):
@@ -996,6 +1092,7 @@ def build_handlers(app: Application) -> None:
     app.add_handler(CommandHandler("stats", stats))
     app.add_handler(CommandHandler("setcaption", setcaption))
     app.add_handler(CommandHandler("removecaption", removecaption))
+    app.add_handler(CommandHandler("settime", settime))
 
     app.add_handler(CommandHandler("redeem", redeem))
 

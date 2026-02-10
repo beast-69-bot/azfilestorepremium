@@ -37,6 +37,7 @@ async def _post_init(app: Application) -> None:
         BotCommand("stats", "View bot stats"),
         BotCommand("setcaption", "Set default caption"),
         BotCommand("removecaption", "Remove default caption"),
+        BotCommand("settime", "Auto-delete delivered files/messages after time"),
     ]
     try:
         await app.bot.set_my_commands(commands)
