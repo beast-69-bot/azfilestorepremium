@@ -669,5 +669,6 @@ def build_handlers(app: Application) -> None:
 
     app.add_handler(CommandHandler("redeem", redeem))
 
-    media_filter = filters.Document | filters.Video | filters.Audio | filters.PHOTO
+    # PTB v20+ uses uppercase filter shortcuts (VIDEO/AUDIO/PHOTO). Document is namespaced.
+    media_filter = filters.Document.ALL | filters.VIDEO | filters.AUDIO | filters.PHOTO
     app.add_handler(MessageHandler(filters.ALL & media_filter, admin_media_ingest))

@@ -2,6 +2,7 @@ import asyncio
 import logging
 
 from dotenv import load_dotenv
+from telegram import LinkPreviewOptions
 from telegram.ext import Application, Defaults
 
 from bot.config import Config
@@ -25,7 +26,7 @@ async def main() -> None:
     db = Database(cfg.db_path)
     await db.init()
 
-    defaults = Defaults(disable_web_page_preview=True)
+    defaults = Defaults(link_preview_options=LinkPreviewOptions(is_disabled=True))
     app = (
         Application.builder()
         .token(cfg.bot_token)
@@ -48,4 +49,3 @@ if __name__ == "__main__":
         asyncio.run(main())
     except (KeyboardInterrupt, SystemExit):
         pass
-
