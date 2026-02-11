@@ -1313,16 +1313,10 @@ async def plan(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         status = "❌ Not Active"
 
     await update.effective_chat.send_message(
-        "💎 *Plans*\n\n"
-        "🔓 *Normal User*\n"
-        "• Access normal links\n"
-        "• Force channels join mandatory\n\n"
-        "⭐ *Premium User*\n"
-        "• Access normal + premium links\n"
-        "• Force channels join mandatory\n\n"
-        "🎟️ *How to get premium*\n"
-        "• Redeem token: `/redeem <token>`\n"
-        "• Or contact admin\n\n"
+        "💎 *Premium Plans*\n\n"
+        "• 1 Day: ₹9\n"
+        "• 7 Days: ₹29\n"
+        "• 1 Month: ₹99\n\n"
         f"👤 *Your Premium Status*\n{status}",
         parse_mode="Markdown",
     )
