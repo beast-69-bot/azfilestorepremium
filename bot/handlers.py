@@ -5,7 +5,7 @@ import datetime
 import re
 import time
 from typing import Any, Optional
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, quote, urlparse
 
 import httpx
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, MessageEntity, Update
@@ -30,7 +30,8 @@ MAX_CHANNEL_BATCH_POSTS = 200
 SETTINGS_AUTODELETE_SECONDS = "autodelete_seconds"
 SETTINGS_START_IMG_URL = "start_img_url"
 SETTINGS_UI_EMOJI_PREFIX = "ui_emoji:"
-SETTINGS_PAY_QR = "pay_qr"
+SETTINGS_PAY_UPI = "pay_upi"
+SETTINGS_PAY_NAME = "pay_name"
 SETTINGS_PAY_TEXT = "pay_text"
 PRESET_UI_EMOJI_IDS = {
     "info": "6096064954018829186",
@@ -246,9 +247,11 @@ BSETTINGS_DOCS: dict[str, dict[str, str]] = {
         "body": (
             "Admin/Owner payment config.\n\nUsage:\n"
             "/setpay view\n"
-            "/setpay qr <url_or_file_id>\n"
+            "/setpay upi <upi_id>\n"
+            "/setpay name <payee_name>\n"
             "/setpay text <instructions>\n"
-            "/setpay clearqr"
+            "/setpay clearupi\n\n"
+            "Bot will auto-generate plan-wise UPI QR for users."
         ),
     },
     "getemojiid": {
@@ -1536,6 +1539,18 @@ def _pay_plan_keyboard() -> InlineKeyboardMarkup:
     )
 
 
+def _upi_uri(upi_id: str, amount_rs: int, payee_name: str, note: str) -> str:
+    pa = quote(upi_id, safe="")
+    pn = quote(payee_name, safe="")
+    tn = quote(note, safe="")
+    return f"upi://pay?pa={pa}&pn={pn}&am={amount_rs}&cu=INR&tn={tn}"
+
+
+def _upi_qr_image_url(upi_uri: str) -> str:
+    # Public QR endpoint; Telegram fetches this URL and shows image in chat.
+    return f"https://api.qrserver.com/v1/create-qr-code/?size=700x700&data={quote(upi_uri, safe='')}"
+
+
 async def pay(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     await update.effective_chat.send_message(
@@ -1567,23 +1582,45 @@ async def pay_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                 "After payment, tap *Send UTR* and share UTR/screenshot.\n"
                 "Admin will verify and activate plan manually."
             )
+        upi_id = await db.get_setting(SETTINGS_PAY_UPI)
+        pay_name = await db.get_setting(SETTINGS_PAY_NAME) or "Premium Store"
+        if not upi_id:
+            await q.edit_message_text(
+                "⚠️ Payment is not configured by admin yet.\n"
+                "Please contact admin.",
+            )
+            return
+
+        note = f"premium {plan['label']} req#{rid}"
+        upi_uri = _upi_uri(upi_id=upi_id, amount_rs=int(plan["amount"]), payee_name=pay_name, note=note)
+        qr_url = _upi_qr_image_url(upi_uri)
         msg = (
             f"💳 *Payment Details*\n\n"
             f"Plan: *{plan['label']}*\n"
             f"Amount: *₹{plan['amount']}*\n"
+            f"UPI ID: `{upi_id}`\n"
             f"Request ID: `{rid}`\n\n"
             f"{pay_text}"
         )
         kb = InlineKeyboardMarkup([[InlineKeyboardButton("📩 Send UTR", callback_data=f"payutr:{rid}")]])
-        qr = await db.get_setting(SETTINGS_PAY_QR)
-        if qr:
-            try:
-                await q.edit_message_text(msg, parse_mode="Markdown", reply_markup=kb)
-                await update.effective_chat.send_photo(photo=qr, caption="🔳 Scan QR and complete payment.")
-                return
-            except Exception:
-                pass
         await q.edit_message_text(msg, parse_mode="Markdown", reply_markup=kb)
+        try:
+            await update.effective_chat.send_photo(
+                photo=qr_url,
+                caption=(
+                    f"🔳 Scan this UPI QR for *₹{plan['amount']}*.\n"
+                    f"UPI: `{upi_id}`\n"
+                    f"Request ID: `{rid}`"
+                ),
+                parse_mode="Markdown",
+            )
+        except Exception:
+            # Fallback if remote QR URL fails for any reason.
+            await update.effective_chat.send_message(
+                "⚠️ QR load failed. Pay via UPI ID shown above.\n"
+                f"UPI URI:\n`{upi_uri}`",
+                parse_mode="Markdown",
+            )
         return
 
     if data.startswith("payutr:"):
@@ -1678,28 +1715,38 @@ async def setpay(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.effective_chat.send_message(
             "ℹ️ Usage:\n"
             "/setpay view\n"
-            "/setpay qr <url_or_file_id>\n"
+            "/setpay upi <upi_id>\n"
+            "/setpay name <payee_name>\n"
             "/setpay text <payment instructions>\n"
-            "/setpay clearqr",
+            "/setpay clearupi",
         )
         return
     sub = context.args[0].lower()
     if sub == "view":
-        qr = await db.get_setting(SETTINGS_PAY_QR) or "-"
+        upi = await db.get_setting(SETTINGS_PAY_UPI) or "-"
+        name = await db.get_setting(SETTINGS_PAY_NAME) or "Premium Store"
         text = await db.get_setting(SETTINGS_PAY_TEXT) or "-"
-        await update.effective_chat.send_message(f"QR: {qr}\n\nText:\n{text}")
+        await update.effective_chat.send_message(f"UPI ID: {upi}\nPayee Name: {name}\n\nText:\n{text}")
         return
-    if sub == "clearqr":
-        await db.set_setting(SETTINGS_PAY_QR, None)
-        await update.effective_chat.send_message("✅ Payment QR cleared.")
+    if sub == "clearupi":
+        await db.set_setting(SETTINGS_PAY_UPI, None)
+        await update.effective_chat.send_message("✅ Payment UPI cleared.")
         return
-    if sub == "qr":
+    if sub == "upi":
         if len(context.args) < 2:
-            await update.effective_chat.send_message("❌ Usage: /setpay qr <url_or_file_id>")
+            await update.effective_chat.send_message("❌ Usage: /setpay upi <upi_id>")
             return
         v = context.args[1].strip()
-        await db.set_setting(SETTINGS_PAY_QR, v)
-        await update.effective_chat.send_message("✅ Payment QR set.")
+        await db.set_setting(SETTINGS_PAY_UPI, v)
+        await update.effective_chat.send_message("✅ Payment UPI set.")
+        return
+    if sub == "name":
+        if len(context.args) < 2:
+            await update.effective_chat.send_message("❌ Usage: /setpay name <payee_name>")
+            return
+        v = " ".join(context.args[1:]).strip()
+        await db.set_setting(SETTINGS_PAY_NAME, v)
+        await update.effective_chat.send_message("✅ Payment payee name set.")
         return
     if sub == "text":
         text = " ".join(context.args[1:]).strip()
