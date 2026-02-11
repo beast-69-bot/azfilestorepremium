@@ -1302,7 +1302,7 @@ async def forcechdebug(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await update.effective_chat.send_message("🚫 Access denied. (Admin/Owner only)")
         return
     if not context.args:
-        await update.effective_chat.send_message("ℹ️ Usage: `/forcechdebug <user_id>`", parse_mode="Markdown")
+        await update.effective_chat.send_message("ℹ️ Usage: /forcechdebug <user_id>")
         return
     try:
         uid = int(context.args[0])
@@ -1313,13 +1313,13 @@ async def forcechdebug(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     if not details:
         await update.effective_chat.send_message("ℹ️ No force channels configured.")
         return
-    lines = [f"Result: {'PASS' if ok else 'BLOCK'} for user `{uid}`", ""]
+    lines = [f"Result: {'PASS' if ok else 'BLOCK'} for user {uid}", ""]
     for d in details:
         lines.append(
-            f"• `{d['channel_id']}` mode={d['mode']} joined={d['joined']} request={d['request']} pass={d['passed']} "
+            f"• {d['channel_id']} mode={d['mode']} joined={d['joined']} request={d['request']} pass={d['passed']} "
             f"member_err={d['member_error'] or '-'} req_api_err={d['request_api_error'] or '-'}"
         )
-    await update.effective_chat.send_message("\n".join(lines), parse_mode="Markdown")
+    await update.effective_chat.send_message("\n".join(lines))
 
 
 async def forcech_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
