@@ -266,9 +266,27 @@ async def _has_pending_join_request_via_api(
     if not fn:
         return False, "no_get_chat_join_requests"
 
+    # Fast path: query by user_id directly (supported by Bot API).
+    # This avoids scanning hundreds of pending requests and keeps bot responsive.
+    try:
+        kwargs_fast: dict[str, Any] = {"chat_id": channel_id, "user_id": int(user_id), "limit": 1}
+        if invite_link and invite_link.startswith("http"):
+            kwargs_fast["invite_link"] = invite_link
+        reqs = await fn(**kwargs_fast)
+        if reqs:
+            return True, ""
+    except TypeError:
+        # Some PTB versions may not expose user_id parameter; continue with fallback.
+        pass
+    except Exception as e:
+        # Continue with fallback scan; include error only if fallback also fails.
+        fast_err = f"api_error_fast:{type(e).__name__}"
+    else:
+        fast_err = ""
+
     async def _scan(kwargs: dict[str, Any]) -> tuple[bool, str]:
         offset: Optional[int] = None
-        for _ in range(5):  # up to ~500 requests scan
+        for _ in range(2):  # keep fallback small to avoid slowdown
             k = dict(kwargs)
             k["chat_id"] = channel_id
             k["limit"] = 100
@@ -312,7 +330,11 @@ async def _has_pending_join_request_via_api(
         # Continue to global scan if not found.
 
     ok, err = await _scan({})
-    return ok, err
+    if ok:
+        return True, ""
+    if fast_err and not err:
+        return False, fast_err
+    return False, err
 
 
 def _join_keyboard(channels: list[dict[str, Any]], recheck_code: str) -> InlineKeyboardMarkup:
