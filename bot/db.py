@@ -58,11 +58,18 @@ class Database:
 
             CREATE TABLE IF NOT EXISTS force_channels (
               channel_id  INTEGER PRIMARY KEY,
+              mode        TEXT NOT NULL DEFAULT 'direct',
               invite_link TEXT,
               title       TEXT,
               username    TEXT,
               added_by    INTEGER NOT NULL,
               added_at    INTEGER NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS force_join_requests (
+              channel_id   INTEGER NOT NULL,
+              user_id      INTEGER NOT NULL,
+              requested_at INTEGER NOT NULL,
+              PRIMARY KEY(channel_id, user_id)
             );
 
             CREATE TABLE IF NOT EXISTS files (
@@ -133,6 +140,13 @@ class Database:
             );
             """
         )
+        # Lightweight migrations for existing databases.
+        cur = await self.conn.execute("PRAGMA table_info(force_channels)")
+        cols = await cur.fetchall()
+        await cur.close()
+        col_names = {str(r[1]) for r in cols}
+        if "mode" not in col_names:
+            await self.conn.execute("ALTER TABLE force_channels ADD COLUMN mode TEXT NOT NULL DEFAULT 'direct'")
         await self.conn.commit()
 
     # Users
@@ -234,6 +248,7 @@ class Database:
     async def add_force_channel(
         self,
         channel_id: int,
+        mode: str,
         invite_link: str | None,
         title: str | None,
         username: str | None,
@@ -242,16 +257,17 @@ class Database:
         now = _now()
         await self.conn.execute(
             """
-            INSERT INTO force_channels(channel_id, invite_link, title, username, added_by, added_at)
-            VALUES(?, ?, ?, ?, ?, ?)
+            INSERT INTO force_channels(channel_id, mode, invite_link, title, username, added_by, added_at)
+            VALUES(?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(channel_id) DO UPDATE SET
+              mode=excluded.mode,
               invite_link=excluded.invite_link,
               title=excluded.title,
               username=excluded.username,
               added_by=excluded.added_by,
               added_at=excluded.added_at
             """,
-            (int(channel_id), invite_link, title, username, int(added_by), now),
+            (int(channel_id), mode, invite_link, title, username, int(added_by), now),
         )
         await self.conn.commit()
 
@@ -260,13 +276,34 @@ class Database:
         await self.conn.commit()
 
     async def list_force_channels(self) -> list[dict[str, Any]]:
-        cur = await self.conn.execute("SELECT channel_id, invite_link, title, username FROM force_channels ORDER BY channel_id")
+        cur = await self.conn.execute("SELECT channel_id, mode, invite_link, title, username FROM force_channels ORDER BY channel_id")
         rows = await cur.fetchall()
         await cur.close()
         out: list[dict[str, Any]] = []
         for r in rows:
-            out.append({"channel_id": int(r[0]), "invite_link": r[1], "title": r[2], "username": r[3]})
+            out.append({"channel_id": int(r[0]), "mode": r[1], "invite_link": r[2], "title": r[3], "username": r[4]})
         return out
+
+    async def add_force_join_request(self, channel_id: int, user_id: int) -> None:
+        now = _now()
+        await self.conn.execute(
+            """
+            INSERT INTO force_join_requests(channel_id, user_id, requested_at)
+            VALUES(?, ?, ?)
+            ON CONFLICT(channel_id, user_id) DO UPDATE SET requested_at=excluded.requested_at
+            """,
+            (int(channel_id), int(user_id), now),
+        )
+        await self.conn.commit()
+
+    async def has_force_join_request(self, channel_id: int, user_id: int) -> bool:
+        cur = await self.conn.execute(
+            "SELECT 1 FROM force_join_requests WHERE channel_id=? AND user_id=?",
+            (int(channel_id), int(user_id)),
+        )
+        row = await cur.fetchone()
+        await cur.close()
+        return bool(row)
 
     # Files
     async def save_file(

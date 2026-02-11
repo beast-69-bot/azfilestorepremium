@@ -42,6 +42,7 @@ async def _post_init(app: Application) -> None:
         BotCommand("setstartimg", "Set /start image URL (Admin/Owner)"),
         BotCommand("getemojiid", "Extract Premium emoji IDs (Admin/Owner)"),
         BotCommand("setuitemoji", "Store UI emoji ID mapping (Admin/Owner)"),
+        BotCommand("setemojipreset", "Apply predefined UI emoji ID set (Admin/Owner)"),
     ]
     try:
         await app.bot.set_my_commands(commands)

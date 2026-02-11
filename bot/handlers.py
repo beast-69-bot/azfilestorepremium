@@ -10,6 +10,7 @@ from telegram.error import RetryAfter
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
+    ChatJoinRequestHandler,
     CommandHandler,
     ContextTypes,
     MessageHandler,
@@ -25,6 +26,32 @@ MAX_CHANNEL_BATCH_POSTS = 200
 SETTINGS_AUTODELETE_SECONDS = "autodelete_seconds"
 SETTINGS_START_IMG_URL = "start_img_url"
 SETTINGS_UI_EMOJI_PREFIX = "ui_emoji:"
+PRESET_UI_EMOJI_IDS = {
+    "info": "6096064954018829186",
+    "timer": "5440621591387980068",
+    "hourglass": "6082464824111928051",
+    "warning": "5420323339723881652",
+    "check": "6082567989226378348",
+    "cross": "5348386339777698814",
+    "id": "6289762537344864636",
+    "ticket": "6082162475594165182",
+    "user": "6062079075374077548",
+    "stats": "5231200819986047254",
+    "pin": "5391032818111363540",
+    "announce": "6289406458786221863",
+    "outbox": "6062007740262258850",
+    "box": "6082192871077712762",
+    "refresh": "5382178536872223059",
+    "lock_closed": "5472308992514464048",
+    "lock": "5231302159739395058",
+    "unlock": "5296369303661067030",
+    "clock": "5440621591387980068",
+    "image": "5375074927252621134",
+    "trash": "5033287275287413303",
+    "denied": "5348386339777698814",
+    "puzzle": "6294142703907116473",
+    "receipt": "5032963696746300412",
+}
 
 
 def _welcome_text() -> str:
@@ -75,31 +102,60 @@ async def _joined_all_force_channels(user_id: int, context: ContextTypes.DEFAULT
     if not channels:
         return True, []
     bot = context.bot
+    missing: list[dict[str, Any]] = []
     for ch in channels:
         cid = int(ch["channel_id"])
+        mode = (ch.get("mode") or "direct").lower()
         try:
             member = await bot.get_chat_member(chat_id=cid, user_id=user_id)
             if member.status in (ChatMemberStatus.LEFT, ChatMemberStatus.KICKED):
-                return False, channels
+                if mode == "request" and await db.has_force_join_request(cid, user_id):
+                    continue
+                missing.append(ch)
         except Exception:
-            # If we can't verify, deny (safer).
-            return False, channels
-    return True, channels
+            # If we can't verify, deny (safer). Request-mode can pass only when join request is recorded.
+            if mode == "request" and await db.has_force_join_request(cid, user_id):
+                continue
+            missing.append(ch)
+    return (len(missing) == 0), missing
 
 
 def _join_keyboard(channels: list[dict[str, Any]], recheck_code: str) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
     for ch in channels:
         title = ch.get("title") or str(ch["channel_id"])
+        mode = (ch.get("mode") or "direct").lower()
         url = ch.get("invite_link")
         if not url and ch.get("username"):
             url = f"https://t.me/{ch['username']}"
         if url:
-            rows.append([InlineKeyboardButton(text=f"📣 Join: {title}", url=url)])
+            if mode == "request":
+                rows.append([InlineKeyboardButton(text=f"🛂 Send Join Request: {title}", url=url)])
+            else:
+                rows.append([InlineKeyboardButton(text=f"📢 Join Channel: {title}", url=url)])
         else:
             rows.append([InlineKeyboardButton(text=f"🔒 Required: {title}", callback_data="noop")])
     rows.append([InlineKeyboardButton(text="✅ I've Joined (Recheck)", callback_data=f"recheck:{recheck_code}")])
     return InlineKeyboardMarkup(rows)
+
+
+def _parse_channel_ref(s: str) -> Optional[str | int]:
+    val = (s or "").strip()
+    if not val:
+        return None
+    if val.startswith("@") and len(val) > 1:
+        return val
+    if val.startswith("-100") and val[1:].isdigit():
+        try:
+            return int(val)
+        except ValueError:
+            return None
+    if val.isdigit() and val.startswith("100"):
+        try:
+            return -int(val)
+        except ValueError:
+            return None
+    return None
 
 
 async def _send_file(chat_id: int, file_row: dict[str, Any], caption: Optional[str], context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -562,6 +618,9 @@ async def batch_link_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     # Handles the link inputs for /batch channel-range creation.
     if not update.effective_message or not update.effective_user or not update.effective_chat:
         return
+    # When /forcech guided flow is active, ignore this handler.
+    if context.user_data.get("forcech_state"):
+        return
     state = context.user_data.get("chbatch_state")
     if not state:
         return
@@ -961,16 +1020,16 @@ async def forcech(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
     db: Database = context.application.bot_data["db"]
 
-    if not context.args or context.args[0].lower() == "list":
+    if context.args and context.args[0].lower() == "list":
         chans = await db.list_force_channels()
         if not chans:
             await update.effective_chat.send_message(
                 "📣 *Force Channels*\n\n"
                 "No required channels set.\n\n"
                 "✅ *Usage*\n"
-                "• `/forcech add <channel_id> [invite_link]`\n"
-                "• `/forcech remove <channel_id>`\n"
-                "• `/forcech list`",
+                "• `/forcech` (add flow)\n"
+                "• `/forcech list`\n"
+                "• `/forcech remove <channel_id|@username>`",
                 parse_mode="Markdown",
             )
             return
@@ -978,47 +1037,167 @@ async def forcech(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         for ch in chans:
             extra = ch.get("invite_link") or (f"@{ch['username']}" if ch.get("username") else "")
             name = ch.get("title") or ""
-            lines.append(f"• `{ch['channel_id']}` {name} {extra}".strip())
+            mode = (ch.get("mode") or "direct").lower()
+            mode_label = "🔓 Direct" if mode == "direct" else "🛂 Request"
+            lines.append(f"• `{ch['channel_id']}` [{mode_label}] {name} {extra}".strip())
         await update.effective_chat.send_message("📣 *Force Channels*\n\n" + "\n".join(lines), parse_mode="Markdown")
         return
 
-    sub = context.args[0].lower()
-    if sub == "add":
+    if context.args and context.args[0].lower() == "remove":
         if len(context.args) < 2:
-            await update.effective_chat.send_message("ℹ️ Usage: `/forcech add <channel_id> [invite_link]`", parse_mode="Markdown")
+            await update.effective_chat.send_message("ℹ️ Usage: `/forcech remove <channel_id|@username>`", parse_mode="Markdown")
+            return
+        ref = _parse_channel_ref(context.args[1])
+        if ref is None:
+            await update.effective_chat.send_message("❌ Invalid channel id/username.")
             return
         try:
-            cid = int(context.args[1])
-        except ValueError:
-            await update.effective_chat.send_message("❌ Invalid channel_id.")
-            return
-        invite = context.args[2].strip() if len(context.args) > 2 else None
-        title = None
-        username = None
-        try:
-            chat = await context.bot.get_chat(cid)
-            title = chat.title
-            username = chat.username
+            chat = await context.bot.get_chat(ref)
+            cid = int(chat.id)
         except Exception:
-            pass
-        await db.add_force_channel(cid, invite, title, username, update.effective_user.id)
-        await update.effective_chat.send_message(f"✅ Force channel added/updated: `{cid}`", parse_mode="Markdown")
-        return
-
-    if sub == "remove":
-        if len(context.args) < 2:
-            await update.effective_chat.send_message("ℹ️ Usage: `/forcech remove <channel_id>`", parse_mode="Markdown")
-            return
-        try:
-            cid = int(context.args[1])
-        except ValueError:
-            await update.effective_chat.send_message("❌ Invalid channel_id.")
-            return
+            # fallback when chat cannot be resolved (assume raw id was passed)
+            if isinstance(ref, int):
+                cid = int(ref)
+            else:
+                await update.effective_chat.send_message("❌ Channel not found.")
+                return
         await db.remove_force_channel(cid)
         await update.effective_chat.send_message(f"✅ Force channel removed: `{cid}`", parse_mode="Markdown")
         return
 
-    await update.effective_chat.send_message("ℹ️ Usage: `/forcech add|remove|list ...`", parse_mode="Markdown")
+    # Default: interactive add flow.
+    context.user_data["forcech_state"] = {"step": "await_channel"}
+    await update.effective_chat.send_message("📣 Channel ID/username bhejo")
+
+
+async def forcech_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not update.effective_chat or not update.effective_user or not update.effective_message:
+        return
+    state = context.user_data.get("forcech_state")
+    if not state:
+        return
+    await _upsert_user(update, context)
+    if not await _is_admin_or_owner(update, context):
+        return
+    if state.get("step") != "await_channel":
+        return
+
+    db: Database = context.application.bot_data["db"]
+    ref = _parse_channel_ref((update.effective_message.text or "").strip())
+    if ref is None:
+        await update.effective_chat.send_message("❌ Invalid format. Send `-100xxxx` or `@channelusername`.", parse_mode="Markdown")
+        return
+
+    try:
+        chat = await context.bot.get_chat(ref)
+    except Exception:
+        await update.effective_chat.send_message("❌ Channel not found / inaccessible.")
+        return
+    if chat.type != "channel":
+        await update.effective_chat.send_message("❌ Only channel is supported for force-join.")
+        return
+    if not await _bot_is_admin(int(chat.id), context):
+        context.user_data.pop("forcech_state", None)
+        await update.effective_chat.send_message("❌ Bot is not admin in this channel. Add bot as admin and try again.")
+        return
+
+    state["channel_id"] = int(chat.id)
+    state["title"] = chat.title
+    state["username"] = chat.username
+    state["step"] = "await_mode"
+    context.user_data["forcech_state"] = state
+
+    kb = InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton("🔓 Direct Mode", callback_data="forcech_mode:direct"),
+                InlineKeyboardButton("🛂 Request Mode", callback_data="forcech_mode:request"),
+            ]
+        ]
+    )
+    await update.effective_chat.send_message("Mode select karo:", reply_markup=kb)
+
+
+async def forcech_mode_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    q = update.callback_query
+    if not q or not update.effective_chat or not update.effective_user:
+        return
+    await q.answer()
+    await _upsert_user(update, context)
+    if not await _is_admin_or_owner(update, context):
+        await q.edit_message_text("🚫 Access denied. (Admin/Owner only)")
+        return
+
+    data = q.data or ""
+    if not data.startswith("forcech_mode:"):
+        return
+    mode = data.split(":", 1)[1]
+    if mode not in ("direct", "request"):
+        await q.edit_message_text("❌ Invalid mode.")
+        return
+
+    state = context.user_data.get("forcech_state") or {}
+    if state.get("step") != "await_mode":
+        await q.edit_message_text("ℹ️ No active forcech add flow. Run /forcech again.")
+        return
+
+    cid = int(state.get("channel_id", 0))
+    if not cid:
+        context.user_data.pop("forcech_state", None)
+        await q.edit_message_text("❌ Missing channel state. Run /forcech again.")
+        return
+
+    # Re-validate admin before saving.
+    if not await _bot_is_admin(cid, context):
+        context.user_data.pop("forcech_state", None)
+        await q.edit_message_text("❌ Bot is not admin in this channel. Add bot as admin and try again.")
+        return
+
+    username = state.get("username")
+    title = state.get("title")
+    invite_link: Optional[str] = None
+    if username:
+        invite_link = f"https://t.me/{username}"
+    else:
+        try:
+            inv = await context.bot.create_chat_invite_link(
+                chat_id=cid,
+                creates_join_request=(mode == "request"),
+                name=f"forcech_{mode}",
+            )
+            invite_link = inv.invite_link
+        except Exception:
+            if mode == "request":
+                await q.edit_message_text(
+                    "❌ Request mode invite link generate nahi hua.\n"
+                    "Enable Join Requests in channel settings, then try /forcech again."
+                )
+                context.user_data.pop("forcech_state", None)
+                return
+            await q.edit_message_text("❌ Invite link generate nahi hua. Check bot admin permissions.")
+            context.user_data.pop("forcech_state", None)
+            return
+
+    db: Database = context.application.bot_data["db"]
+    await db.add_force_channel(cid, mode, invite_link, title, username, update.effective_user.id)
+    context.user_data.pop("forcech_state", None)
+    mode_label = "🔓 Direct Mode" if mode == "direct" else "🛂 Request Mode"
+    await q.edit_message_text(
+        "✅ Force channel saved\n\n"
+        f"Channel: `{cid}`\n"
+        f"Mode: {mode_label}\n"
+        f"Join Link: {invite_link}",
+        parse_mode="Markdown",
+        disable_web_page_preview=True,
+    )
+
+
+async def on_chat_join_request(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    req = update.chat_join_request
+    if not req:
+        return
+    db: Database = context.application.bot_data["db"]
+    await db.add_force_join_request(req.chat.id, req.from_user.id)
 
 
 async def setcaption(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1201,6 +1380,25 @@ async def setuitemoji(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     await update.effective_chat.send_message(f"✅ UI emoji set: `{name}` -> `{val}`", parse_mode="Markdown")
 
 
+async def setemojipreset(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """
+    One-shot preset loader for UI emoji IDs shared by admin.
+    """
+    await _upsert_user(update, context)
+    if not await _is_admin_or_owner(update, context):
+        await update.effective_chat.send_message("🚫 Access denied. (Admin/Owner only)")
+        return
+    db: Database = context.application.bot_data["db"]
+    for name, eid in PRESET_UI_EMOJI_IDS.items():
+        await db.set_setting(f"{SETTINGS_UI_EMOJI_PREFIX}{name}", eid)
+    await update.effective_chat.send_message(
+        "✅ UI emoji preset saved.\n\n"
+        f"🧾 Total mapped: `{len(PRESET_UI_EMOJI_IDS)}`\n"
+        "Next step: UI rendering me in IDs ko apply karna.",
+        parse_mode="Markdown",
+    )
+
+
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     if not await _is_admin_or_owner(update, context):
@@ -1245,8 +1443,13 @@ def build_handlers(app: Application) -> None:
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(recheck_callback, pattern=r"^(recheck:|noop)"))
 
+    # /forcech uses guided text input + mode callback.
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, forcech_input), group=0)
+    app.add_handler(CallbackQueryHandler(forcech_mode_callback, pattern=r"^forcech_mode:(direct|request)$"))
+    app.add_handler(ChatJoinRequestHandler(on_chat_join_request))
+
     # /batch uses non-command text inputs (start/end post links).
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, batch_link_input), group=0)
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, batch_link_input), group=1)
 
     app.add_handler(CommandHandler("getlink", getlink))
     app.add_handler(CommandHandler("batch", batch))
@@ -1266,6 +1469,7 @@ def build_handlers(app: Application) -> None:
     app.add_handler(CommandHandler("setstartimg", setstartimg))
     app.add_handler(CommandHandler("getemojiid", getemojiid))
     app.add_handler(CommandHandler("setuitemoji", setuitemoji))
+    app.add_handler(CommandHandler("setemojipreset", setemojipreset))
 
     app.add_handler(CommandHandler("redeem", redeem))
 
