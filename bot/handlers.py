@@ -30,6 +30,8 @@ MAX_CHANNEL_BATCH_POSTS = 200
 SETTINGS_AUTODELETE_SECONDS = "autodelete_seconds"
 SETTINGS_START_IMG_URL = "start_img_url"
 SETTINGS_UI_EMOJI_PREFIX = "ui_emoji:"
+SETTINGS_PAY_QR = "pay_qr"
+SETTINGS_PAY_TEXT = "pay_text"
 PRESET_UI_EMOJI_IDS = {
     "info": "6096064954018829186",
     "timer": "5440621591387980068",
@@ -83,6 +85,12 @@ UNICODE_TO_UI_NAME = {
     "🧩": "puzzle",
     "🧾": "receipt",
     "⭐": "premium_star",
+}
+
+PAY_PLANS: dict[str, dict[str, Any]] = {
+    "1d": {"label": "1 Day", "days": 1, "amount": 9},
+    "7d": {"label": "7 Days", "days": 7, "amount": 29},
+    "30d": {"label": "1 Month", "days": 30, "amount": 99},
 }
 
 
@@ -1321,9 +1329,196 @@ async def plan(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "• Final link access ke liye ads dekhne honge\n\n"
         "⭐ *Premium User Benefit*\n"
         "• Direct access milta hai (no ads)\n\n"
+        "🛒 Buy premium: `/pay`\n\n"
         f"👤 *Your Premium Status*\n{status}",
         parse_mode="Markdown",
     )
+
+
+def _pay_plan_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton("💎 1 Day - ₹9", callback_data="payplan:1d")],
+            [InlineKeyboardButton("💎 7 Days - ₹29", callback_data="payplan:7d")],
+            [InlineKeyboardButton("💎 1 Month - ₹99", callback_data="payplan:30d")],
+        ]
+    )
+
+
+async def pay(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await _upsert_user(update, context)
+    await update.effective_chat.send_message(
+        "🛒 *Choose Your Plan*\n\nSelect one plan to continue payment:",
+        parse_mode="Markdown",
+        reply_markup=_pay_plan_keyboard(),
+    )
+
+
+async def pay_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    q = update.callback_query
+    if not q or not update.effective_user or not update.effective_chat:
+        return
+    await q.answer()
+    data = q.data or ""
+    db: Database = context.application.bot_data["db"]
+
+    if data.startswith("payplan:"):
+        key = data.split(":", 1)[1]
+        plan = PAY_PLANS.get(key)
+        if not plan:
+            await q.edit_message_text("❌ Invalid plan.")
+            return
+        rid = await db.create_payment_request(update.effective_user.id, key, int(plan["days"]), int(plan["amount"]))
+        pay_text = await db.get_setting(SETTINGS_PAY_TEXT)
+        if not pay_text:
+            pay_text = (
+                "Pay to buy premium.\n"
+                "After payment, tap *Send UTR* and share UTR/screenshot.\n"
+                "Admin will verify and activate plan manually."
+            )
+        msg = (
+            f"💳 *Payment Details*\n\n"
+            f"Plan: *{plan['label']}*\n"
+            f"Amount: *₹{plan['amount']}*\n"
+            f"Request ID: `{rid}`\n\n"
+            f"{pay_text}"
+        )
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton("📩 Send UTR", callback_data=f"payutr:{rid}")]])
+        qr = await db.get_setting(SETTINGS_PAY_QR)
+        if qr:
+            try:
+                await q.edit_message_text(msg, parse_mode="Markdown", reply_markup=kb)
+                await update.effective_chat.send_photo(photo=qr, caption="🔳 Scan QR and complete payment.")
+                return
+            except Exception:
+                pass
+        await q.edit_message_text(msg, parse_mode="Markdown", reply_markup=kb)
+        return
+
+    if data.startswith("payutr:"):
+        rid_raw = data.split(":", 1)[1]
+        try:
+            rid = int(rid_raw)
+        except ValueError:
+            await q.answer("Invalid request id", show_alert=True)
+            return
+        context.user_data["pay_utr_request_id"] = rid
+        await q.edit_message_text(
+            f"📩 Send your UTR now for Request ID `{rid}`.\n\n"
+            "You can send text UTR or payment screenshot.\n"
+            "Admin will verify and activate manually.",
+            parse_mode="Markdown",
+        )
+        return
+
+
+async def _notify_payment_admins(update: Update, context: ContextTypes.DEFAULT_TYPE, req: dict[str, Any], utr_preview: str) -> None:
+    db: Database = context.application.bot_data["db"]
+    cfg = context.application.bot_data["cfg"]
+    admin_ids = await db.list_admin_ids()
+    targets = {int(cfg.owner_id), *[int(x) for x in admin_ids]}
+    user = update.effective_user
+    username = f"@{user.username}" if user and user.username else "-"
+    note = (
+        "💰 *New Payment UTR Submitted*\n\n"
+        f"Request ID: `{req['id']}`\n"
+        f"User ID: `{req['user_id']}`\n"
+        f"Username: {username}\n"
+        f"Plan: *{req['plan_key']}* ({req['plan_days']} days)\n"
+        f"Amount: *₹{req['amount_rs']}*\n"
+        f"UTR: `{utr_preview}`\n\n"
+        "Activate manually using:\n"
+        "`/addpremium <user_id> <days>`"
+    )
+    for aid in targets:
+        try:
+            await context.bot.send_message(chat_id=aid, text=note, parse_mode="Markdown")
+            # If user sent media, forward copy for proof.
+            if update.effective_message and (update.effective_message.photo or update.effective_message.document):
+                await context.bot.copy_message(
+                    chat_id=aid,
+                    from_chat_id=update.effective_chat.id,
+                    message_id=update.effective_message.message_id,
+                )
+        except Exception:
+            pass
+
+
+async def pay_utr_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    rid = context.user_data.get("pay_utr_request_id")
+    if not rid:
+        return
+    if not update.effective_user or not update.effective_chat or not update.effective_message:
+        return
+    db: Database = context.application.bot_data["db"]
+
+    utr_text = (update.effective_message.text or "").strip()
+    if not utr_text:
+        if update.effective_message.photo:
+            utr_text = f"screenshot:{update.effective_message.photo[-1].file_id[:12]}"
+        elif update.effective_message.document:
+            utr_text = f"document:{update.effective_message.document.file_id[:12]}"
+        else:
+            await update.effective_chat.send_message("⚠️ Please send UTR text or payment screenshot.")
+            return
+
+    ok = await db.set_payment_utr(int(rid), utr_text)
+    context.user_data.pop("pay_utr_request_id", None)
+    if not ok:
+        await update.effective_chat.send_message("❌ Payment request expired/invalid. Please run /pay again.")
+        return
+    req = await db.get_payment_request(int(rid))
+    if req:
+        await _notify_payment_admins(update, context, req, utr_text)
+    await update.effective_chat.send_message(
+        "✅ UTR submitted successfully.\n"
+        "Admin ko notify kar diya gaya hai.\n"
+        "Plan verification ke baad manually activate kiya jayega."
+    )
+
+
+async def setpay(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await _upsert_user(update, context)
+    if not await _is_admin_or_owner(update, context):
+        await update.effective_chat.send_message("🚫 Access denied. (Admin/Owner only)")
+        return
+    db: Database = context.application.bot_data["db"]
+    if not context.args:
+        await update.effective_chat.send_message(
+            "ℹ️ Usage:\n"
+            "/setpay view\n"
+            "/setpay qr <url_or_file_id>\n"
+            "/setpay text <payment instructions>\n"
+            "/setpay clearqr",
+        )
+        return
+    sub = context.args[0].lower()
+    if sub == "view":
+        qr = await db.get_setting(SETTINGS_PAY_QR) or "-"
+        text = await db.get_setting(SETTINGS_PAY_TEXT) or "-"
+        await update.effective_chat.send_message(f"QR: {qr}\n\nText:\n{text}")
+        return
+    if sub == "clearqr":
+        await db.set_setting(SETTINGS_PAY_QR, None)
+        await update.effective_chat.send_message("✅ Payment QR cleared.")
+        return
+    if sub == "qr":
+        if len(context.args) < 2:
+            await update.effective_chat.send_message("❌ Usage: /setpay qr <url_or_file_id>")
+            return
+        v = context.args[1].strip()
+        await db.set_setting(SETTINGS_PAY_QR, v)
+        await update.effective_chat.send_message("✅ Payment QR set.")
+        return
+    if sub == "text":
+        text = " ".join(context.args[1:]).strip()
+        if not text:
+            await update.effective_chat.send_message("❌ Usage: /setpay text <payment instructions>")
+            return
+        await db.set_setting(SETTINGS_PAY_TEXT, text)
+        await update.effective_chat.send_message("✅ Payment text set.")
+        return
+    await update.effective_chat.send_message("❌ Invalid /setpay option.")
 
 
 async def forcech(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1803,8 +1998,10 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 def build_handlers(app: Application) -> None:
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(recheck_callback, pattern=r"^(recheck:|noop)"))
+    app.add_handler(CallbackQueryHandler(pay_callback, pattern=r"^pay(plan|utr):"))
 
     # /forcech uses guided text input + mode callback.
+    app.add_handler(MessageHandler((filters.TEXT | filters.PHOTO | filters.Document.ALL) & ~filters.COMMAND, pay_utr_input), group=0)
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, forcech_input), group=0)
     app.add_handler(CallbackQueryHandler(forcech_mode_callback, pattern=r"^forcech_mode:(direct|request)$"))
     app.add_handler(ChatJoinRequestHandler(on_chat_join_request))
@@ -1835,6 +2032,8 @@ def build_handlers(app: Application) -> None:
 
     app.add_handler(CommandHandler("redeem", redeem))
     app.add_handler(CommandHandler("plan", plan))
+    app.add_handler(CommandHandler("pay", pay))
+    app.add_handler(CommandHandler("setpay", setpay))
 
     # PTB v20+ uses uppercase filter shortcuts (VIDEO/AUDIO/PHOTO). Document is namespaced.
     media_filter = filters.Document.ALL | filters.VIDEO | filters.AUDIO | filters.PHOTO

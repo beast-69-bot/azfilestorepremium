@@ -26,6 +26,7 @@ async def _post_init(app: Application) -> None:
         BotCommand("start", "Start / open link (User)"),
         BotCommand("redeem", "Redeem token (User)"),
         BotCommand("plan", "View normal/premium plans (User)"),
+        BotCommand("pay", "Buy premium plan (User)"),
         BotCommand("getlink", "Generate links (Admin/Owner)"),
         BotCommand("batch", "Channel batch links (Admin/Owner)"),
         BotCommand("custombatch", "Custom file batch (Admin/Owner)"),
@@ -45,6 +46,7 @@ async def _post_init(app: Application) -> None:
         BotCommand("getemojiid", "Extract Premium emoji IDs (Admin/Owner)"),
         BotCommand("setuitemoji", "Store UI emoji ID mapping (Admin/Owner)"),
         BotCommand("setemojipreset", "Apply predefined UI emoji ID set (Admin/Owner)"),
+        BotCommand("setpay", "Set payment QR/text (Admin/Owner)"),
     ]
     try:
         await app.bot.set_my_commands(commands)

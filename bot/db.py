@@ -138,6 +138,21 @@ class Database:
               used_at       INTEGER,
               grant_seconds INTEGER NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS payment_requests (
+              id            INTEGER PRIMARY KEY AUTOINCREMENT,
+              user_id       INTEGER NOT NULL,
+              plan_key      TEXT NOT NULL,
+              plan_days     INTEGER NOT NULL,
+              amount_rs     INTEGER NOT NULL,
+              status        TEXT NOT NULL DEFAULT 'pending', -- pending|submitted|processed|rejected
+              utr_text      TEXT,
+              created_at    INTEGER NOT NULL,
+              updated_at    INTEGER NOT NULL,
+              processed_by  INTEGER,
+              processed_at  INTEGER
+            );
+            CREATE INDEX IF NOT EXISTS idx_payment_requests_user ON payment_requests(user_id, status);
             """
         )
         # Lightweight migrations for existing databases.
@@ -232,6 +247,12 @@ class Database:
     async def remove_admin(self, user_id: int) -> None:
         await self.conn.execute("DELETE FROM admins WHERE user_id=?", (int(user_id),))
         await self.conn.commit()
+
+    async def list_admin_ids(self) -> list[int]:
+        cur = await self.conn.execute("SELECT user_id FROM admins")
+        rows = await cur.fetchall()
+        await cur.close()
+        return [int(r[0]) for r in rows]
 
     # Settings
     async def set_setting(self, key: str, value: str | None) -> None:
@@ -530,3 +551,56 @@ class Database:
             await cur.close()
             out[key] = int(row[0]) if row else 0
         return out
+
+    # Payments
+    async def create_payment_request(self, user_id: int, plan_key: str, plan_days: int, amount_rs: int) -> int:
+        now = _now()
+        cur = await self.conn.execute(
+            """
+            INSERT INTO payment_requests(user_id, plan_key, plan_days, amount_rs, status, created_at, updated_at)
+            VALUES(?, ?, ?, ?, 'pending', ?, ?)
+            """,
+            (int(user_id), plan_key, int(plan_days), int(amount_rs), now, now),
+        )
+        await self.conn.commit()
+        return int(cur.lastrowid)
+
+    async def set_payment_utr(self, request_id: int, utr_text: str) -> bool:
+        now = _now()
+        cur = await self.conn.execute(
+            """
+            UPDATE payment_requests
+            SET utr_text=?, status='submitted', updated_at=?
+            WHERE id=? AND status IN ('pending', 'submitted')
+            """,
+            (utr_text, now, int(request_id)),
+        )
+        await self.conn.commit()
+        return bool(cur.rowcount and cur.rowcount > 0)
+
+    async def get_payment_request(self, request_id: int) -> Optional[dict[str, Any]]:
+        cur = await self.conn.execute(
+            """
+            SELECT id, user_id, plan_key, plan_days, amount_rs, status, utr_text, created_at, updated_at, processed_by, processed_at
+            FROM payment_requests
+            WHERE id=?
+            """,
+            (int(request_id),),
+        )
+        row = await cur.fetchone()
+        await cur.close()
+        if not row:
+            return None
+        return {
+            "id": int(row[0]),
+            "user_id": int(row[1]),
+            "plan_key": row[2],
+            "plan_days": int(row[3]),
+            "amount_rs": int(row[4]),
+            "status": row[5],
+            "utr_text": row[6],
+            "created_at": int(row[7]),
+            "updated_at": int(row[8]),
+            "processed_by": row[9],
+            "processed_at": row[10],
+        }
