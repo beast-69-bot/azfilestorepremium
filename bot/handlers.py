@@ -169,6 +169,11 @@ async def _joined_all_force_channels(user_id: int, context: ContextTypes.DEFAULT
         is_joined = False
         if mode == "request":
             has_request = await db.has_force_join_request(cid, user_id)
+            if not has_request:
+                has_request = await _has_pending_join_request_via_api(cid, user_id, context)
+                if has_request:
+                    # Cache it locally so next checks are fast and resilient.
+                    await db.add_force_join_request(cid, user_id)
         try:
             member = await bot.get_chat_member(chat_id=cid, user_id=user_id)
             is_joined = member.status not in (ChatMemberStatus.LEFT, ChatMemberStatus.KICKED)
@@ -185,6 +190,39 @@ async def _joined_all_force_channels(user_id: int, context: ContextTypes.DEFAULT
             if not is_joined:
                 missing.append(ch)
     return (len(missing) == 0), missing
+
+
+async def _has_pending_join_request_via_api(channel_id: int, user_id: int, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    """
+    Fallback for request-mode: check pending join requests directly from Telegram.
+    Useful if join_request update was missed while bot was offline.
+    """
+    fn = getattr(context.bot, "get_chat_join_requests", None)
+    if not fn:
+        return False
+    offset: Optional[int] = None
+    for _ in range(5):  # up to ~500 requests scan
+        kwargs = {"chat_id": channel_id, "limit": 100}
+        if offset is not None:
+            kwargs["offset_requester_user_id"] = offset
+        try:
+            reqs = await fn(**kwargs)
+        except Exception:
+            return False
+        if not reqs:
+            return False
+        last_uid = None
+        for r in reqs:
+            uid = getattr(getattr(r, "from_user", None), "id", None)
+            if uid is None:
+                continue
+            last_uid = int(uid)
+            if int(uid) == int(user_id):
+                return True
+        if last_uid is None:
+            return False
+        offset = int(last_uid) + 1
+    return False
 
 
 def _join_keyboard(channels: list[dict[str, Any]], recheck_code: str) -> InlineKeyboardMarkup:
