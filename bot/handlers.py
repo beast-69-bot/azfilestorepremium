@@ -272,7 +272,7 @@ async def _has_pending_join_request_via_api(
         kwargs_fast: dict[str, Any] = {"chat_id": channel_id, "user_id": int(user_id), "limit": 1}
         if invite_link and invite_link.startswith("http"):
             kwargs_fast["invite_link"] = invite_link
-        reqs = await fn(**kwargs_fast)
+        reqs = await asyncio.wait_for(fn(**kwargs_fast), timeout=4.0)
         if reqs:
             return True, ""
     except TypeError:
@@ -294,14 +294,14 @@ async def _has_pending_join_request_via_api(
                 # PTB/Bot API naming changed over versions, try both.
                 k["offset_requester_user_id"] = offset
             try:
-                reqs = await fn(**k)
+                reqs = await asyncio.wait_for(fn(**k), timeout=4.0)
             except TypeError:
                 # Compatibility fallback.
                 if "offset_requester_user_id" in k:
                     k.pop("offset_requester_user_id", None)
                     k["offset_user_id"] = offset
                 try:
-                    reqs = await fn(**k)
+                    reqs = await asyncio.wait_for(fn(**k), timeout=4.0)
                 except Exception as e:
                     return False, f"api_error:{type(e).__name__}"
             except Exception as e:
