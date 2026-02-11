@@ -4,8 +4,8 @@ import asyncio
 import time
 from typing import Any, Optional
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
-from telegram.constants import ChatMemberStatus
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, MessageEntity, Update
+from telegram.constants import ChatMemberStatus, MessageEntityType
 from telegram.error import RetryAfter
 from telegram.ext import (
     Application,
@@ -52,23 +52,80 @@ PRESET_UI_EMOJI_IDS = {
     "puzzle": "6294142703907116473",
     "receipt": "5032963696746300412",
 }
+UNICODE_TO_UI_NAME = {
+    "ℹ": "info",
+    "⏱": "timer",
+    "⏳": "hourglass",
+    "⚠": "warning",
+    "✅": "check",
+    "❌": "cross",
+    "🆔": "id",
+    "🎟": "ticket",
+    "👤": "user",
+    "📊": "stats",
+    "📌": "pin",
+    "📣": "announce",
+    "📤": "outbox",
+    "📦": "box",
+    "🔄": "refresh",
+    "🔐": "lock_closed",
+    "🔒": "lock",
+    "🔓": "unlock",
+    "🕒": "clock",
+    "🖼": "image",
+    "🗑": "trash",
+    "🚫": "denied",
+    "🧩": "puzzle",
+    "🧾": "receipt",
+}
 
 
 def _welcome_text() -> str:
     return (
-        "🔐 *Secure File Access*\n"
+        "🔐 Secure File Access\n"
         "Normal + Premium content system.\n\n"
-        "📌 *How to use*\n"
+        "📌 How to use\n"
         "• Open the link you received (deep link)\n"
         "• Join required channels when asked\n\n"
-        "⭐ *Premium*\n"
-        "• Redeem token: `/redeem <token>`\n\n"
-        "ℹ️ Note: Files can be accessed only via generated links."
+        "⭐ Premium\n"
+        "• Redeem token: /redeem <token>\n\n"
+        "ℹ Note: Files can be accessed only via generated links."
     )
 
 
 def _now() -> int:
     return int(time.time())
+
+
+def _u16len(s: str) -> int:
+    return len(s.encode("utf-16-le")) // 2
+
+
+async def _build_custom_emoji_entities(text: str, context: ContextTypes.DEFAULT_TYPE) -> list[MessageEntity]:
+    db: Database = context.application.bot_data["db"]
+    # Load effective mapping from DB, fallback to preset map.
+    name_to_id: dict[str, str] = {}
+    for name, preset in PRESET_UI_EMOJI_IDS.items():
+        v = await db.get_setting(f"{SETTINGS_UI_EMOJI_PREFIX}{name}")
+        name_to_id[name] = (v or preset).strip()
+
+    entities: list[MessageEntity] = []
+    off = 0
+    for ch in text:
+        name = UNICODE_TO_UI_NAME.get(ch)
+        if name:
+            eid = name_to_id.get(name)
+            if eid and eid.isdigit():
+                entities.append(
+                    MessageEntity(
+                        type=MessageEntityType.CUSTOM_EMOJI,
+                        offset=off,
+                        length=_u16len(ch),
+                        custom_emoji_id=eid,
+                    )
+                )
+        off += _u16len(ch)
+    return entities
 
 
 def _is_owner(update: Update, cfg: Any) -> bool:
@@ -287,14 +344,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         db: Database = context.application.bot_data["db"]
         img_url = await db.get_setting(SETTINGS_START_IMG_URL)
         text = _welcome_text()
+        entities = await _build_custom_emoji_entities(text, context)
         if img_url:
             try:
-                await update.effective_chat.send_photo(photo=img_url, caption=text, parse_mode="Markdown")
+                await update.effective_chat.send_photo(photo=img_url, caption=text, caption_entities=entities)
                 return
             except Exception:
                 # Fallback to text-only if URL is invalid/unreachable.
                 pass
-        await update.effective_chat.send_message(text, parse_mode="Markdown")
+        await update.effective_chat.send_message(text=text, entities=entities)
         return
     code = args[0].strip()
     await _deliver_by_code(update, context, code)
