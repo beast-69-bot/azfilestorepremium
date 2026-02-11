@@ -336,6 +336,42 @@ async def _build_custom_emoji_entities(text: str, context: ContextTypes.DEFAULT_
     return entities
 
 
+async def _send_emoji_text(
+    chat_id: int,
+    text: str,
+    context: ContextTypes.DEFAULT_TYPE,
+    reply_markup: Optional[InlineKeyboardMarkup] = None,
+    disable_web_page_preview: Optional[bool] = None,
+) -> Any:
+    entities = await _build_custom_emoji_entities(text, context)
+    return await context.bot.send_message(
+        chat_id=chat_id,
+        text=text,
+        entities=entities,
+        reply_markup=reply_markup,
+        disable_web_page_preview=disable_web_page_preview,
+    )
+
+
+async def _edit_emoji_text(
+    chat_id: int,
+    message_id: int,
+    text: str,
+    context: ContextTypes.DEFAULT_TYPE,
+    reply_markup: Optional[InlineKeyboardMarkup] = None,
+    disable_web_page_preview: Optional[bool] = None,
+) -> Any:
+    entities = await _build_custom_emoji_entities(text, context)
+    return await context.bot.edit_message_text(
+        chat_id=chat_id,
+        message_id=message_id,
+        text=text,
+        entities=entities,
+        reply_markup=reply_markup,
+        disable_web_page_preview=disable_web_page_preview,
+    )
+
+
 def _is_owner(update: Update, cfg: Any) -> bool:
     return bool(update.effective_user and update.effective_user.id == int(cfg.owner_id))
 
@@ -805,26 +841,28 @@ async def _deliver_by_code(update: Update, context: ContextTypes.DEFAULT_TYPE, c
 
     link = await db.get_link(code)
     if not link:
-        await chat.send_message("❌ Invalid or expired link.")
+        await _send_emoji_text(chat.id, "❌ Invalid or expired link.", context)
         return
 
     ok_join, channels = await _joined_all_force_channels(user.id, context)
     if not ok_join:
-        await chat.send_message(
-            "🚫 *Access Locked*\n\n"
+        await _send_emoji_text(
+            chat.id,
+            "🚫 Access Locked\n\n"
             "You must join all required channels to continue.\n"
-            "After joining, tap *Recheck* ✅.",
-            parse_mode="Markdown",
+            "After joining, tap Recheck ✅.",
+            context,
             reply_markup=_join_keyboard(channels, code),
         )
         return
 
     if link["access"] == "premium" and not await db.is_premium_active(user.id):
-        await chat.send_message(
-            "⭐ *Premium Required*\n\n"
+        await _send_emoji_text(
+            chat.id,
+            "⭐ Premium Required\n\n"
             "This link is for premium users only.\n"
-            "Redeem a token: `/redeem <token>`",
-            parse_mode="Markdown",
+            "Redeem a token: /redeem <token>",
+            context,
         )
         return
 
@@ -987,13 +1025,12 @@ async def admin_media_ingest(update: Update, context: ContextTypes.DEFAULT_TYPE)
     premium_url = _deep_link(context, prem_code)
 
     await update.effective_chat.send_message(
-        "✅ *File Saved Successfully*\n\n"
-        f"🆔 File ID: `{file_db_id}`\n\n"
-        "🔓 *Normal Link:*\n"
+        "✅ File Saved Successfully\n\n"
+        f"🆔 File ID: {file_db_id}\n\n"
+        "🔓 Normal Link:\n"
         f"{normal_url}\n\n"
-        "⭐ *Premium Link:*\n"
+        "⭐ Premium Link:\n"
         f"{premium_url}",
-        parse_mode="Markdown",
         reply_markup=_access_link_keyboard(normal_url, premium_url),
     )
 
@@ -1057,13 +1094,14 @@ async def getlink(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     normal_url = _deep_link(context, normal_code)
     premium_url = _deep_link(context, prem_code)
 
-    await update.effective_chat.send_message(
-        "✅ *Links Generated*\n\n"
-        "🔓 *Normal Link:*\n"
+    await _send_emoji_text(
+        update.effective_chat.id,
+        "✅ Links Generated\n\n"
+        "🔓 Normal Link:\n"
         f"{normal_url}\n\n"
-        "⭐ *Premium Link:*\n"
+        "⭐ Premium Link:\n"
         f"{premium_url}",
-        parse_mode="Markdown",
+        context,
         reply_markup=_access_link_keyboard(normal_url, premium_url),
     )
 
@@ -1514,18 +1552,19 @@ async def plan(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     else:
         status = "❌ Not Active"
 
-    await update.effective_chat.send_message(
-        "💎 *Premium Plans*\n\n"
+    await _send_emoji_text(
+        update.effective_chat.id,
+        "💎 Premium Plans\n\n"
         "• 1 Day: ₹9\n"
         "• 7 Days: ₹29\n"
         "• 1 Month: ₹99\n\n"
-        "🔓 *Normal User Benefit*\n"
+        "🔓 Normal User Benefit\n"
         "• Final link access ke liye ads dekhne honge\n\n"
-        "⭐ *Premium User Benefit*\n"
+        "⭐ Premium User Benefit\n"
         "• Direct access milta hai (no ads)\n\n"
-        "🛒 Buy premium: `/pay`\n\n"
-        f"👤 *Your Premium Status*\n{status}",
-        parse_mode="Markdown",
+        "🛒 Buy premium: /pay\n\n"
+        f"👤 Your Premium Status\n{status}",
+        context,
     )
 
 
@@ -1553,9 +1592,10 @@ def _upi_qr_image_url(upi_uri: str) -> str:
 
 async def pay(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
-    await update.effective_chat.send_message(
-        "🛒 *Choose Your Plan*\n\nSelect one plan to continue payment:",
-        parse_mode="Markdown",
+    await _send_emoji_text(
+        update.effective_chat.id,
+        "🛒 Choose Your Plan\n\nSelect one plan to continue payment:",
+        context,
         reply_markup=_pay_plan_keyboard(),
     )
 
@@ -1585,9 +1625,11 @@ async def pay_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         upi_id = await db.get_setting(SETTINGS_PAY_UPI)
         pay_name = await db.get_setting(SETTINGS_PAY_NAME) or "Premium Store"
         if not upi_id:
-            await q.edit_message_text(
-                "⚠️ Payment is not configured by admin yet.\n"
-                "Please contact admin.",
+            await _edit_emoji_text(
+                update.effective_chat.id,
+                q.message.message_id,
+                "⚠️ Payment is not configured by admin yet.\nPlease contact admin.",
+                context,
             )
             return
 
@@ -1603,16 +1645,15 @@ async def pay_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             f"{pay_text}"
         )
         kb = InlineKeyboardMarkup([[InlineKeyboardButton("📩 Send UTR", callback_data=f"payutr:{rid}")]])
-        await q.edit_message_text(msg, parse_mode="Markdown", reply_markup=kb)
+        await _edit_emoji_text(update.effective_chat.id, q.message.message_id, msg.replace("*", ""), context, reply_markup=kb)
         try:
             await update.effective_chat.send_photo(
                 photo=qr_url,
                 caption=(
-                    f"🔳 Scan this UPI QR for *₹{plan['amount']}*.\n"
-                    f"UPI: `{upi_id}`\n"
-                    f"Request ID: `{rid}`"
+                    f"🔳 Scan this UPI QR for ₹{plan['amount']}.\n"
+                    f"UPI: {upi_id}\n"
+                    f"Request ID: {rid}"
                 ),
-                parse_mode="Markdown",
             )
         except Exception:
             # Fallback if remote QR URL fails for any reason.
@@ -1631,11 +1672,13 @@ async def pay_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             await q.answer("Invalid request id", show_alert=True)
             return
         context.user_data["pay_utr_request_id"] = rid
-        await q.edit_message_text(
-            f"📩 Send your UTR now for Request ID `{rid}`.\n\n"
+        await _edit_emoji_text(
+            update.effective_chat.id,
+            q.message.message_id,
+            f"📩 Send your UTR now for Request ID {rid}.\n\n"
             "You can send text UTR or payment screenshot.\n"
             "Admin will verify and activate manually.",
-            parse_mode="Markdown",
+            context,
         )
         return
 
@@ -1764,8 +1807,10 @@ async def bsettings(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not await _is_admin_or_owner(update, context):
         await update.effective_chat.send_message("🚫 Access denied. (Admin/Owner only)")
         return
-    await update.effective_chat.send_message(
+    await _send_emoji_text(
+        update.effective_chat.id,
         "⚙️ Admin Settings Panel\n\nSelect any command button to see detailed usage.",
+        context,
         reply_markup=_bsettings_keyboard(),
     )
 
@@ -1780,8 +1825,11 @@ async def bsettings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return
     data = q.data or ""
     if data == "bset:back":
-        await q.edit_message_text(
+        await _edit_emoji_text(
+            update.effective_chat.id,
+            q.message.message_id,
             "⚙️ Admin Settings Panel\n\nSelect any command button to see detailed usage.",
+            context,
             reply_markup=_bsettings_keyboard(),
         )
         return
@@ -1793,8 +1841,11 @@ async def bsettings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await q.edit_message_text("❌ Unknown command doc.")
         return
     kb = InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back", callback_data="bset:back")]])
-    await q.edit_message_text(
+    await _edit_emoji_text(
+        update.effective_chat.id,
+        q.message.message_id,
         f"{doc['title']}\n\n{doc['body']}",
+        context,
         reply_markup=kb,
     )
 
