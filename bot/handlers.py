@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import re
 import time
 from typing import Any, Optional
+from urllib.parse import parse_qs, urlparse
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, MessageEntity, Update
 from telegram.constants import ChatMemberStatus, MessageEntityType
@@ -148,6 +150,38 @@ def _deep_link(context: ContextTypes.DEFAULT_TYPE, code: str) -> str:
     return f"https://t.me/{username}?start={code}"
 
 
+def _normalize_start_code(raw: str) -> str:
+    s = (raw or "").strip()
+    if not s:
+        return ""
+    # Remove common invisible chars from copy/paste.
+    s = s.replace("\u200b", "").replace("\u200c", "").replace("\u200d", "").replace("\ufeff", "")
+
+    # If full URL is provided, extract ?start=...
+    if "t.me/" in s and "start=" in s:
+        try:
+            qs = parse_qs(urlparse(s).query)
+            vals = qs.get("start") or []
+            if vals:
+                s = vals[0]
+        except Exception:
+            pass
+
+    # If fragment includes "start=..."
+    if "start=" in s:
+        try:
+            s = s.split("start=", 1)[1]
+        except Exception:
+            pass
+
+    # Trim punctuation often included by chat copy.
+    s = s.strip(" \t\r\n<>.,;:()[]{}\"'")
+
+    # Keep only valid deep-link payload chars if noisy text is pasted.
+    m = re.search(r"[A-Za-z0-9_-]{6,128}", s)
+    return m.group(0) if m else s
+
+
 async def _upsert_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.effective_user:
         return
@@ -242,6 +276,15 @@ def _join_keyboard(channels: list[dict[str, Any]], recheck_code: str) -> InlineK
             rows.append([InlineKeyboardButton(text=f"🔒 Required: {title}", callback_data="noop")])
     rows.append([InlineKeyboardButton(text="✅ I've Joined (Recheck)", callback_data=f"recheck:{recheck_code}")])
     return InlineKeyboardMarkup(rows)
+
+
+def _access_link_keyboard(normal_url: str, premium_url: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton(text="🔓 Open Normal Link", url=normal_url)],
+            [InlineKeyboardButton(text="⭐ Open Premium Link", url=premium_url)],
+        ]
+    )
 
 
 def _parse_channel_ref(s: str) -> Optional[str | int]:
@@ -388,7 +431,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     args = context.args or []
     if not update.effective_user or not update.effective_chat:
         return
+    # Preferred source: PTB-parsed args.
     code = " ".join(args).strip() if args else ""
+    # Fallback: parse from raw command text for edge clients/copy-paste cases.
+    if not code and update.effective_message and update.effective_message.text:
+        t = update.effective_message.text.strip()
+        parts = t.split(maxsplit=1)
+        if len(parts) > 1:
+            code = parts[1]
+    code = _normalize_start_code(code)
     if not code:
         db: Database = context.application.bot_data["db"]
         img_url = await db.get_setting(SETTINGS_START_IMG_URL)
@@ -609,15 +660,18 @@ async def admin_media_ingest(update: Update, context: ContextTypes.DEFAULT_TYPE)
     prem_code = new_code()
     await db.create_link(normal_code, "file", file_db_id, "normal", update.effective_user.id)
     await db.create_link(prem_code, "file", file_db_id, "premium", update.effective_user.id)
+    normal_url = _deep_link(context, normal_code)
+    premium_url = _deep_link(context, prem_code)
 
     await update.effective_chat.send_message(
         "✅ *File Saved Successfully*\n\n"
         f"🆔 File ID: `{file_db_id}`\n\n"
         "🔓 *Normal Link:*\n"
-        f"{_deep_link(context, normal_code)}\n\n"
+        f"{normal_url}\n\n"
         "⭐ *Premium Link:*\n"
-        f"{_deep_link(context, prem_code)}",
+        f"{premium_url}",
         parse_mode="Markdown",
+        reply_markup=_access_link_keyboard(normal_url, premium_url),
     )
 
 
@@ -677,14 +731,17 @@ async def getlink(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     else:
         await db.create_link(normal_code, "msg", target_msg_id, "normal", update.effective_user.id)
         await db.create_link(prem_code, "msg", target_msg_id, "premium", update.effective_user.id)
+    normal_url = _deep_link(context, normal_code)
+    premium_url = _deep_link(context, prem_code)
 
     await update.effective_chat.send_message(
         "✅ *Links Generated*\n\n"
         "🔓 *Normal Link:*\n"
-        f"{_deep_link(context, normal_code)}\n\n"
+        f"{normal_url}\n\n"
         "⭐ *Premium Link:*\n"
-        f"{_deep_link(context, prem_code)}",
+        f"{premium_url}",
         parse_mode="Markdown",
+        reply_markup=_access_link_keyboard(normal_url, premium_url),
     )
 
 
