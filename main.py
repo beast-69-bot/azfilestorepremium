@@ -25,6 +25,7 @@ async def _post_init(app: Application) -> None:
     commands = [
         BotCommand("start", "Start / open link (User)"),
         BotCommand("redeem", "Redeem token (User)"),
+        BotCommand("plan", "View normal/premium plans (User)"),
         BotCommand("getlink", "Generate links (Admin/Owner)"),
         BotCommand("batch", "Channel batch links (Admin/Owner)"),
         BotCommand("custombatch", "Custom file batch (Admin/Owner)"),

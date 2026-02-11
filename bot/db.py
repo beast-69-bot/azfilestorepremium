@@ -172,6 +172,12 @@ class Database:
         await cur.close()
         return bool(row and int(row[0]) >= now)
 
+    async def get_premium_until(self, user_id: int) -> int:
+        cur = await self.conn.execute("SELECT premium_until FROM users WHERE user_id=?", (int(user_id),))
+        row = await cur.fetchone()
+        await cur.close()
+        return int(row[0]) if row and row[0] is not None else 0
+
     async def add_premium_seconds(self, user_id: int, seconds: int) -> int:
         now = _now()
         cur = await self.conn.execute("SELECT premium_until FROM users WHERE user_id=?", (int(user_id),))

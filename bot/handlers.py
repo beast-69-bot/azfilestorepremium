@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import datetime
 import re
 import time
 from typing import Any, Optional
@@ -1296,6 +1297,37 @@ async def redeem(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
+async def plan(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await _upsert_user(update, context)
+    if not update.effective_user or not update.effective_chat:
+        return
+    db: Database = context.application.bot_data["db"]
+    uid = update.effective_user.id
+    premium_until = await db.get_premium_until(uid)
+    now = int(time.time())
+    active = premium_until >= now
+    if active:
+        dt = datetime.datetime.utcfromtimestamp(premium_until).strftime("%Y-%m-%d %H:%M:%S UTC")
+        status = f"✅ Active\n⏳ Expires: `{dt}`"
+    else:
+        status = "❌ Not Active"
+
+    await update.effective_chat.send_message(
+        "💎 *Plans*\n\n"
+        "🔓 *Normal User*\n"
+        "• Access normal links\n"
+        "• Force channels join mandatory\n\n"
+        "⭐ *Premium User*\n"
+        "• Access normal + premium links\n"
+        "• Force channels join mandatory\n\n"
+        "🎟️ *How to get premium*\n"
+        "• Redeem token: `/redeem <token>`\n"
+        "• Or contact admin\n\n"
+        f"👤 *Your Premium Status*\n{status}",
+        parse_mode="Markdown",
+    )
+
+
 async def forcech(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     if not await _is_admin_or_owner(update, context):
@@ -1804,6 +1836,7 @@ def build_handlers(app: Application) -> None:
     app.add_handler(CommandHandler("setemojipreset", setemojipreset))
 
     app.add_handler(CommandHandler("redeem", redeem))
+    app.add_handler(CommandHandler("plan", plan))
 
     # PTB v20+ uses uppercase filter shortcuts (VIDEO/AUDIO/PHOTO). Document is namespaced.
     media_filter = filters.Document.ALL | filters.VIDEO | filters.AUDIO | filters.PHOTO
