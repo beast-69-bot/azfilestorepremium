@@ -1,7 +1,7 @@
 import logging
 
 from dotenv import load_dotenv
-from telegram import BotCommand, LinkPreviewOptions
+from telegram import BotCommand, LinkPreviewOptions, Update
 from telegram.ext import Application, Defaults
 
 from bot.config import Config
@@ -80,7 +80,7 @@ def main() -> None:
     build_handlers(app)
 
     logging.getLogger(__name__).info("Bot starting (polling)...")
-    app.run_polling()
+    app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 
 if __name__ == "__main__":
