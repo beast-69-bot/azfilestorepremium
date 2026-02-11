@@ -165,17 +165,25 @@ async def _joined_all_force_channels(user_id: int, context: ContextTypes.DEFAULT
     for ch in channels:
         cid = int(ch["channel_id"])
         mode = (ch.get("mode") or "direct").lower()
+        has_request = False
+        is_joined = False
+        if mode == "request":
+            has_request = await db.has_force_join_request(cid, user_id)
         try:
             member = await bot.get_chat_member(chat_id=cid, user_id=user_id)
-            if member.status in (ChatMemberStatus.LEFT, ChatMemberStatus.KICKED):
-                if mode == "request" and await db.has_force_join_request(cid, user_id):
-                    continue
-                missing.append(ch)
+            is_joined = member.status not in (ChatMemberStatus.LEFT, ChatMemberStatus.KICKED)
         except Exception:
-            # If we can't verify, deny (safer). Request-mode can pass only when join request is recorded.
-            if mode == "request" and await db.has_force_join_request(cid, user_id):
-                continue
-            missing.append(ch)
+            # If membership check fails, we can still allow request-mode users
+            # if join request was captured via ChatJoinRequest update.
+            is_joined = False
+
+        if mode == "request":
+            # OR logic: request sent OR user joined => pass
+            if not (has_request or is_joined):
+                missing.append(ch)
+        else:
+            if not is_joined:
+                missing.append(ch)
     return (len(missing) == 0), missing
 
 
@@ -1223,27 +1231,38 @@ async def forcech_mode_callback(update: Update, context: ContextTypes.DEFAULT_TY
     username = state.get("username")
     title = state.get("title")
     invite_link: Optional[str] = None
-    if username:
-        invite_link = f"https://t.me/{username}"
-    else:
+    if mode == "request":
+        # Request mode should always use a join-request invite link,
+        # even for public channels.
         try:
             inv = await context.bot.create_chat_invite_link(
                 chat_id=cid,
-                creates_join_request=(mode == "request"),
-                name=f"forcech_{mode}",
+                creates_join_request=True,
+                name="forcech_request",
             )
             invite_link = inv.invite_link
         except Exception:
-            if mode == "request":
-                await q.edit_message_text(
-                    "❌ Request mode invite link generate nahi hua.\n"
-                    "Enable Join Requests in channel settings, then try /forcech again."
-                )
-                context.user_data.pop("forcech_state", None)
-                return
-            await q.edit_message_text("❌ Invite link generate nahi hua. Check bot admin permissions.")
+            await q.edit_message_text(
+                "❌ Request mode invite link generate nahi hua.\n"
+                "Channel settings me Join Requests enable karo, phir /forcech fir se run karo."
+            )
             context.user_data.pop("forcech_state", None)
             return
+    else:
+        if username:
+            invite_link = f"https://t.me/{username}"
+        else:
+            try:
+                inv = await context.bot.create_chat_invite_link(
+                    chat_id=cid,
+                    creates_join_request=False,
+                    name="forcech_direct",
+                )
+                invite_link = inv.invite_link
+            except Exception:
+                await q.edit_message_text("❌ Invite link generate nahi hua. Check bot admin permissions.")
+                context.user_data.pop("forcech_state", None)
+                return
 
     db: Database = context.application.bot_data["db"]
     await db.add_force_channel(cid, mode, invite_link, title, username, update.effective_user.id)
