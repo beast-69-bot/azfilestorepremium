@@ -275,6 +275,11 @@ class Database:
         await self.conn.execute("DELETE FROM force_channels WHERE channel_id=?", (int(channel_id),))
         await self.conn.commit()
 
+    async def clear_force_channels(self) -> None:
+        await self.conn.execute("DELETE FROM force_channels")
+        await self.conn.execute("DELETE FROM force_join_requests")
+        await self.conn.commit()
+
     async def list_force_channels(self) -> list[dict[str, Any]]:
         cur = await self.conn.execute("SELECT channel_id, mode, invite_link, title, username FROM force_channels ORDER BY channel_id")
         rows = await cur.fetchall()

@@ -343,7 +343,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.effective_user or not update.effective_chat:
         return
     code = " ".join(args).strip() if args else ""
-    # Hardened behavior: plain /start (or empty payload) should always show welcome.
     if not code:
         db: Database = context.application.bot_data["db"]
         img_url = await db.get_setting(SETTINGS_START_IMG_URL)
@@ -1090,7 +1089,8 @@ async def forcech(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 "✅ *Usage*\n"
                 "• `/forcech` (add flow)\n"
                 "• `/forcech list`\n"
-                "• `/forcech remove <channel_id|@username>`",
+                "• `/forcech remove <channel_id|@username>`\n"
+                "• `/forcech reset`",
                 parse_mode="Markdown",
             )
             return
@@ -1124,6 +1124,12 @@ async def forcech(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 return
         await db.remove_force_channel(cid)
         await update.effective_chat.send_message(f"✅ Force channel removed: `{cid}`", parse_mode="Markdown")
+        return
+
+    if context.args and context.args[0].lower() == "reset":
+        await db.clear_force_channels()
+        context.user_data.pop("forcech_state", None)
+        await update.effective_chat.send_message("✅ Force channel DB reset done. All required channels cleared.")
         return
 
     # Default: interactive add flow.
