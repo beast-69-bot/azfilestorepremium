@@ -93,6 +93,197 @@ PAY_PLANS: dict[str, dict[str, Any]] = {
     "30d": {"label": "1 Month", "days": 30, "amount": 99},
 }
 
+BSETTINGS_DOCS: dict[str, dict[str, str]] = {
+    "getlink": {
+        "title": "🔗 /getlink",
+        "body": (
+            "Purpose:\nGenerate dual links (Normal + Premium) for a file/message.\n\n"
+            "Usage:\n"
+            "1) Reply to a file/message and send: /getlink\n"
+            "2) Or direct by id: /getlink <file_id>\n\n"
+            "Output:\n"
+            "• Normal Link -> normal+premium users\n"
+            "• Premium Link -> premium users only\n\n"
+            "Notes:\n"
+            "• Force-channel checks always apply\n"
+            "• Premium link checks active premium in real time"
+        ),
+    },
+    "batch": {
+        "title": "📦 /batch",
+        "body": (
+            "Purpose:\nCreate one channel-post range batch link pair.\n\n"
+            "Flow:\n"
+            "1) /batch\n"
+            "2) Send START post link\n"
+            "3) Send END post link\n"
+            "4) Bot creates Normal + Premium links\n\n"
+            "Cancel:\n"
+            "• /batch cancel\n\n"
+            "Requirements:\n"
+            "• Bot must be admin in source channel"
+        ),
+    },
+    "custombatch": {
+        "title": "🧩 /custombatch",
+        "body": (
+            "Purpose:\nManually collect files/media and generate one batch pair.\n\n"
+            "Flow:\n"
+            "1) /custombatch\n"
+            "2) Send multiple files/media\n"
+            "3) Tap Generate Link\n\n"
+            "Buttons:\n"
+            "• Generate Link\n"
+            "• Cancel Process\n\n"
+            "Extra:\n"
+            "• Temp upload messages are cleaned on finish/cancel"
+        ),
+    },
+    "addadmin": {
+        "title": "👮 /addadmin",
+        "body": "Owner-only.\n\nUsage:\n/addadmin <user_id>\n\nAdds user as bot admin.",
+    },
+    "removeadmin": {
+        "title": "🚫 /removeadmin",
+        "body": "Owner-only.\n\nUsage:\n/removeadmin <user_id>\n\nRemoves bot admin role.",
+    },
+    "addpremium": {
+        "title": "⭐ /addpremium",
+        "body": (
+            "Admin/Owner.\n\nUsage:\n"
+            "/addpremium <user_id> [days]\n\n"
+            "Example:\n/addpremium 123456789 7\n\n"
+            "Adds premium duration (default 1 day)."
+        ),
+    },
+    "removepremium": {
+        "title": "❌ /removepremium",
+        "body": "Admin/Owner.\n\nUsage:\n/removepremium <user_id>\n\nDisables premium instantly.",
+    },
+    "gencode": {
+        "title": "🎟 /gencode",
+        "body": (
+            "Admin/Owner.\n\nUsage:\n"
+            "/gencode\n"
+            "/gencode <count>\n\n"
+            "Examples:\n"
+            "/gencode\n"
+            "/gencode 10\n\n"
+            "Generates one-time premium tokens (1 day each, max 20 at once)."
+        ),
+    },
+    "forcech": {
+        "title": "📣 /forcech",
+        "body": (
+            "Admin/Owner force-join management.\n\n"
+            "Add flow:\n"
+            "1) /forcech\n"
+            "2) Send channel id/username\n"
+            "3) Select mode (Direct/Request)\n\n"
+            "Other:\n"
+            "• /forcech list\n"
+            "• /forcech remove <channel_id|@username>\n"
+            "• /forcech reset"
+        ),
+    },
+    "forcechdebug": {
+        "title": "🧪 /forcechdebug",
+        "body": (
+            "Admin/Owner debug helper.\n\nUsage:\n"
+            "/forcechdebug <user_id>\n\n"
+            "Shows per-channel evaluation:\n"
+            "• mode\n• joined\n• request\n• pass\n• error details"
+        ),
+    },
+    "broadcast": {
+        "title": "📢 /broadcast",
+        "body": (
+            "Admin/Owner.\n\nUsage:\n"
+            "Reply to any message then send /broadcast\n\n"
+            "Bot copies that message to all known users."
+        ),
+    },
+    "stats": {
+        "title": "📊 /stats",
+        "body": "Admin/Owner.\n\nShows users, files, links, premium, tokens and other counts.",
+    },
+    "setcaption": {
+        "title": "📝 /setcaption",
+        "body": (
+            "Admin/Owner.\n\nUsage:\n"
+            "/setcaption <text>\n"
+            "or reply to text and use /setcaption\n\n"
+            "HTML supported for styling:\n"
+            "<b>bold</b> <i>italic</i> <code>code</code>"
+        ),
+    },
+    "removecaption": {
+        "title": "🗑 /removecaption",
+        "body": "Admin/Owner.\n\nRemoves default caption.",
+    },
+    "settime": {
+        "title": "⏱ /settime",
+        "body": (
+            "Admin/Owner auto-delete setting.\n\nUsage:\n"
+            "/settime 60\n"
+            "/settime 5m\n"
+            "/settime 1h\n"
+            "/settime off\n\n"
+            "Applied on files/messages delivered via links."
+        ),
+    },
+    "setstartimg": {
+        "title": "🖼 /setstartimg",
+        "body": (
+            "Admin/Owner.\n\nUsage:\n"
+            "/setstartimg <image_url>\n"
+            "/setstartimg off\n\n"
+            "Adds/removes image in /start welcome."
+        ),
+    },
+    "setpay": {
+        "title": "💳 /setpay",
+        "body": (
+            "Admin/Owner payment config.\n\nUsage:\n"
+            "/setpay view\n"
+            "/setpay qr <url_or_file_id>\n"
+            "/setpay text <instructions>\n"
+            "/setpay clearqr"
+        ),
+    },
+    "getemojiid": {
+        "title": "🆔 /getemojiid",
+        "body": "Admin/Owner.\n\nReply to a message with custom emojis and run /getemojiid to extract custom_emoji_id values.",
+    },
+    "setuitemoji": {
+        "title": "😀 /setuitemoji",
+        "body": (
+            "Admin/Owner.\n\nUsage:\n"
+            "/setuitemoji <name> <custom_emoji_id>\n"
+            "/setuitemoji <name> off\n\n"
+            "Stores UI emoji id mapping."
+        ),
+    },
+    "setemojipreset": {
+        "title": "✨ /setemojipreset",
+        "body": "Admin/Owner.\n\nApplies predefined custom emoji id preset in one shot.",
+    },
+}
+
+
+def _bsettings_keyboard() -> InlineKeyboardMarkup:
+    keys = list(BSETTINGS_DOCS.keys())
+    rows: list[list[InlineKeyboardButton]] = []
+    for i in range(0, len(keys), 2):
+        row = []
+        k1 = keys[i]
+        row.append(InlineKeyboardButton(f"/{k1}", callback_data=f"bset:{k1}"))
+        if i + 1 < len(keys):
+            k2 = keys[i + 1]
+            row.append(InlineKeyboardButton(f"/{k2}", callback_data=f"bset:{k2}"))
+        rows.append(row)
+    return InlineKeyboardMarkup(rows)
+
 
 def _welcome_text() -> str:
     return (
@@ -1521,6 +1712,46 @@ async def setpay(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.effective_chat.send_message("❌ Invalid /setpay option.")
 
 
+async def bsettings(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await _upsert_user(update, context)
+    if not await _is_admin_or_owner(update, context):
+        await update.effective_chat.send_message("🚫 Access denied. (Admin/Owner only)")
+        return
+    await update.effective_chat.send_message(
+        "⚙️ Admin Settings Panel\n\nSelect any command button to see detailed usage.",
+        reply_markup=_bsettings_keyboard(),
+    )
+
+
+async def bsettings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    q = update.callback_query
+    if not q:
+        return
+    await q.answer()
+    if not await _is_admin_or_owner(update, context):
+        await q.edit_message_text("🚫 Access denied. (Admin/Owner only)")
+        return
+    data = q.data or ""
+    if data == "bset:back":
+        await q.edit_message_text(
+            "⚙️ Admin Settings Panel\n\nSelect any command button to see detailed usage.",
+            reply_markup=_bsettings_keyboard(),
+        )
+        return
+    if not data.startswith("bset:"):
+        return
+    key = data.split(":", 1)[1]
+    doc = BSETTINGS_DOCS.get(key)
+    if not doc:
+        await q.edit_message_text("❌ Unknown command doc.")
+        return
+    kb = InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back", callback_data="bset:back")]])
+    await q.edit_message_text(
+        f"{doc['title']}\n\n{doc['body']}",
+        reply_markup=kb,
+    )
+
+
 async def forcech(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     if not await _is_admin_or_owner(update, context):
@@ -1999,6 +2230,7 @@ def build_handlers(app: Application) -> None:
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(recheck_callback, pattern=r"^(recheck:|noop)"))
     app.add_handler(CallbackQueryHandler(pay_callback, pattern=r"^pay(plan|utr):"))
+    app.add_handler(CallbackQueryHandler(bsettings_callback, pattern=r"^bset:"))
 
     # /forcech uses guided text input + mode callback.
     app.add_handler(MessageHandler((filters.TEXT | filters.PHOTO | filters.Document.ALL) & ~filters.COMMAND, pay_utr_input), group=0)
@@ -2034,6 +2266,7 @@ def build_handlers(app: Application) -> None:
     app.add_handler(CommandHandler("plan", plan))
     app.add_handler(CommandHandler("pay", pay))
     app.add_handler(CommandHandler("setpay", setpay))
+    app.add_handler(CommandHandler("bsettings", bsettings))
 
     # PTB v20+ uses uppercase filter shortcuts (VIDEO/AUDIO/PHOTO). Document is namespaced.
     media_filter = filters.Document.ALL | filters.VIDEO | filters.AUDIO | filters.PHOTO

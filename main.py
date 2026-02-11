@@ -47,6 +47,7 @@ async def _post_init(app: Application) -> None:
         BotCommand("setuitemoji", "Store UI emoji ID mapping (Admin/Owner)"),
         BotCommand("setemojipreset", "Apply predefined UI emoji ID set (Admin/Owner)"),
         BotCommand("setpay", "Set payment QR/text (Admin/Owner)"),
+        BotCommand("bsettings", "Admin command guide panel (Admin/Owner)"),
     ]
     try:
         await app.bot.set_my_commands(commands)
