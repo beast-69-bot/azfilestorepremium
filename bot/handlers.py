@@ -191,6 +191,11 @@ async def _upsert_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 
 async def _joined_all_force_channels(user_id: int, context: ContextTypes.DEFAULT_TYPE) -> tuple[bool, list[dict[str, Any]]]:
+    # Bot owner/admin should not be blocked by force-join checks.
+    cfg = context.application.bot_data["cfg"]
+    db: Database = context.application.bot_data["db"]
+    if int(user_id) == int(cfg.owner_id) or await db.is_admin(int(user_id)):
+        return True, []
     ok, missing, _ = await _joined_all_force_channels_details(user_id, context)
     return ok, missing
 
