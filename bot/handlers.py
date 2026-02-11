@@ -210,10 +210,13 @@ async def _joined_all_force_channels_details(
         has_request = False
         is_joined = False
         member_err = ""
+        request_api_err = ""
         if mode == "request":
             has_request = await db.has_force_join_request(cid, user_id)
             if not has_request:
-                has_request = await _has_pending_join_request_via_api(cid, user_id, context)
+                has_request, request_api_err = await _has_pending_join_request_via_api(
+                    cid, user_id, context, invite_link=ch.get("invite_link")
+                )
                 if has_request:
                     # Cache it locally so next checks are fast and resilient.
                     await db.add_force_join_request(cid, user_id)
@@ -243,42 +246,73 @@ async def _joined_all_force_channels_details(
                 "request": has_request,
                 "passed": passed,
                 "member_error": member_err,
+                "request_api_error": request_api_err,
             }
         )
     return (len(missing) == 0), missing, details
 
 
-async def _has_pending_join_request_via_api(channel_id: int, user_id: int, context: ContextTypes.DEFAULT_TYPE) -> bool:
+async def _has_pending_join_request_via_api(
+    channel_id: int,
+    user_id: int,
+    context: ContextTypes.DEFAULT_TYPE,
+    invite_link: Optional[str] = None,
+) -> tuple[bool, str]:
     """
     Fallback for request-mode: check pending join requests directly from Telegram.
     Useful if join_request update was missed while bot was offline.
     """
     fn = getattr(context.bot, "get_chat_join_requests", None)
     if not fn:
-        return False
-    offset: Optional[int] = None
-    for _ in range(5):  # up to ~500 requests scan
-        kwargs = {"chat_id": channel_id, "limit": 100}
-        if offset is not None:
-            kwargs["offset_requester_user_id"] = offset
-        try:
-            reqs = await fn(**kwargs)
-        except Exception:
-            return False
-        if not reqs:
-            return False
-        last_uid = None
-        for r in reqs:
-            uid = getattr(getattr(r, "from_user", None), "id", None)
-            if uid is None:
-                continue
-            last_uid = int(uid)
-            if int(uid) == int(user_id):
-                return True
-        if last_uid is None:
-            return False
-        offset = int(last_uid) + 1
-    return False
+        return False, "no_get_chat_join_requests"
+
+    async def _scan(kwargs: dict[str, Any]) -> tuple[bool, str]:
+        offset: Optional[int] = None
+        for _ in range(5):  # up to ~500 requests scan
+            k = dict(kwargs)
+            k["chat_id"] = channel_id
+            k["limit"] = 100
+            if offset is not None:
+                # PTB/Bot API naming changed over versions, try both.
+                k["offset_requester_user_id"] = offset
+            try:
+                reqs = await fn(**k)
+            except TypeError:
+                # Compatibility fallback.
+                if "offset_requester_user_id" in k:
+                    k.pop("offset_requester_user_id", None)
+                    k["offset_user_id"] = offset
+                try:
+                    reqs = await fn(**k)
+                except Exception as e:
+                    return False, f"api_error:{type(e).__name__}"
+            except Exception as e:
+                return False, f"api_error:{type(e).__name__}"
+
+            if not reqs:
+                return False, ""
+            last_uid = None
+            for r in reqs:
+                uid = getattr(getattr(r, "from_user", None), "id", None)
+                if uid is None:
+                    continue
+                last_uid = int(uid)
+                if int(uid) == int(user_id):
+                    return True, ""
+            if last_uid is None:
+                return False, ""
+            offset = int(last_uid) + 1
+        return False, ""
+
+    # First try invite-link scoped search for better accuracy in request mode.
+    if invite_link and invite_link.startswith("http"):
+        ok, err = await _scan({"invite_link": invite_link})
+        if ok:
+            return True, ""
+        # Continue to global scan if not found.
+
+    ok, err = await _scan({})
+    return ok, err
 
 
 def _join_keyboard(channels: list[dict[str, Any]], recheck_code: str) -> InlineKeyboardMarkup:
@@ -1282,7 +1316,8 @@ async def forcechdebug(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     lines = [f"Result: {'PASS' if ok else 'BLOCK'} for user `{uid}`", ""]
     for d in details:
         lines.append(
-            f"• `{d['channel_id']}` mode={d['mode']} joined={d['joined']} request={d['request']} pass={d['passed']} err={d['member_error'] or '-'}"
+            f"• `{d['channel_id']}` mode={d['mode']} joined={d['joined']} request={d['request']} pass={d['passed']} "
+            f"member_err={d['member_error'] or '-'} req_api_err={d['request_api_error'] or '-'}"
         )
     await update.effective_chat.send_message("\n".join(lines), parse_mode="Markdown")
 
