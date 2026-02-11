@@ -433,15 +433,15 @@ async def _send_file(chat_id: int, file_row: dict[str, Any], caption: Optional[s
         caption = caption[:1020] + "..."
     msg = None
     if t == "document":
-        msg = await context.bot.send_document(chat_id=chat_id, document=fid, caption=caption)
+        msg = await context.bot.send_document(chat_id=chat_id, document=fid, caption=caption, parse_mode="HTML")
     elif t == "video":
-        msg = await context.bot.send_video(chat_id=chat_id, video=fid, caption=caption)
+        msg = await context.bot.send_video(chat_id=chat_id, video=fid, caption=caption, parse_mode="HTML")
     elif t == "audio":
-        msg = await context.bot.send_audio(chat_id=chat_id, audio=fid, caption=caption)
+        msg = await context.bot.send_audio(chat_id=chat_id, audio=fid, caption=caption, parse_mode="HTML")
     elif t == "photo":
-        msg = await context.bot.send_photo(chat_id=chat_id, photo=fid, caption=caption)
+        msg = await context.bot.send_photo(chat_id=chat_id, photo=fid, caption=caption, parse_mode="HTML")
     else:
-        msg = await context.bot.send_document(chat_id=chat_id, document=fid, caption=caption)
+        msg = await context.bot.send_document(chat_id=chat_id, document=fid, caption=caption, parse_mode="HTML")
 
     if msg:
         await _maybe_schedule_autodelete(msg.chat_id, msg.message_id, context)
@@ -1536,7 +1536,11 @@ async def setcaption(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     if not text and update.effective_message and update.effective_message.reply_to_message:
         text = (update.effective_message.reply_to_message.text or "").strip()
     if not text:
-        await update.effective_chat.send_message("ℹ️ Usage: `/setcaption <text>` (or reply to a text message)", parse_mode="Markdown")
+        await update.effective_chat.send_message(
+            "ℹ️ Usage: `/setcaption <text>` (or reply to a text message)\n"
+            "HTML styles supported, e.g. `<b>bold</b> <i>italic</i> <code>code</code>`",
+            parse_mode="Markdown",
+        )
         return
     db: Database = context.application.bot_data["db"]
     await db.set_setting("caption", text)
