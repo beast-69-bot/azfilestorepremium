@@ -27,3 +27,30 @@ python main.py
 - Add the bot to each required channel.
 - For private channels, provide an invite link when adding via `/forcech add`.
 
+## VPS Migration (Backup/Restore)
+Scripts:
+- `scripts/backup_bot.sh`
+- `scripts/restore_bot.sh`
+
+Backup on old VPS:
+```bash
+cd ~/azfilestorepremium
+chmod +x scripts/backup_bot.sh scripts/restore_bot.sh
+./scripts/backup_bot.sh
+```
+
+This creates a timestamped archive in `~/bot_backups/` containing:
+- `data/bot.db`
+- `.env`
+
+Restore on new VPS:
+```bash
+cd ~/azfilestorepremium
+chmod +x scripts/backup_bot.sh scripts/restore_bot.sh
+./scripts/restore_bot.sh /path/to/azfilestorepremium_backup_YYYYmmdd_HHMMSS.tar.gz
+```
+
+Optional env vars:
+- `PROJECT_DIR` (default: `~/azfilestorepremium`)
+- `SERVICE_NAME` (default: `azfilestorepremium`)
+- `BACKUP_DIR` (backup script only, default: `~/bot_backups`)
