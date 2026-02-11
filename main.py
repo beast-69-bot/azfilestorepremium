@@ -34,6 +34,7 @@ async def _post_init(app: Application) -> None:
         BotCommand("removepremium", "Remove premium (Admin/Owner)"),
         BotCommand("gencode", "Generate token(s) (Admin/Owner)"),
         BotCommand("forcech", "Force-join channels (Admin/Owner)"),
+        BotCommand("forcechdebug", "Debug force-join checks (Admin/Owner)"),
         BotCommand("broadcast", "Broadcast message (Admin/Owner)"),
         BotCommand("stats", "Bot stats (Admin/Owner)"),
         BotCommand("setcaption", "Set default caption (Admin/Owner)"),

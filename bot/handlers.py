@@ -190,17 +190,26 @@ async def _upsert_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 
 async def _joined_all_force_channels(user_id: int, context: ContextTypes.DEFAULT_TYPE) -> tuple[bool, list[dict[str, Any]]]:
+    ok, missing, _ = await _joined_all_force_channels_details(user_id, context)
+    return ok, missing
+
+
+async def _joined_all_force_channels_details(
+    user_id: int, context: ContextTypes.DEFAULT_TYPE
+) -> tuple[bool, list[dict[str, Any]], list[dict[str, Any]]]:
     db: Database = context.application.bot_data["db"]
     channels = await db.list_force_channels()
     if not channels:
-        return True, []
+        return True, [], []
     bot = context.bot
     missing: list[dict[str, Any]] = []
+    details: list[dict[str, Any]] = []
     for ch in channels:
         cid = int(ch["channel_id"])
         mode = (ch.get("mode") or "direct").lower()
         has_request = False
         is_joined = False
+        member_err = ""
         if mode == "request":
             has_request = await db.has_force_join_request(cid, user_id)
             if not has_request:
@@ -215,15 +224,28 @@ async def _joined_all_force_channels(user_id: int, context: ContextTypes.DEFAULT
             # If membership check fails, we can still allow request-mode users
             # if join request was captured via ChatJoinRequest update.
             is_joined = False
+            member_err = "member_check_failed"
 
         if mode == "request":
             # OR logic: request sent OR user joined => pass
-            if not (has_request or is_joined):
+            passed = bool(has_request or is_joined)
+            if not passed:
                 missing.append(ch)
         else:
-            if not is_joined:
+            passed = bool(is_joined)
+            if not passed:
                 missing.append(ch)
-    return (len(missing) == 0), missing
+        details.append(
+            {
+                "channel_id": cid,
+                "mode": mode,
+                "joined": is_joined,
+                "request": has_request,
+                "passed": passed,
+                "member_error": member_err,
+            }
+        )
+    return (len(missing) == 0), missing, details
 
 
 async def _has_pending_join_request_via_api(channel_id: int, user_id: int, context: ContextTypes.DEFAULT_TYPE) -> bool:
@@ -1240,6 +1262,31 @@ async def forcech(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.effective_chat.send_message("📣 Channel ID/username bhejo")
 
 
+async def forcechdebug(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await _upsert_user(update, context)
+    if not await _is_admin_or_owner(update, context):
+        await update.effective_chat.send_message("🚫 Access denied. (Admin/Owner only)")
+        return
+    if not context.args:
+        await update.effective_chat.send_message("ℹ️ Usage: `/forcechdebug <user_id>`", parse_mode="Markdown")
+        return
+    try:
+        uid = int(context.args[0])
+    except ValueError:
+        await update.effective_chat.send_message("❌ Invalid user_id.")
+        return
+    ok, _, details = await _joined_all_force_channels_details(uid, context)
+    if not details:
+        await update.effective_chat.send_message("ℹ️ No force channels configured.")
+        return
+    lines = [f"Result: {'PASS' if ok else 'BLOCK'} for user `{uid}`", ""]
+    for d in details:
+        lines.append(
+            f"• `{d['channel_id']}` mode={d['mode']} joined={d['joined']} request={d['request']} pass={d['passed']} err={d['member_error'] or '-'}"
+        )
+    await update.effective_chat.send_message("\n".join(lines), parse_mode="Markdown")
+
+
 async def forcech_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.effective_chat or not update.effective_user or not update.effective_message:
         return
@@ -1642,6 +1689,7 @@ def build_handlers(app: Application) -> None:
     app.add_handler(CommandHandler("removepremium", removepremium))
     app.add_handler(CommandHandler("gencode", gencode))
     app.add_handler(CommandHandler("forcech", forcech))
+    app.add_handler(CommandHandler("forcechdebug", forcechdebug))
     app.add_handler(CommandHandler("broadcast", broadcast))
     app.add_handler(CommandHandler("stats", stats))
     app.add_handler(CommandHandler("setcaption", setcaption))
