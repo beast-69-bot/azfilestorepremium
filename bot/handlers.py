@@ -1317,6 +1317,10 @@ async def plan(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "• 1 Day: ₹9\n"
         "• 7 Days: ₹29\n"
         "• 1 Month: ₹99\n\n"
+        "🔓 *Normal User Benefit*\n"
+        "• Final link access ke liye ads dekhne honge\n\n"
+        "⭐ *Premium User Benefit*\n"
+        "• Direct access milta hai (no ads)\n\n"
         f"👤 *Your Premium Status*\n{status}",
         parse_mode="Markdown",
     )
