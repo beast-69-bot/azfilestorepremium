@@ -51,6 +51,7 @@ PRESET_UI_EMOJI_IDS = {
     "denied": "5348386339777698814",
     "puzzle": "6294142703907116473",
     "receipt": "5032963696746300412",
+    "premium_star": "5202218878888850186",
 }
 UNICODE_TO_UI_NAME = {
     "ℹ": "info",
@@ -77,6 +78,7 @@ UNICODE_TO_UI_NAME = {
     "🚫": "denied",
     "🧩": "puzzle",
     "🧾": "receipt",
+    "⭐": "premium_star",
 }
 
 
@@ -340,7 +342,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     args = context.args or []
     if not update.effective_user or not update.effective_chat:
         return
-    if not args:
+    code = " ".join(args).strip() if args else ""
+    # Hardened behavior: plain /start (or empty payload) should always show welcome.
+    if not code:
         db: Database = context.application.bot_data["db"]
         img_url = await db.get_setting(SETTINGS_START_IMG_URL)
         text = _welcome_text()
@@ -354,7 +358,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 pass
         await update.effective_chat.send_message(text=text, entities=entities)
         return
-    code = args[0].strip()
     await _deliver_by_code(update, context, code)
 
 
