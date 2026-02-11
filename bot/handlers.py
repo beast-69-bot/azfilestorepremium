@@ -6,6 +6,7 @@ import time
 from typing import Any, Optional
 from urllib.parse import parse_qs, urlparse
 
+import httpx
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, MessageEntity, Update
 from telegram.constants import ChatMemberStatus, MessageEntityType
 from telegram.error import RetryAfter
@@ -223,11 +224,17 @@ async def _joined_all_force_channels_details(
         try:
             member = await bot.get_chat_member(chat_id=cid, user_id=user_id)
             is_joined = member.status not in (ChatMemberStatus.LEFT, ChatMemberStatus.KICKED)
-        except Exception:
-            # If membership check fails, we can still allow request-mode users
-            # if join request was captured via ChatJoinRequest update.
-            is_joined = False
-            member_err = "member_check_failed"
+        except Exception as e1:
+            # Retry once for transient network/API issues.
+            try:
+                await asyncio.sleep(0.25)
+                member = await bot.get_chat_member(chat_id=cid, user_id=user_id)
+                is_joined = member.status not in (ChatMemberStatus.LEFT, ChatMemberStatus.KICKED)
+            except Exception as e2:
+                # If membership check fails, we can still allow request-mode users
+                # if join request was captured via ChatJoinRequest update.
+                is_joined = False
+                member_err = f"member_check_failed:{type(e2).__name__}"
 
         if mode == "request":
             # OR logic: request sent OR user joined => pass
@@ -264,7 +271,9 @@ async def _has_pending_join_request_via_api(
     """
     fn = getattr(context.bot, "get_chat_join_requests", None)
     if not fn:
-        return False, "no_get_chat_join_requests"
+        return await _has_pending_join_request_via_raw_api(
+            channel_id=channel_id, user_id=user_id, context=context, invite_link=invite_link
+        )
 
     # Fast path: query by user_id directly (supported by Bot API).
     # This avoids scanning hundreds of pending requests and keeps bot responsive.
@@ -335,6 +344,34 @@ async def _has_pending_join_request_via_api(
     if fast_err and not err:
         return False, fast_err
     return False, err
+
+
+async def _has_pending_join_request_via_raw_api(
+    channel_id: int,
+    user_id: int,
+    context: ContextTypes.DEFAULT_TYPE,
+    invite_link: Optional[str] = None,
+) -> tuple[bool, str]:
+    """
+    Raw Bot API fallback when PTB wrapper method is unavailable.
+    """
+    token = getattr(context.bot, "token", None)
+    if not token:
+        return False, "raw_no_token"
+    url = f"https://api.telegram.org/bot{token}/getChatJoinRequests"
+    payload: dict[str, Any] = {"chat_id": channel_id, "user_id": int(user_id), "limit": 1}
+    if invite_link and invite_link.startswith("http"):
+        payload["invite_link"] = invite_link
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            r = await client.post(url, json=payload)
+            data = r.json()
+        if not data.get("ok"):
+            return False, f"raw_api_error:{data.get('description', 'unknown')}"
+        reqs = data.get("result") or []
+        return (len(reqs) > 0), ""
+    except Exception as e:
+        return False, f"raw_api_error:{type(e).__name__}"
 
 
 def _join_keyboard(channels: list[dict[str, Any]], recheck_code: str) -> InlineKeyboardMarkup:
