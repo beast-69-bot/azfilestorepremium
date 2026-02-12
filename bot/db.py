@@ -604,3 +604,29 @@ class Database:
             "processed_by": row[9],
             "processed_at": row[10],
         }
+
+    async def approve_payment_request(self, request_id: int, admin_id: int) -> bool:
+        now = _now()
+        cur = await self.conn.execute(
+            """
+            UPDATE payment_requests
+            SET status='processed', processed_by=?, processed_at=?, updated_at=?
+            WHERE id=? AND status IN ('submitted', 'pending')
+            """,
+            (int(admin_id), now, now, int(request_id)),
+        )
+        await self.conn.commit()
+        return bool(cur.rowcount and cur.rowcount > 0)
+
+    async def reject_payment_request(self, request_id: int, admin_id: int) -> bool:
+        now = _now()
+        cur = await self.conn.execute(
+            """
+            UPDATE payment_requests
+            SET status='rejected', processed_by=?, processed_at=?, updated_at=?
+            WHERE id=? AND status IN ('submitted', 'pending')
+            """,
+            (int(admin_id), now, now, int(request_id)),
+        )
+        await self.conn.commit()
+        return bool(cur.rowcount and cur.rowcount > 0)

@@ -1819,12 +1819,19 @@ async def _notify_payment_admins(update: Update, context: ContextTypes.DEFAULT_T
         f"Plan: {req['plan_key']} ({req['plan_days']} days)\n"
         f"Amount: ₹{req['amount_rs']}\n"
         f"UTR: {utr_preview}\n\n"
-        "Activate manually using:\n"
-        "/addpremium <user_id> <days>"
+        "Review and use buttons below."
+    )
+    kb = InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton("✅ Approve", callback_data=f"payadm:approve:{req['id']}"),
+                InlineKeyboardButton("❌ Reject", callback_data=f"payadm:reject:{req['id']}"),
+            ]
+        ]
     )
     for aid in targets:
         try:
-            await _send_emoji_text(aid, note, context)
+            await _send_emoji_text(aid, note, context, reply_markup=kb)
             # If user sent media, forward copy for proof.
             if update.effective_message and (update.effective_message.photo or update.effective_message.document):
                 await context.bot.copy_message(
@@ -1867,6 +1874,111 @@ async def pay_utr_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         "✅ UTR submitted successfully.\n"
         "Admin ko notify kar diya gaya hai.\n"
         "Plan verification ke baad manually activate kiya jayega.",
+        context,
+    )
+
+
+async def pay_admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    q = update.callback_query
+    if not q or not update.effective_chat or not update.effective_user:
+        return
+    await q.answer()
+    if not await _is_admin_or_owner(update, context):
+        await q.answer("Access denied", show_alert=True)
+        return
+    data = q.data or ""
+    if not data.startswith("payadm:"):
+        return
+    parts = data.split(":")
+    if len(parts) != 3:
+        await q.answer("Invalid action", show_alert=True)
+        return
+    action, rid_raw = parts[1], parts[2]
+    if action not in ("approve", "reject"):
+        await q.answer("Invalid action", show_alert=True)
+        return
+    try:
+        rid = int(rid_raw)
+    except ValueError:
+        await q.answer("Invalid request id", show_alert=True)
+        return
+
+    db: Database = context.application.bot_data["db"]
+    req = await db.get_payment_request(rid)
+    if not req:
+        await q.answer("Request not found", show_alert=True)
+        return
+
+    # Already processed by someone else.
+    if req["status"] in ("processed", "rejected"):
+        who = req.get("processed_by") or "-"
+        await _edit_emoji_text(
+            update.effective_chat.id,
+            q.message.message_id,
+            "ℹ️ Payment request already handled.\n\n"
+            f"Request ID: {req['id']}\n"
+            f"Status: {req['status']}\n"
+            f"Processed by: {who}",
+            context,
+        )
+        return
+
+    if action == "approve":
+        ok = await db.approve_payment_request(rid, update.effective_user.id)
+        if not ok:
+            await q.answer("Already handled", show_alert=True)
+            return
+        until = await db.add_premium_seconds(int(req["user_id"]), int(req["plan_days"]) * DAY_SECONDS)
+        expiry_utc = datetime.datetime.utcfromtimestamp(until).strftime("%Y-%m-%d %H:%M:%S UTC")
+        # Notify user
+        try:
+            await _send_emoji_text(
+                int(req["user_id"]),
+                "✅ Payment Verified\n\n"
+                f"💎 Plan activated: {req['plan_key']} ({req['plan_days']} days)\n"
+                f"🕒 Expires: {expiry_utc}",
+                context,
+            )
+        except Exception:
+            pass
+        await _edit_emoji_text(
+            update.effective_chat.id,
+            q.message.message_id,
+            "✅ Payment Approved\n\n"
+            f"Request ID: {req['id']}\n"
+            f"User ID: {req['user_id']}\n"
+            f"Plan: {req['plan_key']} ({req['plan_days']} days)\n"
+            f"Amount: ₹{req['amount_rs']}\n"
+            f"By Admin: {update.effective_user.id}\n"
+            f"Premium Until: {expiry_utc}",
+            context,
+        )
+        return
+
+    ok = await db.reject_payment_request(rid, update.effective_user.id)
+    if not ok:
+        await q.answer("Already handled", show_alert=True)
+        return
+    # Notify user
+    try:
+        await _send_emoji_text(
+            int(req["user_id"]),
+            "❌ Payment Rejected\n\n"
+            "Your submitted payment could not be verified.\n"
+            "Please contact admin with proper payment proof.",
+            context,
+        )
+    except Exception:
+        pass
+    await _edit_emoji_text(
+        update.effective_chat.id,
+        q.message.message_id,
+        "❌ Payment Rejected\n\n"
+        f"Request ID: {req['id']}\n"
+        f"User ID: {req['user_id']}\n"
+        f"Plan: {req['plan_key']} ({req['plan_days']} days)\n"
+        f"Amount: ₹{req['amount_rs']}\n"
+        f"By Admin: {update.effective_user.id}",
         context,
     )
 
@@ -2480,6 +2592,7 @@ def build_handlers(app: Application) -> None:
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(recheck_callback, pattern=r"^(recheck:|noop)"))
     app.add_handler(CallbackQueryHandler(pay_callback, pattern=r"^pay(plan|utr):"))
+    app.add_handler(CallbackQueryHandler(pay_admin_callback, pattern=r"^payadm:(approve|reject):"))
     app.add_handler(CallbackQueryHandler(bsettings_callback, pattern=r"^bset:"))
 
     # /forcech uses guided text input + mode callback.
