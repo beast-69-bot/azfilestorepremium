@@ -893,8 +893,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not code:
         db: Database = context.application.bot_data["db"]
         img_url = await db.get_setting(SETTINGS_START_IMG_URL)
-        text = _welcome_text()
-        entities = await _build_custom_emoji_entities(text, context)
+        raw_text = _welcome_text()
+        text, style_entities = _extract_style_entities(raw_text)
+        emoji_entities = await _build_custom_emoji_entities(text, context)
+        entities = sorted([*style_entities, *emoji_entities], key=lambda e: (e.offset, e.length))
         if img_url:
             try:
                 await update.effective_chat.send_photo(photo=img_url, caption=text, caption_entities=entities)
