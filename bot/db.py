@@ -145,8 +145,12 @@ class Database:
               plan_key      TEXT NOT NULL,
               plan_days     INTEGER NOT NULL,
               amount_rs     INTEGER NOT NULL,
-              status        TEXT NOT NULL DEFAULT 'pending', -- pending|submitted|processed|rejected
+              status        TEXT NOT NULL DEFAULT 'pending', -- pending|submitted|processed|rejected|expired
               utr_text      TEXT,
+              user_chat_id  INTEGER,
+              details_msg_id INTEGER,
+              qr_msg_id     INTEGER,
+              expires_at    INTEGER,
               created_at    INTEGER NOT NULL,
               updated_at    INTEGER NOT NULL,
               processed_by  INTEGER,
@@ -162,6 +166,19 @@ class Database:
         col_names = {str(r[1]) for r in cols}
         if "mode" not in col_names:
             await self.conn.execute("ALTER TABLE force_channels ADD COLUMN mode TEXT NOT NULL DEFAULT 'direct'")
+
+        cur = await self.conn.execute("PRAGMA table_info(payment_requests)")
+        pcols = await cur.fetchall()
+        await cur.close()
+        pcol_names = {str(r[1]) for r in pcols}
+        if "user_chat_id" not in pcol_names:
+            await self.conn.execute("ALTER TABLE payment_requests ADD COLUMN user_chat_id INTEGER")
+        if "details_msg_id" not in pcol_names:
+            await self.conn.execute("ALTER TABLE payment_requests ADD COLUMN details_msg_id INTEGER")
+        if "qr_msg_id" not in pcol_names:
+            await self.conn.execute("ALTER TABLE payment_requests ADD COLUMN qr_msg_id INTEGER")
+        if "expires_at" not in pcol_names:
+            await self.conn.execute("ALTER TABLE payment_requests ADD COLUMN expires_at INTEGER")
         await self.conn.commit()
 
     # Users
@@ -555,12 +572,13 @@ class Database:
     # Payments
     async def create_payment_request(self, user_id: int, plan_key: str, plan_days: int, amount_rs: int) -> int:
         now = _now()
+        expires_at = now + 600
         cur = await self.conn.execute(
             """
-            INSERT INTO payment_requests(user_id, plan_key, plan_days, amount_rs, status, created_at, updated_at)
-            VALUES(?, ?, ?, ?, 'pending', ?, ?)
+            INSERT INTO payment_requests(user_id, plan_key, plan_days, amount_rs, status, expires_at, created_at, updated_at)
+            VALUES(?, ?, ?, ?, 'pending', ?, ?, ?)
             """,
-            (int(user_id), plan_key, int(plan_days), int(amount_rs), now, now),
+            (int(user_id), plan_key, int(plan_days), int(amount_rs), int(expires_at), now, now),
         )
         await self.conn.commit()
         return int(cur.lastrowid)
@@ -581,7 +599,7 @@ class Database:
     async def get_payment_request(self, request_id: int) -> Optional[dict[str, Any]]:
         cur = await self.conn.execute(
             """
-            SELECT id, user_id, plan_key, plan_days, amount_rs, status, utr_text, created_at, updated_at, processed_by, processed_at
+            SELECT id, user_id, plan_key, plan_days, amount_rs, status, utr_text, user_chat_id, details_msg_id, qr_msg_id, expires_at, created_at, updated_at, processed_by, processed_at
             FROM payment_requests
             WHERE id=?
             """,
@@ -599,11 +617,52 @@ class Database:
             "amount_rs": int(row[4]),
             "status": row[5],
             "utr_text": row[6],
-            "created_at": int(row[7]),
-            "updated_at": int(row[8]),
-            "processed_by": row[9],
-            "processed_at": row[10],
+            "user_chat_id": int(row[7]) if row[7] is not None else None,
+            "details_msg_id": int(row[8]) if row[8] is not None else None,
+            "qr_msg_id": int(row[9]) if row[9] is not None else None,
+            "expires_at": int(row[10]) if row[10] is not None else 0,
+            "created_at": int(row[11]),
+            "updated_at": int(row[12]),
+            "processed_by": row[13],
+            "processed_at": row[14],
         }
+
+    async def set_payment_ui_messages(self, request_id: int, user_chat_id: int, details_msg_id: int, qr_msg_id: int | None) -> None:
+        now = _now()
+        await self.conn.execute(
+            """
+            UPDATE payment_requests
+            SET user_chat_id=?, details_msg_id=?, qr_msg_id=?, updated_at=?
+            WHERE id=?
+            """,
+            (int(user_chat_id), int(details_msg_id), int(qr_msg_id) if qr_msg_id is not None else None, now, int(request_id)),
+        )
+        await self.conn.commit()
+
+    async def clear_payment_ui_messages(self, request_id: int) -> None:
+        now = _now()
+        await self.conn.execute(
+            """
+            UPDATE payment_requests
+            SET user_chat_id=NULL, details_msg_id=NULL, qr_msg_id=NULL, updated_at=?
+            WHERE id=?
+            """,
+            (now, int(request_id)),
+        )
+        await self.conn.commit()
+
+    async def expire_payment_request_if_pending(self, request_id: int) -> bool:
+        now = _now()
+        cur = await self.conn.execute(
+            """
+            UPDATE payment_requests
+            SET status='expired', updated_at=?
+            WHERE id=? AND status='pending' AND (utr_text IS NULL OR TRIM(utr_text)='')
+            """,
+            (now, int(request_id)),
+        )
+        await self.conn.commit()
+        return bool(cur.rowcount and cur.rowcount > 0)
 
     async def approve_payment_request(self, request_id: int, admin_id: int) -> bool:
         now = _now()

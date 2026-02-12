@@ -952,9 +952,10 @@ async def _deliver_by_code(update: Update, context: ContextTypes.DEFAULT_TYPE, c
     if link["access"] == "premium" and not await db.is_premium_active(user.id):
         await _send_emoji_text(
             chat.id,
-            "⭐ Premium Required\n\n"
+            "⭐ [b]Premium Required[/b]\n\n"
             "This link is for premium users only.\n"
-            "Redeem a token: /redeem <token>",
+            "• Redeem token: [c]/redeem <token>[/c]\n"
+            "• Plan buy karo: [c]/pay[/c]",
             context,
         )
         return
@@ -1710,6 +1711,56 @@ def _upi_qr_image_url(upi_uri: str) -> str:
     return f"https://api.qrserver.com/v1/create-qr-code/?size=700x700&data={quote(upi_uri, safe='')}"
 
 
+async def _cleanup_payment_user_ui(req: dict[str, Any], context: ContextTypes.DEFAULT_TYPE) -> None:
+    db: Database = context.application.bot_data["db"]
+    chat_id = req.get("user_chat_id")
+    details_id = req.get("details_msg_id")
+    qr_id = req.get("qr_msg_id")
+    if chat_id:
+        if details_id:
+            try:
+                await context.bot.delete_message(chat_id=int(chat_id), message_id=int(details_id))
+            except Exception:
+                pass
+        if qr_id:
+            try:
+                await context.bot.delete_message(chat_id=int(chat_id), message_id=int(qr_id))
+            except Exception:
+                pass
+    await db.clear_payment_ui_messages(int(req["id"]))
+
+
+async def _payment_timeout_job(context: ContextTypes.DEFAULT_TYPE) -> None:
+    data = context.job.data or {}
+    rid = data.get("request_id")
+    if not rid:
+        return
+    db: Database = context.application.bot_data["db"]
+    req = await db.get_payment_request(int(rid))
+    if not req:
+        return
+    # Expire only if no UTR submitted within timeout window.
+    if req["status"] != "pending":
+        return
+    now = int(time.time())
+    if int(req.get("expires_at") or 0) > now:
+        return
+    changed = await db.expire_payment_request_if_pending(int(rid))
+    if not changed:
+        return
+    await _cleanup_payment_user_ui(req, context)
+    try:
+        await _send_emoji_text(
+            int(req["user_id"]),
+            "⏳ Payment request expired.\n\n"
+            "No UTR received within 10 minutes.\n"
+            "Please run /pay again.",
+            context,
+        )
+    except Exception:
+        pass
+
+
 async def pay(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     await _send_emoji_text(
@@ -1766,8 +1817,9 @@ async def pay_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         )
         kb = InlineKeyboardMarkup([[InlineKeyboardButton("📩 Send UTR", callback_data=f"payutr:{rid}")]])
         await _edit_emoji_text(update.effective_chat.id, q.message.message_id, msg.replace("*", ""), context, reply_markup=kb)
+        qr_msg_id: Optional[int] = None
         try:
-            await update.effective_chat.send_photo(
+            qr_msg = await update.effective_chat.send_photo(
                 photo=qr_url,
                 caption=(
                     f"🔳 Scan this UPI QR for ₹{plan['amount']}.\n"
@@ -1775,6 +1827,7 @@ async def pay_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                     f"Request ID: {rid}"
                 ),
             )
+            qr_msg_id = qr_msg.message_id
         except Exception:
             # Fallback if remote QR URL fails for any reason.
             await _send_emoji_text(
@@ -1782,6 +1835,19 @@ async def pay_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                 "⚠️ QR load failed. Pay via UPI ID shown above.\n"
                 f"UPI URI:\n{upi_uri}",
                 context,
+            )
+        await db.set_payment_ui_messages(
+            int(rid),
+            int(update.effective_chat.id),
+            int(q.message.message_id),
+            int(qr_msg_id) if qr_msg_id is not None else None,
+        )
+        if context.application.job_queue:
+            context.application.job_queue.run_once(
+                _payment_timeout_job,
+                when=600,
+                data={"request_id": int(rid)},
+                name=f"pay-timeout-{rid}",
             )
         return
 
@@ -1850,6 +1916,18 @@ async def pay_utr_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     if not update.effective_user or not update.effective_chat or not update.effective_message:
         return
     db: Database = context.application.bot_data["db"]
+    req = await db.get_payment_request(int(rid))
+    if not req:
+        context.user_data.pop("pay_utr_request_id", None)
+        await _send_emoji_text(update.effective_chat.id, "❌ Payment request expired/invalid. Please run /pay again.", context)
+        return
+    now = int(time.time())
+    if req["status"] == "pending" and int(req.get("expires_at") or 0) > 0 and int(req.get("expires_at") or 0) <= now:
+        await db.expire_payment_request_if_pending(int(rid))
+        await _cleanup_payment_user_ui(req, context)
+        context.user_data.pop("pay_utr_request_id", None)
+        await _send_emoji_text(update.effective_chat.id, "⏳ Payment request expired. Please run /pay again.", context)
+        return
 
     utr_text = (update.effective_message.text or "").strip()
     if not utr_text:
@@ -1953,6 +2031,7 @@ async def pay_admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
             f"Premium Until: {expiry_utc}",
             context,
         )
+        await _cleanup_payment_user_ui(req, context)
         return
 
     ok = await db.reject_payment_request(rid, update.effective_user.id)
@@ -1981,6 +2060,7 @@ async def pay_admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         f"By Admin: {update.effective_user.id}",
         context,
     )
+    await _cleanup_payment_user_ui(req, context)
 
 
 async def setpay(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
