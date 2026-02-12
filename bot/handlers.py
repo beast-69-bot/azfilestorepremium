@@ -35,7 +35,7 @@ SETTINGS_PAY_UPI = "pay_upi"
 SETTINGS_PAY_NAME = "pay_name"
 SETTINGS_PAY_TEXT = "pay_text"
 PRESET_UI_EMOJI_IDS = {
-    "info": "6096064954018829186",
+    "info": "6059839048065750021",
     "timer": "5440621591387980068",
     "hourglass": "6082464824111928051",
     "warning": "5420323339723881652",
@@ -45,12 +45,12 @@ PRESET_UI_EMOJI_IDS = {
     "ticket": "6082162475594165182",
     "user": "6062079075374077548",
     "stats": "5231200819986047254",
-    "pin": "5391032818111363540",
+    "pin": "5397782960512444700",
     "announce": "6289406458786221863",
     "outbox": "6062007740262258850",
     "box": "6082192871077712762",
     "refresh": "5382178536872223059",
-    "lock_closed": "5472308992514464048",
+    "lock_closed": "5296369303661067030",
     "lock": "5231302159739395058",
     "unlock": "5296369303661067030",
     "clock": "5440621591387980068",
@@ -291,14 +291,14 @@ def _bsettings_keyboard() -> InlineKeyboardMarkup:
 
 def _welcome_text() -> str:
     return (
-        "🔐 <b>Secure File Access</b>\n"
-        "<i>Normal + Premium content system.</i>\n\n"
-        "📌 <u>How to use</u>\n"
+        "🔐 [b]Secure File Access[/b]\n"
+        "[i]Normal + Premium content system.[/i]\n\n"
+        "📌 [u]How to use[/u]\n"
         "• Open the link you received (deep link)\n"
         "• Join required channels when asked\n\n"
-        "⭐ <b>Premium</b>\n"
-        "• Redeem token: <code>/redeem &lt;token&gt;</code>\n\n"
-        "ℹ️ <b>Note:</b> Files can be accessed only via generated links."
+        "⭐ [b]Premium[/b]\n"
+        "• Redeem token: [c]/redeem <token>[/c]\n\n"
+        "ℹ️ [b]Note:[/b] Files can be accessed only via generated links."
     )
 
 
@@ -356,6 +356,57 @@ async def _build_custom_emoji_entities(text: str, context: ContextTypes.DEFAULT_
     return entities
 
 
+def _extract_style_entities(raw_text: str) -> tuple[str, list[MessageEntity]]:
+    marker_to_type = {
+        "[b]": MessageEntityType.BOLD,
+        "[i]": MessageEntityType.ITALIC,
+        "[u]": MessageEntityType.UNDERLINE,
+        "[c]": MessageEntityType.CODE,
+    }
+    closing_to_open = {"[/b]": "[b]", "[/i]": "[i]", "[/u]": "[u]", "[/c]": "[c]"}
+    markers = sorted(list(marker_to_type.keys()) + list(closing_to_open.keys()), key=len, reverse=True)
+
+    out: list[str] = []
+    entities: list[MessageEntity] = []
+    stack: list[tuple[str, int]] = []
+    i = 0
+    off = 0
+    while i < len(raw_text):
+        matched = None
+        for mk in markers:
+            if raw_text.startswith(mk, i):
+                matched = mk
+                break
+        if not matched:
+            ch = raw_text[i]
+            out.append(ch)
+            off += _u16len(ch)
+            i += 1
+            continue
+
+        if matched in marker_to_type:
+            stack.append((matched, off))
+        else:
+            expected_open = closing_to_open[matched]
+            if stack and stack[-1][0] == expected_open:
+                open_mk, start_off = stack.pop()
+                if off > start_off:
+                    entities.append(
+                        MessageEntity(
+                            type=marker_to_type[open_mk],
+                            offset=start_off,
+                            length=off - start_off,
+                        )
+                    )
+            else:
+                # Unbalanced closing marker: keep it as literal text.
+                out.append(matched)
+                off += _u16len(matched)
+        i += len(matched)
+
+    return "".join(out), entities
+
+
 async def _send_emoji_text(
     chat_id: int,
     text: str,
@@ -363,10 +414,12 @@ async def _send_emoji_text(
     reply_markup: Optional[InlineKeyboardMarkup] = None,
     disable_web_page_preview: Optional[bool] = None,
 ) -> Any:
-    entities = await _build_custom_emoji_entities(text, context)
+    clean_text, style_entities = _extract_style_entities(text)
+    emoji_entities = await _build_custom_emoji_entities(clean_text, context)
+    entities = sorted([*style_entities, *emoji_entities], key=lambda e: (e.offset, e.length))
     return await context.bot.send_message(
         chat_id=chat_id,
-        text=text,
+        text=clean_text,
         entities=entities,
         reply_markup=reply_markup,
         disable_web_page_preview=disable_web_page_preview,
@@ -381,11 +434,13 @@ async def _edit_emoji_text(
     reply_markup: Optional[InlineKeyboardMarkup] = None,
     disable_web_page_preview: Optional[bool] = None,
 ) -> Any:
-    entities = await _build_custom_emoji_entities(text, context)
+    clean_text, style_entities = _extract_style_entities(text)
+    emoji_entities = await _build_custom_emoji_entities(clean_text, context)
+    entities = sorted([*style_entities, *emoji_entities], key=lambda e: (e.offset, e.length))
     return await context.bot.edit_message_text(
         chat_id=chat_id,
         message_id=message_id,
-        text=text,
+        text=clean_text,
         entities=entities,
         reply_markup=reply_markup,
         disable_web_page_preview=disable_web_page_preview,
@@ -839,14 +894,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         db: Database = context.application.bot_data["db"]
         img_url = await db.get_setting(SETTINGS_START_IMG_URL)
         text = _welcome_text()
+        entities = await _build_custom_emoji_entities(text, context)
         if img_url:
             try:
-                await update.effective_chat.send_photo(photo=img_url, caption=text, parse_mode="HTML")
+                await update.effective_chat.send_photo(photo=img_url, caption=text, caption_entities=entities)
                 return
             except Exception:
                 # Fallback to text-only if URL is invalid/unreachable.
                 pass
-        await _send_html_text(update.effective_chat.id, text, context)
+        await update.effective_chat.send_message(text=text, entities=entities)
         return
     await _deliver_by_code(update, context, code)
 
@@ -1610,22 +1666,22 @@ async def plan(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     active = premium_until >= now
     if active:
         dt = datetime.datetime.utcfromtimestamp(premium_until).strftime("%Y-%m-%d %H:%M:%S UTC")
-        status = f"✅ <b>Active</b>\n⏳ Expires: <code>{html.escape(dt)}</code>"
+        status = f"✅ [b]Active[/b]\n⏳ Expires: [c]{dt}[/c]"
     else:
-        status = "❌ <b>Not Active</b>"
+        status = "❌ [b]Not Active[/b]"
 
-    await _send_html_text(
+    await _send_emoji_text(
         update.effective_chat.id,
-        "💎 <b>Premium Plans</b>\n\n"
-        "• <b>1 Day</b>: ₹9\n"
-        "• <b>7 Days</b>: ₹29\n"
-        "• <b>1 Month</b>: ₹99\n\n"
-        "🔓 <u>Normal User Benefit</u>\n"
+        "💎 [b]Premium Plans[/b]\n\n"
+        "• [b]1 Day[/b]: ₹9\n"
+        "• [b]7 Days[/b]: ₹29\n"
+        "• [b]1 Month[/b]: ₹99\n\n"
+        "🔓 [u]Normal User Benefit[/u]\n"
         "• Final link access ke liye ads dekhne honge\n\n"
-        "⭐ <u>Premium User Benefit</u>\n"
+        "⭐ [u]Premium User Benefit[/u]\n"
         "• Direct access milta hai (no ads)\n\n"
-        "🛒 Buy premium: <code>/pay</code>\n\n"
-        f"👤 <b>Your Premium Status</b>\n{status}",
+        "🛒 Buy premium: [c]/pay[/c]\n\n"
+        f"👤 [b]Your Premium Status[/b]\n{status}",
         context,
     )
 
@@ -1820,16 +1876,16 @@ async def setpay(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
     db: Database = context.application.bot_data["db"]
     if not context.args:
-        await _send_html_text(
+        await _send_emoji_text(
             update.effective_chat.id,
-            "ℹ️ <b>Payment Settings</b>\n"
-            "<i>Admin configuration guide</i>\n\n"
-            "<u>Commands</u>\n"
-            "• <code>/setpay view</code>\n"
-            "• <code>/setpay upi &lt;upi_id&gt;</code>\n"
-            "• <code>/setpay name &lt;payee_name&gt;</code>\n"
-            "• <code>/setpay text &lt;payment_instructions&gt;</code>\n"
-            "• <code>/setpay clearupi</code>",
+            "ℹ️ [b]Payment Settings[/b]\n"
+            "[i]Admin configuration guide[/i]\n\n"
+            "[u]Commands[/u]\n"
+            "• [c]/setpay view[/c]\n"
+            "• [c]/setpay upi <upi_id>[/c]\n"
+            "• [c]/setpay name <payee_name>[/c]\n"
+            "• [c]/setpay text <payment_instructions>[/c]\n"
+            "• [c]/setpay clearupi[/c]",
             context,
         )
         return
@@ -2382,12 +2438,10 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
     db: Database = context.application.bot_data["db"]
     s = await db.stats()
-    stats_lines = []
-    for k, v in s.items():
-        stats_lines.append(f"• <b>{html.escape(str(k))}</b>: <code>{html.escape(str(v))}</code>")
-    await _send_html_text(
+    lines = [f"• [b]{k}:[/b] [c]{v}[/c]" for k, v in s.items()]
+    await _send_emoji_text(
         update.effective_chat.id,
-        "📊 <b>Bot Stats</b>\n<i>Live summary</i>\n\n" + "\n".join(stats_lines),
+        "📊 [b]Bot Stats[/b]\n[i]Live summary[/i]\n\n" + "\n".join(lines),
         context,
     )
 
