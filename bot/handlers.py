@@ -1,7 +1,8 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import asyncio
 import datetime
+import html
 import re
 import time
 from typing import Any, Optional
@@ -290,14 +291,14 @@ def _bsettings_keyboard() -> InlineKeyboardMarkup:
 
 def _welcome_text() -> str:
     return (
-        "🔐 Secure File Access\n"
-        "Normal + Premium content system.\n\n"
-        "📌 How to use\n"
+        "🔐 <b>Secure File Access</b>\n"
+        "<i>Normal + Premium content system.</i>\n\n"
+        "📌 <u>How to use</u>\n"
         "• Open the link you received (deep link)\n"
         "• Join required channels when asked\n\n"
-        "⭐ Premium\n"
-        "• Redeem token: /redeem <token>\n\n"
-        "ℹ Note: Files can be accessed only via generated links."
+        "⭐ <b>Premium</b>\n"
+        "• Redeem token: <code>/redeem &lt;token&gt;</code>\n\n"
+        "ℹ️ <b>Note:</b> Files can be accessed only via generated links."
     )
 
 
@@ -315,11 +316,29 @@ async def _build_custom_emoji_entities(text: str, context: ContextTypes.DEFAULT_
     name_to_id: dict[str, str] = {}
     for name, preset in PRESET_UI_EMOJI_IDS.items():
         v = await db.get_setting(f"{SETTINGS_UI_EMOJI_PREFIX}{name}")
-        name_to_id[name] = (v or preset).strip()
+        db_val = (v or "").strip()
+        preset_val = (preset or "").strip()
+        # If DB has stale/invalid value (e.g. "off", empty, malformed), fallback to preset id.
+        if db_val.isdigit():
+            name_to_id[name] = db_val
+        elif preset_val.isdigit():
+            name_to_id[name] = preset_val
+        else:
+            name_to_id[name] = ""
 
     entities: list[MessageEntity] = []
     off = 0
-    for ch in text:
+    i = 0
+    vs16 = "\ufe0f"
+    while i < len(text):
+        ch = text[i]
+        token = ch
+        step = 1
+        # Handle variation-selector style emoji sequences like "ℹ️", "⚠️", "🗑️".
+        if i + 1 < len(text) and text[i + 1] == vs16:
+            token = ch + text[i + 1]
+            step = 2
+
         name = UNICODE_TO_UI_NAME.get(ch)
         if name:
             eid = name_to_id.get(name)
@@ -328,11 +347,12 @@ async def _build_custom_emoji_entities(text: str, context: ContextTypes.DEFAULT_
                     MessageEntity(
                         type=MessageEntityType.CUSTOM_EMOJI,
                         offset=off,
-                        length=_u16len(ch),
+                        length=_u16len(token),
                         custom_emoji_id=eid,
                     )
                 )
-        off += _u16len(ch)
+        off += _u16len(token)
+        i += step
     return entities
 
 
@@ -367,6 +387,22 @@ async def _edit_emoji_text(
         message_id=message_id,
         text=text,
         entities=entities,
+        reply_markup=reply_markup,
+        disable_web_page_preview=disable_web_page_preview,
+    )
+
+
+async def _send_html_text(
+    chat_id: int,
+    html_text: str,
+    context: ContextTypes.DEFAULT_TYPE,
+    reply_markup: Optional[InlineKeyboardMarkup] = None,
+    disable_web_page_preview: Optional[bool] = None,
+) -> Any:
+    return await context.bot.send_message(
+        chat_id=chat_id,
+        text=html_text,
+        parse_mode="HTML",
         reply_markup=reply_markup,
         disable_web_page_preview=disable_web_page_preview,
     )
@@ -803,15 +839,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         db: Database = context.application.bot_data["db"]
         img_url = await db.get_setting(SETTINGS_START_IMG_URL)
         text = _welcome_text()
-        entities = await _build_custom_emoji_entities(text, context)
         if img_url:
             try:
-                await update.effective_chat.send_photo(photo=img_url, caption=text, caption_entities=entities)
+                await update.effective_chat.send_photo(photo=img_url, caption=text, parse_mode="HTML")
                 return
             except Exception:
                 # Fallback to text-only if URL is invalid/unreachable.
                 pass
-        await update.effective_chat.send_message(text=text, entities=entities)
+        await _send_html_text(update.effective_chat.id, text, context)
         return
     await _deliver_by_code(update, context, code)
 
@@ -1009,9 +1044,10 @@ async def admin_media_ingest(update: Update, context: ContextTypes.DEFAULT_TYPE)
             except Exception:
                 pass
         count = len(cb_state.get("file_ids") or [])
-        msg = await update.effective_chat.send_message(
-            f"✅ *{count}* file save ho gayi.\n\nLink generate karu ya process cancel karu?",
-            parse_mode="Markdown",
+        msg = await _send_emoji_text(
+            update.effective_chat.id,
+            f"✅ {count} file save ho gayi.\n\nLink generate karu ya process cancel karu?",
+            context,
             reply_markup=_custombatch_prompt_keyboard(),
         )
         cb_state["prompt_message_id"] = msg.message_id
@@ -1038,7 +1074,7 @@ async def admin_media_ingest(update: Update, context: ContextTypes.DEFAULT_TYPE)
 async def getlink(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     if not await _is_admin_or_owner(update, context):
-        await update.effective_chat.send_message("🚫 Access denied. (Admin/Owner only)")
+        await _send_emoji_text(update.effective_chat.id, "🚫 Access denied. (Admin/Owner only)", context)
         return
 
     db: Database = context.application.bot_data["db"]
@@ -1072,11 +1108,12 @@ async def getlink(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             target_file_id = None
 
     if target_file_id is None and target_msg_id is None:
-        await update.effective_chat.send_message(
-            "ℹ️ *How to use /getlink*\n\n"
-            "1) Reply to any message/file and send `/getlink`\n"
-            "2) Or use: `/getlink <file_id>`",
-            parse_mode="Markdown",
+        await _send_emoji_text(
+            update.effective_chat.id,
+            "ℹ️ How to use /getlink\n\n"
+            "1) Reply to any message/file and send /getlink\n"
+            "2) Or use: /getlink <file_id>",
+            context,
         )
         return
 
@@ -1290,16 +1327,17 @@ async def batch_ingest(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 async def custombatch(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     if not await _is_admin_or_owner(update, context):
-        await update.effective_chat.send_message("🚫 Access denied. (Admin/Owner only)")
+        await _send_emoji_text(update.effective_chat.id, "🚫 Access denied. (Admin/Owner only)", context)
         return
     # Start a temporary "collect files" flow.
     context.user_data["custombatch_state"] = {"file_ids": [], "prompt_message_id": None}
-    await update.effective_chat.send_message(
-        "🧩 *Custom Batch Mode Started*\n\n"
+    await _send_emoji_text(
+        update.effective_chat.id,
+        "🧩 Custom Batch Mode Started\n\n"
         "📤 Files / media bhejo.\n"
         "Main unko custom batch me add karta rahunga.\n\n"
-        "❌ Cancel anytime: press *Cancel Process* button.",
-        parse_mode="Markdown",
+        "❌ Cancel anytime: press Cancel Process button.",
+        context,
     )
 
 
@@ -1373,17 +1411,19 @@ async def custombatch_callback(update: Update, context: ContextTypes.DEFAULT_TYP
                     await context.bot.delete_message(chat_id=int(src_chat_id), message_id=int(mid))
                 except Exception:
                     pass
-        await q.edit_message_text(
-            "✅ *Custom Batch Created Successfully!*\n\n"
+        await _edit_emoji_text(
+            update.effective_chat.id,
+            q.message.message_id,
+            "✅ Custom Batch Created Successfully!\n\n"
             f"📦 Total Files: {len(file_ids)}\n\n"
-            "🔓 *Normal Access Link:*\n"
+            "🔓 Normal Access Link:\n"
             f"{_deep_link(context, normal_code)}\n\n"
-            "⭐ *Premium Access Link:*\n"
+            "⭐ Premium Access Link:\n"
             f"{_deep_link(context, prem_code)}\n\n"
             "ℹ️ Rules:\n"
             "• Required channels join karna mandatory hai\n"
             "• Premium link sirf premium users ke liye kaam karega",
-            parse_mode="Markdown",
+            context,
         )
         return
 
@@ -1392,87 +1432,106 @@ async def addadmin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     cfg = context.application.bot_data["cfg"]
     if not _is_owner(update, cfg):
-        await update.effective_chat.send_message("🚫 Owner only.")
+        await _send_emoji_text(update.effective_chat.id, "🚫 Owner only.", context)
         return
     if not context.args:
-        await update.effective_chat.send_message("ℹ️ Usage: `/addadmin <user_id>`", parse_mode="Markdown")
+        await _send_emoji_text(update.effective_chat.id, "ℹ️ Usage: /addadmin <user_id>", context)
         return
     try:
         uid = int(context.args[0])
     except ValueError:
-        await update.effective_chat.send_message("❌ Invalid user_id.")
+        await _send_emoji_text(update.effective_chat.id, "❌ Invalid user_id.", context)
         return
     db: Database = context.application.bot_data["db"]
     await db.add_admin(uid, update.effective_user.id)
-    await update.effective_chat.send_message(f"✅ Admin added: `{uid}`", parse_mode="Markdown")
+    await _send_emoji_text(update.effective_chat.id, f"✅ Admin added: {uid}", context)
 
 
 async def removeadmin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     cfg = context.application.bot_data["cfg"]
     if not _is_owner(update, cfg):
-        await update.effective_chat.send_message("🚫 Owner only.")
+        await _send_emoji_text(update.effective_chat.id, "🚫 Owner only.", context)
         return
     if not context.args:
-        await update.effective_chat.send_message("ℹ️ Usage: `/removeadmin <user_id>`", parse_mode="Markdown")
+        await _send_emoji_text(update.effective_chat.id, "ℹ️ Usage: /removeadmin <user_id>", context)
         return
     try:
         uid = int(context.args[0])
     except ValueError:
-        await update.effective_chat.send_message("❌ Invalid user_id.")
+        await _send_emoji_text(update.effective_chat.id, "❌ Invalid user_id.", context)
         return
     db: Database = context.application.bot_data["db"]
     await db.remove_admin(uid)
-    await update.effective_chat.send_message(f"✅ Admin removed: `{uid}`", parse_mode="Markdown")
+    await _send_emoji_text(update.effective_chat.id, f"✅ Admin removed: {uid}", context)
 
 
 async def addpremium(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     if not await _is_admin_or_owner(update, context):
-        await update.effective_chat.send_message("🚫 Access denied. (Admin/Owner only)")
+        await _send_emoji_text(update.effective_chat.id, "🚫 Access denied. (Admin/Owner only)", context)
         return
     if not context.args:
-        await update.effective_chat.send_message("ℹ️ Usage: `/addpremium <user_id> [days]`", parse_mode="Markdown")
+        await _send_emoji_text(update.effective_chat.id, "ℹ️ Usage: /addpremium <user_id> [days]", context)
         return
     try:
         uid = int(context.args[0])
         days = int(context.args[1]) if len(context.args) > 1 else 1
     except ValueError:
-        await update.effective_chat.send_message("❌ Invalid args.")
+        await _send_emoji_text(update.effective_chat.id, "❌ Invalid args.", context)
         return
     db: Database = context.application.bot_data["db"]
-    until = await db.add_premium_seconds(uid, max(1, days) * DAY_SECONDS)
-    await update.effective_chat.send_message(
-        "✅ *Premium Granted*\n\n"
-        f"👤 User: `{uid}`\n"
-        f"⏳ Days: `{max(1, days)}`\n"
-        f"🕒 premium_until (unix): `{until}`",
-        parse_mode="Markdown",
+    grant_days = max(1, days)
+    until = await db.add_premium_seconds(uid, grant_days * DAY_SECONDS)
+    expiry_utc = datetime.datetime.utcfromtimestamp(until).strftime("%Y-%m-%d %H:%M:%S UTC")
+
+    user_notified = False
+    try:
+        await _send_html_text(
+            uid,
+            "✅ <b>Premium Activated</b>\n"
+            "<i>Your premium access has been enabled.</i>\n\n"
+            f"⏳ <b>Duration:</b> {grant_days} day(s)\n"
+            f"🕒 <b>Expires:</b> <code>{html.escape(expiry_utc)}</code>",
+            context,
+        )
+        user_notified = True
+    except Exception:
+        user_notified = False
+
+    await _send_emoji_text(
+        update.effective_chat.id,
+        "✅ Premium Granted\n\n"
+        f"👤 User: {uid}\n"
+        f"⏳ Days: {grant_days}\n"
+        f"🕒 premium_until (unix): {until}\n"
+        f"📣 User notified: {'Yes' if user_notified else 'No (user must /start bot)'}",
+        context,
     )
 
 
 async def removepremium(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     if not await _is_admin_or_owner(update, context):
-        await update.effective_chat.send_message("🚫 Access denied. (Admin/Owner only)")
+        await _send_emoji_text(update.effective_chat.id, "🚫 Access denied. (Admin/Owner only)", context)
         return
     if not context.args:
-        await update.effective_chat.send_message("ℹ️ Usage: `/removepremium <user_id>`", parse_mode="Markdown")
+        await _send_emoji_text(update.effective_chat.id, "ℹ️ Usage: /removepremium <user_id>", context)
         return
     try:
         uid = int(context.args[0])
     except ValueError:
-        await update.effective_chat.send_message("❌ Invalid user_id.")
+        await _send_emoji_text(update.effective_chat.id, "❌ Invalid user_id.", context)
         return
     db: Database = context.application.bot_data["db"]
     await db.set_premium_until(uid, 0)
-    await update.effective_chat.send_message(f"✅ Premium removed for `{uid}`.", parse_mode="Markdown")
+    await _send_emoji_text(update.effective_chat.id, f"✅ Premium removed for {uid}.", context)
 
 
 async def gencode(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     if not await _is_admin_or_owner(update, context):
-        await update.effective_chat.send_message("🚫 Access denied. (Admin/Owner only)")
+        await _send_emoji_text(update.effective_chat.id, "🚫 Access denied. (Admin/Owner only)", context)
         return
     db: Database = context.application.bot_data["db"]
     count = 1
@@ -1494,25 +1553,27 @@ async def gencode(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         tokens.append(t)
 
     if count == 1:
-        await update.effective_chat.send_message(
-            "🎟️ *Token Generated*\n\n"
-            f"`{tokens[0]}`\n\n"
+        await _send_emoji_text(
+            update.effective_chat.id,
+            "🎟️ Token Generated\n\n"
+            f"{tokens[0]}\n\n"
             "⭐ Grants: 1 day premium\n"
             "🔒 One-time use only",
-            parse_mode="Markdown",
+            context,
         )
         return
 
     # Multi-token response
-    token_lines = "\n".join([f"`{t}`" for t in tokens])
-    await update.effective_chat.send_message(
-        "🎟️ *Tokens Generated*\n\n"
-        f"🧾 Total: *{count}*\n\n"
+    token_lines = "\n".join(tokens)
+    await _send_emoji_text(
+        update.effective_chat.id,
+        "🎟️ Tokens Generated\n\n"
+        f"🧾 Total: {count}\n\n"
         f"{token_lines}\n\n"
         "⭐ Each grants: 1 day premium\n"
         "🔒 Each is one-time use only\n\n"
-        "ℹ️ Users redeem: `/redeem <token>`",
-        parse_mode="Markdown",
+        "ℹ️ Users redeem: /redeem <token>",
+        context,
     )
 
 
@@ -1521,19 +1582,20 @@ async def redeem(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.effective_chat or not update.effective_user:
         return
     if not context.args:
-        await update.effective_chat.send_message("ℹ️ Usage: `/redeem <token>`", parse_mode="Markdown")
+        await _send_emoji_text(update.effective_chat.id, "ℹ️ Usage: /redeem <token>", context)
         return
     token = context.args[0].strip()
     db: Database = context.application.bot_data["db"]
     grant = await db.redeem_token(token, update.effective_user.id)
     if not grant:
-        await update.effective_chat.send_message("❌ Invalid or already-used token.")
+        await _send_emoji_text(update.effective_chat.id, "❌ Invalid or already-used token.", context)
         return
     until = await db.add_premium_seconds(update.effective_user.id, grant)
-    await update.effective_chat.send_message(
-        "✅ *Token Redeemed Successfully*\n\n"
-        f"⭐ Premium active until (unix): `{until}`",
-        parse_mode="Markdown",
+    await _send_emoji_text(
+        update.effective_chat.id,
+        "✅ Token Redeemed Successfully\n\n"
+        f"⭐ Premium active until (unix): {until}",
+        context,
     )
 
 
@@ -1548,22 +1610,22 @@ async def plan(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     active = premium_until >= now
     if active:
         dt = datetime.datetime.utcfromtimestamp(premium_until).strftime("%Y-%m-%d %H:%M:%S UTC")
-        status = f"✅ Active\n⏳ Expires: `{dt}`"
+        status = f"✅ <b>Active</b>\n⏳ Expires: <code>{html.escape(dt)}</code>"
     else:
-        status = "❌ Not Active"
+        status = "❌ <b>Not Active</b>"
 
-    await _send_emoji_text(
+    await _send_html_text(
         update.effective_chat.id,
-        "💎 Premium Plans\n\n"
-        "• 1 Day: ₹9\n"
-        "• 7 Days: ₹29\n"
-        "• 1 Month: ₹99\n\n"
-        "🔓 Normal User Benefit\n"
+        "💎 <b>Premium Plans</b>\n\n"
+        "• <b>1 Day</b>: ₹9\n"
+        "• <b>7 Days</b>: ₹29\n"
+        "• <b>1 Month</b>: ₹99\n\n"
+        "🔓 <u>Normal User Benefit</u>\n"
         "• Final link access ke liye ads dekhne honge\n\n"
-        "⭐ Premium User Benefit\n"
+        "⭐ <u>Premium User Benefit</u>\n"
         "• Direct access milta hai (no ads)\n\n"
-        "🛒 Buy premium: /pay\n\n"
-        f"👤 Your Premium Status\n{status}",
+        "🛒 Buy premium: <code>/pay</code>\n\n"
+        f"👤 <b>Your Premium Status</b>\n{status}",
         context,
     )
 
@@ -1612,7 +1674,7 @@ async def pay_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         key = data.split(":", 1)[1]
         plan = PAY_PLANS.get(key)
         if not plan:
-            await q.edit_message_text("❌ Invalid plan.")
+            await _edit_emoji_text(update.effective_chat.id, q.message.message_id, "❌ Invalid plan.", context)
             return
         rid = await db.create_payment_request(update.effective_user.id, key, int(plan["days"]), int(plan["amount"]))
         pay_text = await db.get_setting(SETTINGS_PAY_TEXT)
@@ -1657,10 +1719,11 @@ async def pay_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             )
         except Exception:
             # Fallback if remote QR URL fails for any reason.
-            await update.effective_chat.send_message(
+            await _send_emoji_text(
+                update.effective_chat.id,
                 "⚠️ QR load failed. Pay via UPI ID shown above.\n"
-                f"UPI URI:\n`{upi_uri}`",
-                parse_mode="Markdown",
+                f"UPI URI:\n{upi_uri}",
+                context,
             )
         return
 
@@ -1691,19 +1754,19 @@ async def _notify_payment_admins(update: Update, context: ContextTypes.DEFAULT_T
     user = update.effective_user
     username = f"@{user.username}" if user and user.username else "-"
     note = (
-        "💰 *New Payment UTR Submitted*\n\n"
-        f"Request ID: `{req['id']}`\n"
-        f"User ID: `{req['user_id']}`\n"
+        "💰 New Payment UTR Submitted\n\n"
+        f"Request ID: {req['id']}\n"
+        f"User ID: {req['user_id']}\n"
         f"Username: {username}\n"
-        f"Plan: *{req['plan_key']}* ({req['plan_days']} days)\n"
-        f"Amount: *₹{req['amount_rs']}*\n"
-        f"UTR: `{utr_preview}`\n\n"
+        f"Plan: {req['plan_key']} ({req['plan_days']} days)\n"
+        f"Amount: ₹{req['amount_rs']}\n"
+        f"UTR: {utr_preview}\n\n"
         "Activate manually using:\n"
-        "`/addpremium <user_id> <days>`"
+        "/addpremium <user_id> <days>"
     )
     for aid in targets:
         try:
-            await context.bot.send_message(chat_id=aid, text=note, parse_mode="Markdown")
+            await _send_emoji_text(aid, note, context)
             # If user sent media, forward copy for proof.
             if update.effective_message and (update.effective_message.photo or update.effective_message.document):
                 await context.bot.copy_message(
@@ -1730,38 +1793,44 @@ async def pay_utr_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         elif update.effective_message.document:
             utr_text = f"document:{update.effective_message.document.file_id[:12]}"
         else:
-            await update.effective_chat.send_message("⚠️ Please send UTR text or payment screenshot.")
+            await _send_emoji_text(update.effective_chat.id, "⚠️ Please send UTR text or payment screenshot.", context)
             return
 
     ok = await db.set_payment_utr(int(rid), utr_text)
     context.user_data.pop("pay_utr_request_id", None)
     if not ok:
-        await update.effective_chat.send_message("❌ Payment request expired/invalid. Please run /pay again.")
+        await _send_emoji_text(update.effective_chat.id, "❌ Payment request expired/invalid. Please run /pay again.", context)
         return
     req = await db.get_payment_request(int(rid))
     if req:
         await _notify_payment_admins(update, context, req, utr_text)
-    await update.effective_chat.send_message(
+    await _send_emoji_text(
+        update.effective_chat.id,
         "✅ UTR submitted successfully.\n"
         "Admin ko notify kar diya gaya hai.\n"
-        "Plan verification ke baad manually activate kiya jayega."
+        "Plan verification ke baad manually activate kiya jayega.",
+        context,
     )
 
 
 async def setpay(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     if not await _is_admin_or_owner(update, context):
-        await update.effective_chat.send_message("🚫 Access denied. (Admin/Owner only)")
+        await _send_emoji_text(update.effective_chat.id, "🚫 Access denied. (Admin/Owner only)", context)
         return
     db: Database = context.application.bot_data["db"]
     if not context.args:
-        await update.effective_chat.send_message(
-            "ℹ️ Usage:\n"
-            "/setpay view\n"
-            "/setpay upi <upi_id>\n"
-            "/setpay name <payee_name>\n"
-            "/setpay text <payment instructions>\n"
-            "/setpay clearupi",
+        await _send_html_text(
+            update.effective_chat.id,
+            "ℹ️ <b>Payment Settings</b>\n"
+            "<i>Admin configuration guide</i>\n\n"
+            "<u>Commands</u>\n"
+            "• <code>/setpay view</code>\n"
+            "• <code>/setpay upi &lt;upi_id&gt;</code>\n"
+            "• <code>/setpay name &lt;payee_name&gt;</code>\n"
+            "• <code>/setpay text &lt;payment_instructions&gt;</code>\n"
+            "• <code>/setpay clearupi</code>",
+            context,
         )
         return
     sub = context.args[0].lower()
@@ -1769,43 +1838,43 @@ async def setpay(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         upi = await db.get_setting(SETTINGS_PAY_UPI) or "-"
         name = await db.get_setting(SETTINGS_PAY_NAME) or "Premium Store"
         text = await db.get_setting(SETTINGS_PAY_TEXT) or "-"
-        await update.effective_chat.send_message(f"UPI ID: {upi}\nPayee Name: {name}\n\nText:\n{text}")
+        await _send_emoji_text(update.effective_chat.id, f"UPI ID: {upi}\nPayee Name: {name}\n\nText:\n{text}", context)
         return
     if sub == "clearupi":
         await db.set_setting(SETTINGS_PAY_UPI, None)
-        await update.effective_chat.send_message("✅ Payment UPI cleared.")
+        await _send_emoji_text(update.effective_chat.id, "✅ Payment UPI cleared.", context)
         return
     if sub == "upi":
         if len(context.args) < 2:
-            await update.effective_chat.send_message("❌ Usage: /setpay upi <upi_id>")
+            await _send_emoji_text(update.effective_chat.id, "❌ Usage: /setpay upi <upi_id>", context)
             return
         v = context.args[1].strip()
         await db.set_setting(SETTINGS_PAY_UPI, v)
-        await update.effective_chat.send_message("✅ Payment UPI set.")
+        await _send_emoji_text(update.effective_chat.id, "✅ Payment UPI set.", context)
         return
     if sub == "name":
         if len(context.args) < 2:
-            await update.effective_chat.send_message("❌ Usage: /setpay name <payee_name>")
+            await _send_emoji_text(update.effective_chat.id, "❌ Usage: /setpay name <payee_name>", context)
             return
         v = " ".join(context.args[1:]).strip()
         await db.set_setting(SETTINGS_PAY_NAME, v)
-        await update.effective_chat.send_message("✅ Payment payee name set.")
+        await _send_emoji_text(update.effective_chat.id, "✅ Payment payee name set.", context)
         return
     if sub == "text":
         text = " ".join(context.args[1:]).strip()
         if not text:
-            await update.effective_chat.send_message("❌ Usage: /setpay text <payment instructions>")
+            await _send_emoji_text(update.effective_chat.id, "❌ Usage: /setpay text <payment instructions>", context)
             return
         await db.set_setting(SETTINGS_PAY_TEXT, text)
-        await update.effective_chat.send_message("✅ Payment text set.")
+        await _send_emoji_text(update.effective_chat.id, "✅ Payment text set.", context)
         return
-    await update.effective_chat.send_message("❌ Invalid /setpay option.")
+    await _send_emoji_text(update.effective_chat.id, "❌ Invalid /setpay option.", context)
 
 
 async def bsettings(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     if not await _is_admin_or_owner(update, context):
-        await update.effective_chat.send_message("🚫 Access denied. (Admin/Owner only)")
+        await _send_emoji_text(update.effective_chat.id, "🚫 Access denied. (Admin/Owner only)", context)
         return
     await _send_emoji_text(
         update.effective_chat.id,
@@ -1821,7 +1890,7 @@ async def bsettings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return
     await q.answer()
     if not await _is_admin_or_owner(update, context):
-        await q.edit_message_text("🚫 Access denied. (Admin/Owner only)")
+        await _edit_emoji_text(update.effective_chat.id, q.message.message_id, "🚫 Access denied. (Admin/Owner only)", context)
         return
     data = q.data or ""
     if data == "bset:back":
@@ -1838,7 +1907,7 @@ async def bsettings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     key = data.split(":", 1)[1]
     doc = BSETTINGS_DOCS.get(key)
     if not doc:
-        await q.edit_message_text("❌ Unknown command doc.")
+        await _edit_emoji_text(update.effective_chat.id, q.message.message_id, "❌ Unknown command doc.", context)
         return
     kb = InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back", callback_data="bset:back")]])
     await _edit_emoji_text(
@@ -1853,22 +1922,23 @@ async def bsettings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
 async def forcech(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     if not await _is_admin_or_owner(update, context):
-        await update.effective_chat.send_message("🚫 Access denied. (Admin/Owner only)")
+        await _send_emoji_text(update.effective_chat.id, "🚫 Access denied. (Admin/Owner only)", context)
         return
     db: Database = context.application.bot_data["db"]
 
     if context.args and context.args[0].lower() == "list":
         chans = await db.list_force_channels()
         if not chans:
-            await update.effective_chat.send_message(
-                "📣 *Force Channels*\n\n"
+            await _send_emoji_text(
+                update.effective_chat.id,
+                "📣 Force Channels\n\n"
                 "No required channels set.\n\n"
-                "✅ *Usage*\n"
-                "• `/forcech` (add flow)\n"
-                "• `/forcech list`\n"
-                "• `/forcech remove <channel_id|@username>`\n"
-                "• `/forcech reset`",
-                parse_mode="Markdown",
+                "✅ Usage\n"
+                "• /forcech (add flow)\n"
+                "• /forcech list\n"
+                "• /forcech remove <channel_id|@username>\n"
+                "• /forcech reset",
+                context,
             )
             return
         lines = []
@@ -1877,17 +1947,17 @@ async def forcech(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             name = ch.get("title") or ""
             mode = (ch.get("mode") or "direct").lower()
             mode_label = "🔓 Direct" if mode == "direct" else "🛂 Request"
-            lines.append(f"• `{ch['channel_id']}` [{mode_label}] {name} {extra}".strip())
-        await update.effective_chat.send_message("📣 *Force Channels*\n\n" + "\n".join(lines), parse_mode="Markdown")
+            lines.append(f"• {ch['channel_id']} [{mode_label}] {name} {extra}".strip())
+        await _send_emoji_text(update.effective_chat.id, "📣 Force Channels\n\n" + "\n".join(lines), context)
         return
 
     if context.args and context.args[0].lower() == "remove":
         if len(context.args) < 2:
-            await update.effective_chat.send_message("ℹ️ Usage: `/forcech remove <channel_id|@username>`", parse_mode="Markdown")
+            await _send_emoji_text(update.effective_chat.id, "ℹ️ Usage: /forcech remove <channel_id|@username>", context)
             return
         ref = _parse_channel_ref(context.args[1])
         if ref is None:
-            await update.effective_chat.send_message("❌ Invalid channel id/username.")
+            await _send_emoji_text(update.effective_chat.id, "❌ Invalid channel id/username.", context)
             return
         try:
             chat = await context.bot.get_chat(ref)
@@ -1897,39 +1967,39 @@ async def forcech(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             if isinstance(ref, int):
                 cid = int(ref)
             else:
-                await update.effective_chat.send_message("❌ Channel not found.")
+                await _send_emoji_text(update.effective_chat.id, "❌ Channel not found.", context)
                 return
         await db.remove_force_channel(cid)
-        await update.effective_chat.send_message(f"✅ Force channel removed: `{cid}`", parse_mode="Markdown")
+        await _send_emoji_text(update.effective_chat.id, f"✅ Force channel removed: {cid}", context)
         return
 
     if context.args and context.args[0].lower() == "reset":
         await db.clear_force_channels()
         context.user_data.pop("forcech_state", None)
-        await update.effective_chat.send_message("✅ Force channel DB reset done. All required channels cleared.")
+        await _send_emoji_text(update.effective_chat.id, "✅ Force channel DB reset done. All required channels cleared.", context)
         return
 
     # Default: interactive add flow.
     context.user_data["forcech_state"] = {"step": "await_channel"}
-    await update.effective_chat.send_message("📣 Channel ID/username bhejo")
+    await _send_emoji_text(update.effective_chat.id, "📣 Channel ID/username bhejo", context)
 
 
 async def forcechdebug(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     if not await _is_admin_or_owner(update, context):
-        await update.effective_chat.send_message("🚫 Access denied. (Admin/Owner only)")
+        await _send_emoji_text(update.effective_chat.id, "🚫 Access denied. (Admin/Owner only)", context)
         return
     if not context.args:
-        await update.effective_chat.send_message("ℹ️ Usage: /forcechdebug <user_id>")
+        await _send_emoji_text(update.effective_chat.id, "ℹ️ Usage: /forcechdebug <user_id>", context)
         return
     try:
         uid = int(context.args[0])
     except ValueError:
-        await update.effective_chat.send_message("❌ Invalid user_id.")
+        await _send_emoji_text(update.effective_chat.id, "❌ Invalid user_id.", context)
         return
     ok, _, details = await _joined_all_force_channels_details(uid, context)
     if not details:
-        await update.effective_chat.send_message("ℹ️ No force channels configured.")
+        await _send_emoji_text(update.effective_chat.id, "ℹ️ No force channels configured.", context)
         return
     lines = [f"Result: {'PASS' if ok else 'BLOCK'} for user {uid}", ""]
     for d in details:
@@ -1937,7 +2007,7 @@ async def forcechdebug(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             f"• {d['channel_id']} mode={d['mode']} joined={d['joined']} request={d['request']} pass={d['passed']} "
             f"member_err={d['member_error'] or '-'} req_api_err={d['request_api_error'] or '-'}"
         )
-    await update.effective_chat.send_message("\n".join(lines))
+    await _send_emoji_text(update.effective_chat.id, "\n".join(lines), context)
 
 
 async def forcech_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1955,20 +2025,20 @@ async def forcech_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     db: Database = context.application.bot_data["db"]
     ref = _parse_channel_ref((update.effective_message.text or "").strip())
     if ref is None:
-        await update.effective_chat.send_message("❌ Invalid format. Send `-100xxxx` or `@channelusername`.", parse_mode="Markdown")
+        await _send_emoji_text(update.effective_chat.id, "❌ Invalid format. Send -100xxxx or @channelusername.", context)
         return
 
     try:
         chat = await context.bot.get_chat(ref)
     except Exception:
-        await update.effective_chat.send_message("❌ Channel not found / inaccessible.")
+        await _send_emoji_text(update.effective_chat.id, "❌ Channel not found / inaccessible.", context)
         return
     if chat.type != "channel":
-        await update.effective_chat.send_message("❌ Only channel is supported for force-join.")
+        await _send_emoji_text(update.effective_chat.id, "❌ Only channel is supported for force-join.", context)
         return
     if not await _bot_is_admin(int(chat.id), context):
         context.user_data.pop("forcech_state", None)
-        await update.effective_chat.send_message("❌ Bot is not admin in this channel. Add bot as admin and try again.")
+        await _send_emoji_text(update.effective_chat.id, "❌ Bot is not admin in this channel. Add bot as admin and try again.", context)
         return
 
     state["channel_id"] = int(chat.id)
@@ -1985,7 +2055,7 @@ async def forcech_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             ]
         ]
     )
-    await update.effective_chat.send_message("Mode select karo:", reply_markup=kb)
+    await _send_emoji_text(update.effective_chat.id, "Mode select karo:", context, reply_markup=kb)
 
 
 async def forcech_mode_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1995,7 +2065,7 @@ async def forcech_mode_callback(update: Update, context: ContextTypes.DEFAULT_TY
     await q.answer()
     await _upsert_user(update, context)
     if not await _is_admin_or_owner(update, context):
-        await q.edit_message_text("🚫 Access denied. (Admin/Owner only)")
+        await _edit_emoji_text(update.effective_chat.id, q.message.message_id, "🚫 Access denied. (Admin/Owner only)", context)
         return
 
     data = q.data or ""
@@ -2003,24 +2073,24 @@ async def forcech_mode_callback(update: Update, context: ContextTypes.DEFAULT_TY
         return
     mode = data.split(":", 1)[1]
     if mode not in ("direct", "request"):
-        await q.edit_message_text("❌ Invalid mode.")
+        await _edit_emoji_text(update.effective_chat.id, q.message.message_id, "❌ Invalid mode.", context)
         return
 
     state = context.user_data.get("forcech_state") or {}
     if state.get("step") != "await_mode":
-        await q.edit_message_text("ℹ️ No active forcech add flow. Run /forcech again.")
+        await _edit_emoji_text(update.effective_chat.id, q.message.message_id, "ℹ️ No active forcech add flow. Run /forcech again.", context)
         return
 
     cid = int(state.get("channel_id", 0))
     if not cid:
         context.user_data.pop("forcech_state", None)
-        await q.edit_message_text("❌ Missing channel state. Run /forcech again.")
+        await _edit_emoji_text(update.effective_chat.id, q.message.message_id, "❌ Missing channel state. Run /forcech again.", context)
         return
 
     # Re-validate admin before saving.
     if not await _bot_is_admin(cid, context):
         context.user_data.pop("forcech_state", None)
-        await q.edit_message_text("❌ Bot is not admin in this channel. Add bot as admin and try again.")
+        await _edit_emoji_text(update.effective_chat.id, q.message.message_id, "❌ Bot is not admin in this channel. Add bot as admin and try again.", context)
         return
 
     username = state.get("username")
@@ -2037,9 +2107,12 @@ async def forcech_mode_callback(update: Update, context: ContextTypes.DEFAULT_TY
             )
             invite_link = inv.invite_link
         except Exception:
-            await q.edit_message_text(
+            await _edit_emoji_text(
+                update.effective_chat.id,
+                q.message.message_id,
                 "❌ Request mode invite link generate nahi hua.\n"
-                "Channel settings me Join Requests enable karo, phir /forcech fir se run karo."
+                "Channel settings me Join Requests enable karo, phir /forcech fir se run karo.",
+                context,
             )
             context.user_data.pop("forcech_state", None)
             return
@@ -2055,7 +2128,12 @@ async def forcech_mode_callback(update: Update, context: ContextTypes.DEFAULT_TY
                 )
                 invite_link = inv.invite_link
             except Exception:
-                await q.edit_message_text("❌ Invite link generate nahi hua. Check bot admin permissions.")
+                await _edit_emoji_text(
+                    update.effective_chat.id,
+                    q.message.message_id,
+                    "❌ Invite link generate nahi hua. Check bot admin permissions.",
+                    context,
+                )
                 context.user_data.pop("forcech_state", None)
                 return
 
@@ -2063,12 +2141,14 @@ async def forcech_mode_callback(update: Update, context: ContextTypes.DEFAULT_TY
     await db.add_force_channel(cid, mode, invite_link, title, username, update.effective_user.id)
     context.user_data.pop("forcech_state", None)
     mode_label = "🔓 Direct Mode" if mode == "direct" else "🛂 Request Mode"
-    await q.edit_message_text(
+    await _edit_emoji_text(
+        update.effective_chat.id,
+        q.message.message_id,
         "✅ Force channel saved\n\n"
-        f"Channel: `{cid}`\n"
+        f"Channel: {cid}\n"
         f"Mode: {mode_label}\n"
         f"Join Link: {invite_link}",
-        parse_mode="Markdown",
+        context,
         disable_web_page_preview=True,
     )
 
@@ -2084,89 +2164,92 @@ async def on_chat_join_request(update: Update, context: ContextTypes.DEFAULT_TYP
 async def setcaption(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     if not await _is_admin_or_owner(update, context):
-        await update.effective_chat.send_message("🚫 Access denied. (Admin/Owner only)")
+        await _send_emoji_text(update.effective_chat.id, "🚫 Access denied. (Admin/Owner only)", context)
         return
     text = " ".join(context.args).strip() if context.args else ""
     if not text and update.effective_message and update.effective_message.reply_to_message:
         text = (update.effective_message.reply_to_message.text or "").strip()
     if not text:
-        await update.effective_chat.send_message(
-            "ℹ️ Usage: `/setcaption <text>` (or reply to a text message)\n"
+        await _send_emoji_text(
+            update.effective_chat.id,
+            "ℹ️ Usage: /setcaption <text> (or reply to a text message)\n"
             "HTML styles supported, e.g. `<b>bold</b> <i>italic</i> <code>code</code>`",
-            parse_mode="Markdown",
+            context,
         )
         return
     db: Database = context.application.bot_data["db"]
     await db.set_setting("caption", text)
-    await update.effective_chat.send_message("✅ Default caption set.")
+    await _send_emoji_text(update.effective_chat.id, "✅ Default caption set.", context)
 
 
 async def removecaption(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     if not await _is_admin_or_owner(update, context):
-        await update.effective_chat.send_message("🚫 Access denied. (Admin/Owner only)")
+        await _send_emoji_text(update.effective_chat.id, "🚫 Access denied. (Admin/Owner only)", context)
         return
     db: Database = context.application.bot_data["db"]
     await db.set_setting("caption", None)
-    await update.effective_chat.send_message("🗑️ Default caption removed.")
+    await _send_emoji_text(update.effective_chat.id, "🗑️ Default caption removed.", context)
 
 
 async def settime(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     if not await _is_admin_or_owner(update, context):
-        await update.effective_chat.send_message("🚫 Access denied. (Admin/Owner only)")
+        await _send_emoji_text(update.effective_chat.id, "🚫 Access denied. (Admin/Owner only)", context)
         return
     if not context.args:
-        await update.effective_chat.send_message(
-            "⏱️ *Auto-Delete Time*\n\n"
+        await _send_emoji_text(
+            update.effective_chat.id,
+            "⏱️ Auto-Delete Time\n\n"
             "Set time after which files/messages delivered via links will be auto-deleted.\n\n"
             "✅ Usage:\n"
-            "• `/settime 60` (seconds)\n"
-            "• `/settime 5m`\n"
-            "• `/settime 1h`\n"
-            "• `/settime off`\n",
-            parse_mode="Markdown",
+            "• /settime 60 (seconds)\n"
+            "• /settime 5m\n"
+            "• /settime 1h\n"
+            "• /settime off\n",
+            context,
         )
         return
     seconds = _parse_duration_seconds(context.args[0])
     if seconds is None:
-        await update.effective_chat.send_message("❌ Invalid time. Examples: `60`, `5m`, `1h`, `off`", parse_mode="Markdown")
+        await _send_emoji_text(update.effective_chat.id, "❌ Invalid time. Examples: 60, 5m, 1h, off", context)
         return
     db: Database = context.application.bot_data["db"]
     await db.set_setting(SETTINGS_AUTODELETE_SECONDS, str(int(seconds)))
     if seconds <= 0:
-        await update.effective_chat.send_message("✅ Auto-delete disabled.")
+        await _send_emoji_text(update.effective_chat.id, "✅ Auto-delete disabled.", context)
         return
-    await update.effective_chat.send_message(f"✅ Auto-delete enabled: messages will be deleted after `{seconds}` seconds.", parse_mode="Markdown")
+    await _send_emoji_text(update.effective_chat.id, f"✅ Auto-delete enabled: messages will be deleted after {seconds} seconds.", context)
 
 
 async def setstartimg(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     if not await _is_admin_or_owner(update, context):
-        await update.effective_chat.send_message("🚫 Access denied. (Admin/Owner only)")
+        await _send_emoji_text(update.effective_chat.id, "🚫 Access denied. (Admin/Owner only)", context)
         return
     if not context.args:
-        await update.effective_chat.send_message(
-            "🖼️ *Start Image*\n\n"
+        await _send_emoji_text(
+            update.effective_chat.id,
+            "🖼️ Start Image\n\n"
             "Set an image URL that will be shown with `/start` message.\n\n"
             "✅ Usage:\n"
-            "• `/setstartimg <image_url>`\n"
-            "• `/setstartimg off`",
-            parse_mode="Markdown",
+            "• /setstartimg <image_url>\n"
+            "• /setstartimg off",
+            context,
         )
         return
     raw = context.args[0].strip()
     if raw.lower() in ("off", "remove", "none", "disable", "disabled"):
         db: Database = context.application.bot_data["db"]
         await db.set_setting(SETTINGS_START_IMG_URL, None)
-        await update.effective_chat.send_message("✅ Start image removed.")
+        await _send_emoji_text(update.effective_chat.id, "✅ Start image removed.", context)
         return
     if not (raw.startswith("https://") or raw.startswith("http://")):
-        await update.effective_chat.send_message("❌ Invalid URL. Must start with http:// or https://")
+        await _send_emoji_text(update.effective_chat.id, "❌ Invalid URL. Must start with http:// or https://", context)
         return
     db: Database = context.application.bot_data["db"]
     await db.set_setting(SETTINGS_START_IMG_URL, raw)
-    await update.effective_chat.send_message("✅ Start image set. Now `/start` will show the image.")
+    await _send_emoji_text(update.effective_chat.id, "✅ Start image set. Now /start will show the image.", context)
 
 
 async def getemojiid(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -2175,10 +2258,14 @@ async def getemojiid(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     """
     await _upsert_user(update, context)
     if not await _is_admin_or_owner(update, context):
-        await update.effective_chat.send_message("🚫 Access denied. (Admin/Owner only)")
+        await _send_emoji_text(update.effective_chat.id, "🚫 Access denied. (Admin/Owner only)", context)
         return
     if not update.effective_message or not update.effective_message.reply_to_message:
-        await update.effective_chat.send_message("ℹ️ Reply to a message that contains Premium/custom emojis, then send: `/getemojiid`", parse_mode="Markdown")
+        await _send_emoji_text(
+            update.effective_chat.id,
+            "ℹ️ Reply to a message that contains Premium/custom emojis, then send: /getemojiid",
+            context,
+        )
         return
 
     msg = update.effective_message.reply_to_message
@@ -2200,21 +2287,23 @@ async def getemojiid(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
             uniq.append(cid)
 
     if not uniq:
-        await update.effective_chat.send_message(
+        await _send_emoji_text(
+            update.effective_chat.id,
             "⚠️ No custom emoji IDs found in that message.\n\n"
-            "Tip: Premium/custom emojis are detectable only when they are *custom emoji entities* (not normal Unicode emojis).",
-            parse_mode="Markdown",
+            "Tip: Premium/custom emojis are detectable only when they are custom emoji entities (not normal Unicode emojis).",
+            context,
         )
         return
 
-    out = "\n".join([f"• `{cid}`" for cid in uniq])
-    await update.effective_chat.send_message(
-        "✅ *Custom Emoji IDs Found*\n\n"
+    out = "\n".join([f"• {cid}" for cid in uniq])
+    await _send_emoji_text(
+        update.effective_chat.id,
+        "✅ Custom Emoji IDs Found\n\n"
         f"{out}\n\n"
         "Set for UI:\n"
-        "• `/setuitemoji <name> <custom_emoji_id>`\n"
-        "Example: `/setuitemoji lock 54545454545454545`",
-        parse_mode="Markdown",
+        "• /setuitemoji <name> <custom_emoji_id>\n"
+        "Example: /setuitemoji lock 54545454545454545",
+        context,
     )
 
 
@@ -2225,27 +2314,28 @@ async def setuitemoji(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     """
     await _upsert_user(update, context)
     if not await _is_admin_or_owner(update, context):
-        await update.effective_chat.send_message("🚫 Access denied. (Admin/Owner only)")
+        await _send_emoji_text(update.effective_chat.id, "🚫 Access denied. (Admin/Owner only)", context)
         return
     if len(context.args) < 1:
-        await update.effective_chat.send_message(
-            "🧩 *UI Emoji Settings*\n\n"
+        await _send_emoji_text(
+            update.effective_chat.id,
+            "🧩 UI Emoji Settings\n\n"
             "✅ Usage:\n"
-            "• `/setuitemoji <name> <custom_emoji_id>`\n"
-            "• `/setuitemoji <name> off`\n\n"
+            "• /setuitemoji <name> <custom_emoji_id>\n"
+            "• /setuitemoji <name> off\n\n"
             "Example:\n"
-            "• `/setuitemoji lock 54545454545454545`",
-            parse_mode="Markdown",
+            "• /setuitemoji lock 54545454545454545",
+            context,
         )
         return
 
     name = context.args[0].strip().lower()
     if not name or any(c not in "abcdefghijklmnopqrstuvwxyz0123456789_-" for c in name) or len(name) > 32:
-        await update.effective_chat.send_message("❌ Invalid name. Use letters/numbers/`_`/`-` (max 32).", parse_mode="Markdown")
+        await _send_emoji_text(update.effective_chat.id, "❌ Invalid name. Use letters/numbers/_/- (max 32).", context)
         return
 
     if len(context.args) < 2:
-        await update.effective_chat.send_message("ℹ️ Missing value. Use: `/setuitemoji <name> <custom_emoji_id|off>`", parse_mode="Markdown")
+        await _send_emoji_text(update.effective_chat.id, "ℹ️ Missing value. Use: /setuitemoji <name> <custom_emoji_id|off>", context)
         return
 
     val = context.args[1].strip()
@@ -2254,15 +2344,15 @@ async def setuitemoji(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
     if val.lower() in ("off", "remove", "none", "disable", "disabled"):
         await db.set_setting(key, None)
-        await update.effective_chat.send_message(f"✅ UI emoji removed for `{name}`.", parse_mode="Markdown")
+        await _send_emoji_text(update.effective_chat.id, f"✅ UI emoji removed for {name}.", context)
         return
 
     if not val.isdigit():
-        await update.effective_chat.send_message("❌ Invalid custom_emoji_id. It must be numeric.", parse_mode="Markdown")
+        await _send_emoji_text(update.effective_chat.id, "❌ Invalid custom_emoji_id. It must be numeric.", context)
         return
 
     await db.set_setting(key, val)
-    await update.effective_chat.send_message(f"✅ UI emoji set: `{name}` -> `{val}`", parse_mode="Markdown")
+    await _send_emoji_text(update.effective_chat.id, f"✅ UI emoji set: {name} -> {val}", context)
 
 
 async def setemojipreset(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -2271,39 +2361,44 @@ async def setemojipreset(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     """
     await _upsert_user(update, context)
     if not await _is_admin_or_owner(update, context):
-        await update.effective_chat.send_message("🚫 Access denied. (Admin/Owner only)")
+        await _send_emoji_text(update.effective_chat.id, "🚫 Access denied. (Admin/Owner only)", context)
         return
     db: Database = context.application.bot_data["db"]
     for name, eid in PRESET_UI_EMOJI_IDS.items():
         await db.set_setting(f"{SETTINGS_UI_EMOJI_PREFIX}{name}", eid)
-    await update.effective_chat.send_message(
+    await _send_emoji_text(
+        update.effective_chat.id,
         "✅ UI emoji preset saved.\n\n"
-        f"🧾 Total mapped: `{len(PRESET_UI_EMOJI_IDS)}`\n"
+        f"🧾 Total mapped: {len(PRESET_UI_EMOJI_IDS)}\n"
         "Next step: UI rendering me in IDs ko apply karna.",
-        parse_mode="Markdown",
+        context,
     )
 
 
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     if not await _is_admin_or_owner(update, context):
-        await update.effective_chat.send_message("🚫 Access denied. (Admin/Owner only)")
+        await _send_emoji_text(update.effective_chat.id, "🚫 Access denied. (Admin/Owner only)", context)
         return
     db: Database = context.application.bot_data["db"]
     s = await db.stats()
-    await update.effective_chat.send_message(
-        "📊 *Bot Stats*\n\n" + "\n".join([f"• *{k}*: `{v}`" for k, v in s.items()]),
-        parse_mode="Markdown",
+    stats_lines = []
+    for k, v in s.items():
+        stats_lines.append(f"• <b>{html.escape(str(k))}</b>: <code>{html.escape(str(v))}</code>")
+    await _send_html_text(
+        update.effective_chat.id,
+        "📊 <b>Bot Stats</b>\n<i>Live summary</i>\n\n" + "\n".join(stats_lines),
+        context,
     )
 
 
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     if not await _is_admin_or_owner(update, context):
-        await update.effective_chat.send_message("🚫 Access denied. (Admin/Owner only)")
+        await _send_emoji_text(update.effective_chat.id, "🚫 Access denied. (Admin/Owner only)", context)
         return
     if not update.effective_message or not update.effective_message.reply_to_message:
-        await update.effective_chat.send_message("ℹ️ Reply to a message, then send: `/broadcast`", parse_mode="Markdown")
+        await _send_emoji_text(update.effective_chat.id, "ℹ️ Reply to a message, then send: /broadcast", context)
         return
     db: Database = context.application.bot_data["db"]
     user_ids = await db.list_user_ids()
@@ -2316,11 +2411,12 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             ok += 1
         except Exception:
             fail += 1
-    await update.effective_chat.send_message(
-        "📣 *Broadcast Completed*\n\n"
-        f"✅ Sent: `{ok}`\n"
-        f"⚠️ Failed: `{fail}`",
-        parse_mode="Markdown",
+    await _send_emoji_text(
+        update.effective_chat.id,
+        "📣 Broadcast Completed\n\n"
+        f"✅ Sent: {ok}\n"
+        f"⚠️ Failed: {fail}",
+        context,
     )
 
 
@@ -2369,3 +2465,4 @@ def build_handlers(app: Application) -> None:
     # PTB v20+ uses uppercase filter shortcuts (VIDEO/AUDIO/PHOTO). Document is namespaced.
     media_filter = filters.Document.ALL | filters.VIDEO | filters.AUDIO | filters.PHOTO
     app.add_handler(MessageHandler(filters.ALL & media_filter, admin_media_ingest))
+
