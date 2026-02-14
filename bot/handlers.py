@@ -278,15 +278,34 @@ BSETTINGS_DOCS: dict[str, dict[str, str]] = {
 
 
 def _bsettings_keyboard() -> InlineKeyboardMarkup:
-    keys = list(BSETTINGS_DOCS.keys())
+    # Intentionally exclude /getlink, /batch, /custombatch from this panel.
+    button_items: list[tuple[str, str]] = [
+        ("addadmin", "👮 Add Admin"),
+        ("removeadmin", "🚫 Remove Admin"),
+        ("addpremium", "⭐ Add Premium"),
+        ("removepremium", "❌ Remove Premium"),
+        ("gencode", "🎟 Generate Codes"),
+        ("forcech", "📣 Force Channel"),
+        ("forcechdebug", "🧪 Force Debug"),
+        ("broadcast", "📢 Broadcast"),
+        ("stats", "📊 Stats"),
+        ("setcaption", "📝 Set Caption"),
+        ("removecaption", "🗑 Remove Caption"),
+        ("settime", "⏱ Set AutoDelete"),
+        ("setstartimg", "🖼 Start Image"),
+        ("setpay", "💳 Payment"),
+        ("getemojiid", "🆔 Emoji IDs"),
+        ("setuitemoji", "😀 UI Emoji"),
+        ("setemojipreset", "✨ Emoji Preset"),
+    ]
     rows: list[list[InlineKeyboardButton]] = []
-    for i in range(0, len(keys), 2):
-        row = []
-        k1 = keys[i]
-        row.append(InlineKeyboardButton(f"/{k1}", callback_data=f"bset:{k1}"))
-        if i + 1 < len(keys):
-            k2 = keys[i + 1]
-            row.append(InlineKeyboardButton(f"/{k2}", callback_data=f"bset:{k2}"))
+    for i in range(0, len(button_items), 2):
+        row: list[InlineKeyboardButton] = []
+        k1, label1 = button_items[i]
+        row.append(InlineKeyboardButton(label1, callback_data=f"bset:{k1}"))
+        if i + 1 < len(button_items):
+            k2, label2 = button_items[i + 1]
+            row.append(InlineKeyboardButton(label2, callback_data=f"bset:{k2}"))
         rows.append(row)
     return InlineKeyboardMarkup(rows)
 
@@ -2309,7 +2328,7 @@ async def bsettings(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     _clear_bsettings_wait_states(context)
     await _send_emoji_text(
         update.effective_chat.id,
-        "⚙️ Admin Settings Panel\n\nSelect any command button to see detailed usage.",
+        "⚙️ [b]Admin Settings Panel[/b]\n\nTap any option below to open guided actions.",
         context,
         reply_markup=_bsettings_keyboard(),
     )
@@ -2566,7 +2585,7 @@ async def bsettings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await _edit_emoji_text(
             update.effective_chat.id,
             q.message.message_id,
-            "⚙️ Admin Settings Panel\n\nSelect any command button to see detailed usage.",
+            "⚙️ [b]Admin Settings Panel[/b]\n\nTap any option below to open guided actions.",
             context,
             reply_markup=_bsettings_keyboard(),
         )
