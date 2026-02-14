@@ -424,7 +424,7 @@ class MongoDatabase:
     # Payments
     async def create_payment_request(self, user_id: int, plan_key: str, plan_days: int, amount_rs: int) -> int:
         now = _now()
-        expires_at = now + 600
+        expires_at = now + 300
         new_id = await self._next_id("payment_requests")
         await self.db.payment_requests.insert_one(
             {
@@ -551,3 +551,6 @@ class MongoDatabase:
             {"$set": {"status": "rejected", "processed_by": int(admin_id), "processed_at": now, "updated_at": now}},
         )
         return bool(res.modified_count > 0)
+
+    async def delete_payment_request(self, request_id: int) -> None:
+        await self.db.payment_requests.delete_one({"id": int(request_id)})

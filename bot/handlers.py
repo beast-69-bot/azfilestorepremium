@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import datetime
 import html
+import json
 import re
 import time
 from typing import Any, Optional
@@ -34,6 +35,7 @@ SETTINGS_UI_EMOJI_PREFIX = "ui_emoji:"
 SETTINGS_PAY_UPI = "pay_upi"
 SETTINGS_PAY_NAME = "pay_name"
 SETTINGS_PAY_TEXT = "pay_text"
+SETTINGS_PAY_ADMIN_MSGS_PREFIX = "pay_admin_msgs:"
 PRESET_UI_EMOJI_IDS = {
     "info": "6059839048065750021",
     "timer": "5440621591387980068",
@@ -484,6 +486,61 @@ async def _is_admin_or_owner(update: Update, context: ContextTypes.DEFAULT_TYPE)
 def _deep_link(context: ContextTypes.DEFAULT_TYPE, code: str) -> str:
     username = context.application.bot_data.get("bot_username") or "YourBot"
     return f"https://t.me/{username}?start={code}"
+
+
+def _pay_admin_msgs_key(request_id: int) -> str:
+    return f"{SETTINGS_PAY_ADMIN_MSGS_PREFIX}{int(request_id)}"
+
+
+async def _save_pay_admin_msg_ref(db: Database, request_id: int, chat_id: int, message_id: int) -> None:
+    key = _pay_admin_msgs_key(request_id)
+    raw = (await db.get_setting(key)) or "[]"
+    try:
+        refs = json.loads(raw)
+        if not isinstance(refs, list):
+            refs = []
+    except Exception:
+        refs = []
+    ref = [int(chat_id), int(message_id)]
+    if ref not in refs:
+        refs.append(ref)
+    await db.set_setting(key, json.dumps(refs, separators=(",", ":")))
+
+
+async def _get_pay_admin_msg_refs(db: Database, request_id: int) -> list[tuple[int, int]]:
+    raw = (await db.get_setting(_pay_admin_msgs_key(request_id))) or "[]"
+    try:
+        refs = json.loads(raw)
+    except Exception:
+        refs = []
+    out: list[tuple[int, int]] = []
+    if isinstance(refs, list):
+        for item in refs:
+            if isinstance(item, list) and len(item) == 2:
+                try:
+                    out.append((int(item[0]), int(item[1])))
+                except Exception:
+                    pass
+    return out
+
+
+async def _clear_pay_admin_msg_refs(db: Database, request_id: int) -> None:
+    await db.set_setting(_pay_admin_msgs_key(request_id), None)
+
+
+async def _sync_pay_admin_status(
+    context: ContextTypes.DEFAULT_TYPE,
+    request_id: int,
+    text: str,
+) -> None:
+    db: Database = context.application.bot_data["db"]
+    refs = await _get_pay_admin_msg_refs(db, request_id)
+    for chat_id, message_id in refs:
+        try:
+            await _edit_emoji_text(chat_id, message_id, text, context)
+        except Exception:
+            pass
+    await _clear_pay_admin_msg_refs(db, request_id)
 
 
 def _normalize_start_code(raw: str) -> str:
@@ -1759,11 +1816,12 @@ async def _payment_timeout_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     if not changed:
         return
     await _cleanup_payment_user_ui(req, context)
+    await db.delete_payment_request(int(rid))
     try:
         await _send_emoji_text(
             int(req["user_id"]),
             "⏳ Payment request expired.\n\n"
-            "No UTR received within 10 minutes.\n"
+            "No UTR received within 5 minutes.\n"
             "Please run /pay again.",
             context,
         )
@@ -1800,7 +1858,9 @@ async def pay_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                 await q.answer("Active payment request already exists. Use Send UTR.", show_alert=True)
                 return
             if existing.get("status") == "pending":
-                await db.expire_payment_request_if_pending(int(existing["id"]))
+                changed = await db.expire_payment_request_if_pending(int(existing["id"]))
+                if changed:
+                    await db.delete_payment_request(int(existing["id"]))
 
         key = data.split(":", 1)[1]
         plan = PAY_PLANS.get(key)
@@ -1847,7 +1907,7 @@ async def pay_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             "2️⃣ Tap \"Submit UTR\"\n"
             "3️⃣ Send transaction ID\n"
             "4️⃣ Premium activates after verification\n\n"
-            "⏳ Request expires in 10 minutes."
+            "⏳ Request expires in 5 minutes."
         )
         # Keep optional admin-configured payment note, without clutter.
         pay_text_clean = (pay_text or "").strip()
@@ -1889,7 +1949,7 @@ async def pay_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         if context.application.job_queue:
             context.application.job_queue.run_once(
                 _payment_timeout_job,
-                when=600,
+                when=300,
                 data={"request_id": int(rid)},
                 name=f"pay-timeout-{rid}",
             )
@@ -1941,7 +2001,9 @@ async def _notify_payment_admins(update: Update, context: ContextTypes.DEFAULT_T
     )
     for aid in targets:
         try:
-            await _send_emoji_text(aid, note, context, reply_markup=kb)
+            sent = await _send_emoji_text(aid, note, context, reply_markup=kb)
+            if sent and getattr(sent, "message_id", None):
+                await _save_pay_admin_msg_ref(db, int(req["id"]), int(aid), int(sent.message_id))
             # If user sent media, forward copy for proof.
             if update.effective_message and (update.effective_message.photo or update.effective_message.document):
                 await context.bot.copy_message(
@@ -1969,6 +2031,7 @@ async def pay_utr_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     if req["status"] == "pending" and int(req.get("expires_at") or 0) > 0 and int(req.get("expires_at") or 0) <= now:
         await db.expire_payment_request_if_pending(int(rid))
         await _cleanup_payment_user_ui(req, context)
+        await db.delete_payment_request(int(rid))
         context.user_data.pop("pay_utr_request_id", None)
         await _send_emoji_text(update.effective_chat.id, "⏳ Payment request expired. Please run /pay again.", context)
         return
@@ -2034,15 +2097,13 @@ async def pay_admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     # Already processed by someone else.
     if req["status"] in ("processed", "rejected"):
         who = req.get("processed_by") or "-"
-        await _edit_emoji_text(
-            update.effective_chat.id,
-            q.message.message_id,
+        status_text = (
             "ℹ️ Payment request already handled.\n\n"
             f"Request ID: {req['id']}\n"
             f"Status: {req['status']}\n"
-            f"Processed by: {who}",
-            context,
+            f"Processed by: {who}"
         )
+        await _sync_pay_admin_status(context, int(req["id"]), status_text)
         return
 
     if action == "approve":
@@ -2052,6 +2113,8 @@ async def pay_admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
             return
         until = await db.add_premium_seconds(int(req["user_id"]), int(req["plan_days"]) * DAY_SECONDS)
         expiry_utc = datetime.datetime.utcfromtimestamp(until).strftime("%Y-%m-%d %H:%M:%S UTC")
+        reviewed_at = datetime.datetime.utcfromtimestamp(int(time.time())).strftime("%Y-%m-%d %H:%M:%S UTC")
+        admin_name = f"@{update.effective_user.username}" if update.effective_user.username else str(update.effective_user.id)
         # Notify user
         try:
             await _send_emoji_text(
@@ -2063,18 +2126,17 @@ async def pay_admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
             )
         except Exception:
             pass
-        await _edit_emoji_text(
-            update.effective_chat.id,
-            q.message.message_id,
+        approved_text = (
             "✅ Payment Approved\n\n"
             f"Request ID: {req['id']}\n"
             f"User ID: {req['user_id']}\n"
             f"Plan: {req['plan_key']} ({req['plan_days']} days)\n"
             f"Amount: ₹{req['amount_rs']}\n"
-            f"By Admin: {update.effective_user.id}\n"
-            f"Premium Until: {expiry_utc}",
-            context,
+            f"By Admin: {admin_name}\n"
+            f"Reviewed At: {reviewed_at}\n"
+            f"Premium Until: {expiry_utc}"
         )
+        await _sync_pay_admin_status(context, int(req["id"]), approved_text)
         await _cleanup_payment_user_ui(req, context)
         return
 
@@ -2082,6 +2144,8 @@ async def pay_admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if not ok:
         await q.answer("Already handled", show_alert=True)
         return
+    reviewed_at = datetime.datetime.utcfromtimestamp(int(time.time())).strftime("%Y-%m-%d %H:%M:%S UTC")
+    admin_name = f"@{update.effective_user.username}" if update.effective_user.username else str(update.effective_user.id)
     # Notify user
     try:
         await _send_emoji_text(
@@ -2093,17 +2157,16 @@ async def pay_admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         )
     except Exception:
         pass
-    await _edit_emoji_text(
-        update.effective_chat.id,
-        q.message.message_id,
+    rejected_text = (
         "❌ Payment Rejected\n\n"
         f"Request ID: {req['id']}\n"
         f"User ID: {req['user_id']}\n"
         f"Plan: {req['plan_key']} ({req['plan_days']} days)\n"
         f"Amount: ₹{req['amount_rs']}\n"
-        f"By Admin: {update.effective_user.id}",
-        context,
+        f"By Admin: {admin_name}\n"
+        f"Reviewed At: {reviewed_at}"
     )
+    await _sync_pay_admin_status(context, int(req["id"]), rejected_text)
     await _cleanup_payment_user_ui(req, context)
 
 

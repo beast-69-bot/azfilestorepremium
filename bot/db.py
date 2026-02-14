@@ -572,7 +572,7 @@ class Database:
     # Payments
     async def create_payment_request(self, user_id: int, plan_key: str, plan_days: int, amount_rs: int) -> int:
         now = _now()
-        expires_at = now + 600
+        expires_at = now + 300
         cur = await self.conn.execute(
             """
             INSERT INTO payment_requests(user_id, plan_key, plan_days, amount_rs, status, expires_at, created_at, updated_at)
@@ -706,3 +706,7 @@ class Database:
         )
         await self.conn.commit()
         return bool(cur.rowcount and cur.rowcount > 0)
+
+    async def delete_payment_request(self, request_id: int) -> None:
+        await self.conn.execute("DELETE FROM payment_requests WHERE id=?", (int(request_id),))
+        await self.conn.commit()
