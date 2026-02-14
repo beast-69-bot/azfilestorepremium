@@ -1,4 +1,4 @@
-sa# Admin-Controlled File Distribution Bot (Normal + Premium)
+# Admin-Controlled File Distribution Bot (Normal + Premium)
 
 Python Telegram bot that:
 - Stores files on Telegram (via `file_id`)
@@ -21,6 +21,40 @@ pip install -r requirements.txt
 3. Run:
 ```powershell
 python main.py
+```
+
+## Database Backends
+Supported:
+- `sqlite` (default)
+- `mongo` (MongoDB Atlas)
+
+### SQLite (default)
+```env
+DB_BACKEND=sqlite
+DB_PATH=data/bot.db
+```
+
+### MongoDB Atlas
+```env
+DB_BACKEND=mongo
+MONGO_URI=mongodb+srv://<user>:<pass>@<cluster-url>/?retryWrites=true&w=majority
+MONGO_DB_NAME=azfilestorepremium
+```
+
+## SQLite -> Mongo Atlas Migration
+Run once after creating your Atlas database/user/network access:
+```bash
+python scripts/migrate_sqlite_to_mongo.py \
+  --sqlite data/bot.db \
+  --mongo-uri "mongodb+srv://<user>:<pass>@<cluster-url>/?retryWrites=true&w=majority" \
+  --mongo-db azfilestorepremium
+```
+
+Then switch `.env`:
+```env
+DB_BACKEND=mongo
+MONGO_URI=...
+MONGO_DB_NAME=azfilestorepremium
 ```
 
 ## Force Channels

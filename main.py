@@ -6,13 +6,17 @@ from telegram.ext import Application, Defaults
 
 from bot.config import Config
 from bot.db import Database
+from bot.db_mongo import MongoDatabase
 from bot.handlers import build_handlers
 
 
 async def _post_init(app: Application) -> None:
     # Runs inside PTB's event loop (safe place to init async dependencies).
     cfg: Config = app.bot_data["cfg"]
-    db = Database(cfg.db_path)
+    if cfg.db_backend == "mongo":
+        db = MongoDatabase(cfg.mongo_uri, cfg.mongo_db_name)
+    else:
+        db = Database(cfg.db_path)
     await db.init()
     app.bot_data["db"] = db
 
