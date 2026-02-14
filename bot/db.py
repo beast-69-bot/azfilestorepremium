@@ -627,6 +627,23 @@ class Database:
             "processed_at": row[14],
         }
 
+    async def get_latest_open_payment_request(self, user_id: int) -> Optional[dict[str, Any]]:
+        cur = await self.conn.execute(
+            """
+            SELECT id
+            FROM payment_requests
+            WHERE user_id=? AND status IN ('pending', 'submitted')
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            (int(user_id),),
+        )
+        row = await cur.fetchone()
+        await cur.close()
+        if not row:
+            return None
+        return await self.get_payment_request(int(row[0]))
+
     async def set_payment_ui_messages(self, request_id: int, user_chat_id: int, details_msg_id: int, qr_msg_id: int | None) -> None:
         now = _now()
         await self.conn.execute(

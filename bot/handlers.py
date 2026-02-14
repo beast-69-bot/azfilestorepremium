@@ -291,14 +291,19 @@ def _bsettings_keyboard() -> InlineKeyboardMarkup:
 
 def _welcome_text() -> str:
     return (
-        "🔐 [b]Secure File Access[/b]\n"
-        "[i]Normal + Premium content system.[/i]\n\n"
-        "📌 [u]How to use[/u]\n"
-        "• Open the link you received (deep link)\n"
-        "• Join required channels when asked\n\n"
-        "⭐ [b]Premium[/b]\n"
-        "• Redeem token: [c]/redeem <token>[/c]\n\n"
-        "ℹ️ [b]Note:[/b] Files can be accessed only via generated links."
+        "🔐 [b]Secure Access System[/b]\n\n"
+        "[b]❝ Access is protected. Delivery is verified. ❞[/b]\n\n"
+        "📌 [u]How It Works[/u]\n"
+        "› Open your unique deep link\n"
+        "› Complete channel verification\n"
+        "› Unlock instantly\n\n"
+        "⭐ [b]Upgrade to Premium[/b]\n"
+        "› No Ads\n"
+        "› Instant Delivery\n"
+        "› VIP Links\n\n"
+        "🎟 [c]/redeem <token>[/c]\n"
+        "💎 [c]/plan[/c] | 🛒 [c]/pay[/c]\n\n"
+        "🚫 Forwarded links will not work."
     )
 
 
@@ -1679,12 +1684,17 @@ async def plan(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "• [b]1 Day[/b]: ₹9\n"
         "• [b]7 Days[/b]: ₹29\n"
         "• [b]1 Month[/b]: ₹99\n\n"
-        "🔓 [u]Normal User Benefit[/u]\n"
+        "🔓 [b]Normal User Benefit[/b]\n"
         "• Final link access ke liye ads dekhne honge\n\n"
-        "⭐ [u]Premium User Benefit[/u]\n"
+        "⭐ [b]Premium User Benefit[/b]\n"
         "• Direct access milta hai (no ads)\n\n"
-        "🛒 Buy premium: [c]/pay[/c]\n\n"
-        f"👤 [b]Your Premium Status[/b]\n{status}",
+        "🛒 [b]Buy Premium[/b]: [c]/pay[/c]",
+        context,
+    )
+
+    await _send_emoji_text(
+        update.effective_chat.id,
+        f"👤 [b]Your Premium Status[/b]\n\n{status}",
         context,
     )
 
@@ -1780,6 +1790,18 @@ async def pay_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     db: Database = context.application.bot_data["db"]
 
     if data.startswith("payplan:"):
+        existing = await db.get_latest_open_payment_request(update.effective_user.id)
+        if existing:
+            now_ts = int(time.time())
+            if existing.get("status") == "submitted":
+                await q.answer("Payment already submitted. Admin verification pending.", show_alert=True)
+                return
+            if existing.get("status") == "pending" and int(existing.get("expires_at") or 0) > now_ts:
+                await q.answer("Active payment request already exists. Use Send UTR.", show_alert=True)
+                return
+            if existing.get("status") == "pending":
+                await db.expire_payment_request_if_pending(int(existing["id"]))
+
         key = data.split(":", 1)[1]
         plan = PAY_PLANS.get(key)
         if not plan:
@@ -1804,30 +1826,52 @@ async def pay_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             )
             return
 
-        note = f"premium {plan['label']} req#{rid}"
+        note = f"premium {plan['label']} order#{rid}"
         upi_uri = _upi_uri(upi_id=upi_id, amount_rs=int(plan["amount"]), payee_name=pay_name, note=note)
         qr_url = _upi_qr_image_url(upi_uri)
-        msg = (
-            f"💳 *Payment Details*\n\n"
-            f"Plan: *{plan['label']}*\n"
-            f"Amount: *₹{plan['amount']}*\n"
-            f"UPI ID: `{upi_id}`\n"
-            f"Request ID: `{rid}`\n\n"
-            f"{pay_text}"
+        plan_label = html.escape(str(plan["label"]))
+        upi_html = html.escape(upi_id)
+        caption = (
+            "💎 <b>Premium Purchase</b>\n\n"
+            f"🛍 Plan: <b>{plan_label}</b>\n"
+            f"💰 Amount: ₹{plan['amount']}\n\n"
+            "━━━━━━━━━━━━━━\n\n"
+            "📲 <b>Pay via UPI</b>\n"
+            "Scan the QR above\n"
+            "OR send to:\n\n"
+            f"<code>{upi_html}</code>\n\n"
+            f"🆔 Order ID: <code>#{rid}</code>\n\n"
+            "━━━━━━━━━━━━━━\n\n"
+            "📌 <b>How to Activate</b>\n"
+            "1️⃣ Complete payment\n"
+            "2️⃣ Tap \"Submit UTR\"\n"
+            "3️⃣ Send transaction ID\n"
+            "4️⃣ Premium activates after verification\n\n"
+            "⏳ Request expires in 10 minutes."
         )
-        kb = InlineKeyboardMarkup([[InlineKeyboardButton("📩 Send UTR", callback_data=f"payutr:{rid}")]])
-        await _edit_emoji_text(update.effective_chat.id, q.message.message_id, msg.replace("*", ""), context, reply_markup=kb)
-        qr_msg_id: Optional[int] = None
+        # Keep optional admin-configured payment note, without clutter.
+        pay_text_clean = (pay_text or "").strip()
+        if pay_text_clean:
+            caption = f"{caption}\n\n🧾 <b>Note</b>\n{html.escape(pay_text_clean)}"
+
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton("📩 Submit UTR", callback_data=f"payutr:{rid}")]])
+
+        # Remove plan picker message to keep payment UI clean.
         try:
-            qr_msg = await update.effective_chat.send_photo(
+            if q.message:
+                await q.message.delete()
+        except Exception:
+            pass
+
+        payment_msg_id: Optional[int] = None
+        try:
+            payment_msg = await update.effective_chat.send_photo(
                 photo=qr_url,
-                caption=(
-                    f"🔳 Scan this UPI QR for ₹{plan['amount']}.\n"
-                    f"UPI: {upi_id}\n"
-                    f"Request ID: {rid}"
-                ),
+                caption=caption,
+                parse_mode="HTML",
+                reply_markup=kb,
             )
-            qr_msg_id = qr_msg.message_id
+            payment_msg_id = payment_msg.message_id
         except Exception:
             # Fallback if remote QR URL fails for any reason.
             await _send_emoji_text(
@@ -1839,8 +1883,8 @@ async def pay_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await db.set_payment_ui_messages(
             int(rid),
             int(update.effective_chat.id),
-            int(q.message.message_id),
-            int(qr_msg_id) if qr_msg_id is not None else None,
+            int(payment_msg_id) if payment_msg_id is not None else int(q.message.message_id),
+            None,
         )
         if context.application.job_queue:
             context.application.job_queue.run_once(

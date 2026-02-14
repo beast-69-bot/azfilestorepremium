@@ -477,6 +477,32 @@ class MongoDatabase:
             "processed_at": row.get("processed_at"),
         }
 
+    async def get_latest_open_payment_request(self, user_id: int) -> Optional[dict[str, Any]]:
+        row = await self.db.payment_requests.find_one(
+            {"user_id": int(user_id), "status": {"$in": ["pending", "submitted"]}},
+            {"_id": 0},
+            sort=[("id", -1)],
+        )
+        if not row:
+            return None
+        return {
+            "id": int(row["id"]),
+            "user_id": int(row["user_id"]),
+            "plan_key": row["plan_key"],
+            "plan_days": int(row["plan_days"]),
+            "amount_rs": int(row["amount_rs"]),
+            "status": row["status"],
+            "utr_text": row.get("utr_text"),
+            "user_chat_id": int(row["user_chat_id"]) if row.get("user_chat_id") is not None else None,
+            "details_msg_id": int(row["details_msg_id"]) if row.get("details_msg_id") is not None else None,
+            "qr_msg_id": int(row["qr_msg_id"]) if row.get("qr_msg_id") is not None else None,
+            "expires_at": int(row.get("expires_at") or 0),
+            "created_at": int(row["created_at"]),
+            "updated_at": int(row["updated_at"]),
+            "processed_by": row.get("processed_by"),
+            "processed_at": row.get("processed_at"),
+        }
+
     async def set_payment_ui_messages(self, request_id: int, user_chat_id: int, details_msg_id: int, qr_msg_id: int | None) -> None:
         now = _now()
         await self.db.payment_requests.update_one(
