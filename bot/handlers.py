@@ -4,7 +4,9 @@ import asyncio
 import datetime
 import html
 import json
+import os
 import re
+import tempfile
 import time
 from typing import Any, Optional
 from urllib.parse import parse_qs, quote, urlparse
@@ -211,6 +213,18 @@ BSETTINGS_DOCS: dict[str, dict[str, str]] = {
         "title": "📊 /stats",
         "body": "Admin/Owner.\n\nShows users, files, links, premium, tokens and other counts.",
     },
+    "premiumdb": {
+        "title": "📥 /premiumdb",
+        "body": (
+            "Admin/Owner.\n\n"
+            "Exports full premium records to an Excel file.\n\n"
+            "Output columns include:\n"
+            "• user_id, name, username\n"
+            "• premium_until (unix + UTC)\n"
+            "• active status\n"
+            "• created_at, last_seen"
+        ),
+    },
     "setcaption": {
         "title": "📝 /setcaption",
         "body": (
@@ -289,6 +303,7 @@ def _bsettings_keyboard() -> InlineKeyboardMarkup:
         ("forcechdebug", "🧪 Force Debug"),
         ("broadcast", "📢 Broadcast"),
         ("stats", "📊 Stats"),
+        ("premiumdb", "📥 Premium DB"),
         ("setcaption", "📝 Set Caption"),
         ("removecaption", "🗑 Remove Caption"),
         ("settime", "⏱ Set AutoDelete"),
@@ -2420,6 +2435,9 @@ async def bsettings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
             reply_markup=_bset_setpay_keyboard(),
         )
         return
+    if data == "bset:premiumdb_action":
+        await premiumdb(update, context)
+        return
     if data == "bset:setpay_view":
         db: Database = context.application.bot_data["db"]
         upi = await db.get_setting(SETTINGS_PAY_UPI) or "-"
@@ -2672,6 +2690,13 @@ async def bsettings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
             reply_markup=_bset_setpay_keyboard(),
         )
         return
+    elif key == "premiumdb":
+        kb = InlineKeyboardMarkup(
+            [
+                [InlineKeyboardButton("📥 Export Premium DB", callback_data="bset:premiumdb_action")],
+                [InlineKeyboardButton("⬅️ Back", callback_data="bset:back")],
+            ]
+        )
     else:
         kb = InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back", callback_data="bset:back")]])
     await _edit_emoji_text(
@@ -3339,6 +3364,86 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
+async def premiumdb(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await _upsert_user(update, context)
+    if not await _is_admin_or_owner(update, context):
+        await _send_emoji_text(update.effective_chat.id, "🚫 Access denied. (Admin/Owner only)", context)
+        return
+    if not update.effective_chat:
+        return
+    db: Database = context.application.bot_data["db"]
+    rows = await db.list_premium_records()
+    if not rows:
+        await _send_emoji_text(update.effective_chat.id, "ℹ️ No premium records found.", context)
+        return
+
+    try:
+        from openpyxl import Workbook
+    except Exception:
+        await _send_emoji_text(
+            update.effective_chat.id,
+            "❌ Excel export dependency missing.\nInstall: [c]pip install openpyxl[/c]",
+            context,
+        )
+        return
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "PremiumRecords"
+    headers = [
+        "user_id",
+        "first_name",
+        "username",
+        "premium_until_unix",
+        "premium_until_utc",
+        "active_now",
+        "created_at_unix",
+        "created_at_utc",
+        "last_seen_unix",
+        "last_seen_utc",
+    ]
+    ws.append(headers)
+    now = int(time.time())
+    for r in rows:
+        pu = int(r.get("premium_until") or 0)
+        ca = int(r.get("created_at") or 0)
+        ls = int(r.get("last_seen") or 0)
+        ws.append(
+            [
+                int(r.get("user_id") or 0),
+                str(r.get("first_name") or ""),
+                str(r.get("username") or ""),
+                pu,
+                datetime.datetime.utcfromtimestamp(pu).strftime("%Y-%m-%d %H:%M:%S UTC") if pu > 0 else "",
+                "yes" if pu >= now else "no",
+                ca,
+                datetime.datetime.utcfromtimestamp(ca).strftime("%Y-%m-%d %H:%M:%S UTC") if ca > 0 else "",
+                ls,
+                datetime.datetime.utcfromtimestamp(ls).strftime("%Y-%m-%d %H:%M:%S UTC") if ls > 0 else "",
+            ]
+        )
+
+    tmp_path = ""
+    try:
+        with tempfile.NamedTemporaryFile(prefix="premium_records_", suffix=".xlsx", delete=False) as tmp:
+            tmp_path = tmp.name
+        wb.save(tmp_path)
+        date_tag = datetime.datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+        with open(tmp_path, "rb") as fh:
+            await context.bot.send_document(
+                chat_id=update.effective_chat.id,
+                document=fh,
+                filename=f"premium_records_{date_tag}.xlsx",
+                caption=f"📦 Premium DB export\n🧾 Total records: {len(rows)}",
+            )
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except Exception:
+                pass
+
+
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     if not await _is_admin_or_owner(update, context):
@@ -3401,6 +3506,7 @@ def build_handlers(app: Application) -> None:
     app.add_handler(CommandHandler("forcechdebug", forcechdebug))
     app.add_handler(CommandHandler("broadcast", broadcast))
     app.add_handler(CommandHandler("stats", stats))
+    app.add_handler(CommandHandler("premiumdb", premiumdb))
     app.add_handler(CommandHandler("setcaption", setcaption))
     app.add_handler(CommandHandler("removecaption", removecaption))
     app.add_handler(CommandHandler("settime", settime))

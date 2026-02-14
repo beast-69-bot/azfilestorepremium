@@ -246,6 +246,31 @@ class Database:
         await cur.close()
         return [int(r[0]) for r in rows]
 
+    async def list_premium_records(self) -> list[dict[str, Any]]:
+        cur = await self.conn.execute(
+            """
+            SELECT user_id, first_name, username, premium_until, created_at, last_seen
+            FROM users
+            WHERE premium_until > 0
+            ORDER BY premium_until DESC
+            """
+        )
+        rows = await cur.fetchall()
+        await cur.close()
+        out: list[dict[str, Any]] = []
+        for r in rows:
+            out.append(
+                {
+                    "user_id": int(r[0]),
+                    "first_name": r[1] or "",
+                    "username": r[2] or "",
+                    "premium_until": int(r[3]) if r[3] is not None else 0,
+                    "created_at": int(r[4]) if r[4] is not None else 0,
+                    "last_seen": int(r[5]) if r[5] is not None else 0,
+                }
+            )
+        return out
+
     # Admins
     async def is_admin(self, user_id: int) -> bool:
         cur = await self.conn.execute("SELECT 1 FROM admins WHERE user_id=?", (int(user_id),))

@@ -101,6 +101,34 @@ class MongoDatabase:
             out.append(int(r["user_id"]))
         return out
 
+    async def list_premium_records(self) -> list[dict[str, Any]]:
+        rows = self.db.users.find(
+            {"premium_until": {"$gt": 0}},
+            {
+                "_id": 0,
+                "user_id": 1,
+                "first_name": 1,
+                "username": 1,
+                "premium_until": 1,
+                "created_at": 1,
+                "last_seen": 1,
+            },
+            sort=[("premium_until", -1)],
+        )
+        out: list[dict[str, Any]] = []
+        async for r in rows:
+            out.append(
+                {
+                    "user_id": int(r.get("user_id") or 0),
+                    "first_name": r.get("first_name") or "",
+                    "username": r.get("username") or "",
+                    "premium_until": int(r.get("premium_until") or 0),
+                    "created_at": int(r.get("created_at") or 0),
+                    "last_seen": int(r.get("last_seen") or 0),
+                }
+            )
+        return out
+
     # Admins
     async def is_admin(self, user_id: int) -> bool:
         row = await self.db.admins.find_one({"user_id": int(user_id)}, {"_id": 1})
