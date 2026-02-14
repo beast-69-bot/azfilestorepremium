@@ -129,6 +129,34 @@ class MongoDatabase:
             )
         return out
 
+    async def list_latest_payment_meta(self) -> dict[int, dict[str, Any]]:
+        pipeline = [
+            {"$sort": {"id": -1}},
+            {
+                "$group": {
+                    "_id": "$user_id",
+                    "request_id": {"$first": "$id"},
+                    "amount_rs": {"$first": "$amount_rs"},
+                    "plan_days": {"$first": "$plan_days"},
+                    "status": {"$first": "$status"},
+                    "processed_at": {"$first": "$processed_at"},
+                    "created_at": {"$first": "$created_at"},
+                }
+            },
+        ]
+        out: dict[int, dict[str, Any]] = {}
+        async for r in self.db.payment_requests.aggregate(pipeline):
+            uid = int(r.get("_id") or 0)
+            payment_ts = int(r.get("processed_at") or r.get("created_at") or 0)
+            out[uid] = {
+                "request_id": int(r.get("request_id") or 0),
+                "amount_rs": int(r.get("amount_rs") or 0),
+                "plan_days": int(r.get("plan_days") or 0),
+                "status": str(r.get("status") or ""),
+                "payment_ts": payment_ts,
+            }
+        return out
+
     # Admins
     async def is_admin(self, user_id: int) -> bool:
         row = await self.db.admins.find_one({"user_id": int(user_id)}, {"_id": 1})

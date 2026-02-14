@@ -271,6 +271,33 @@ class Database:
             )
         return out
 
+    async def list_latest_payment_meta(self) -> dict[int, dict[str, Any]]:
+        cur = await self.conn.execute(
+            """
+            SELECT p.user_id, p.id, p.amount_rs, p.plan_days, p.status,
+                   COALESCE(p.processed_at, p.created_at) AS payment_ts
+            FROM payment_requests p
+            INNER JOIN (
+              SELECT user_id, MAX(id) AS max_id
+              FROM payment_requests
+              GROUP BY user_id
+            ) x ON x.user_id = p.user_id AND x.max_id = p.id
+            """
+        )
+        rows = await cur.fetchall()
+        await cur.close()
+        out: dict[int, dict[str, Any]] = {}
+        for r in rows:
+            uid = int(r[0])
+            out[uid] = {
+                "request_id": int(r[1]) if r[1] is not None else 0,
+                "amount_rs": int(r[2]) if r[2] is not None else 0,
+                "plan_days": int(r[3]) if r[3] is not None else 0,
+                "status": str(r[4] or ""),
+                "payment_ts": int(r[5]) if r[5] is not None else 0,
+            }
+        return out
+
     # Admins
     async def is_admin(self, user_id: int) -> bool:
         cur = await self.conn.execute("SELECT 1 FROM admins WHERE user_id=?", (int(user_id),))

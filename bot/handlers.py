@@ -3373,6 +3373,7 @@ async def premiumdb(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
     db: Database = context.application.bot_data["db"]
     rows = await db.list_premium_records()
+    payment_meta = await db.list_latest_payment_meta()
     if not rows:
         await _send_emoji_text(update.effective_chat.id, "ℹ️ No premium records found.", context)
         return
@@ -3397,6 +3398,12 @@ async def premiumdb(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "premium_until_unix",
         "premium_until_utc",
         "active_now",
+        "last_payment_request_id",
+        "last_payment_amount_rs",
+        "last_payment_plan_days",
+        "last_payment_status",
+        "last_payment_unix",
+        "last_payment_utc",
         "created_at_unix",
         "created_at_utc",
         "last_seen_unix",
@@ -3408,6 +3415,8 @@ async def premiumdb(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         pu = int(r.get("premium_until") or 0)
         ca = int(r.get("created_at") or 0)
         ls = int(r.get("last_seen") or 0)
+        pm = payment_meta.get(int(r.get("user_id") or 0), {})
+        pay_ts = int(pm.get("payment_ts") or 0)
         ws.append(
             [
                 int(r.get("user_id") or 0),
@@ -3416,6 +3425,12 @@ async def premiumdb(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 pu,
                 datetime.datetime.utcfromtimestamp(pu).strftime("%Y-%m-%d %H:%M:%S UTC") if pu > 0 else "",
                 "yes" if pu >= now else "no",
+                int(pm.get("request_id") or 0),
+                int(pm.get("amount_rs") or 0),
+                int(pm.get("plan_days") or 0),
+                str(pm.get("status") or ""),
+                pay_ts,
+                datetime.datetime.utcfromtimestamp(pay_ts).strftime("%Y-%m-%d %H:%M:%S UTC") if pay_ts > 0 else "",
                 ca,
                 datetime.datetime.utcfromtimestamp(ca).strftime("%Y-%m-%d %H:%M:%S UTC") if ca > 0 else "",
                 ls,
