@@ -291,6 +291,71 @@ def _bsettings_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(rows)
 
 
+def _bset_forcech_panel_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton("➕ Add", callback_data="bset:forcech_add"),
+                InlineKeyboardButton("📋 List", callback_data="bset:forcech_list"),
+            ],
+            [
+                InlineKeyboardButton("➖ Remove", callback_data="bset:forcech_remove"),
+                InlineKeyboardButton("🗑 Reset", callback_data="bset:forcech_reset"),
+            ],
+            [InlineKeyboardButton("⬅️ Back", callback_data="bset:back")],
+        ]
+    )
+
+
+def _bset_forcech_panel_text() -> str:
+    return (
+        "📣 [b]Force Channel Manager[/b]\n\n"
+        "[u]Instructions[/u]\n"
+        "1) [b]Add[/b] pe click karo\n"
+        "2) Channel ID/username bhejo ([c]-100xxxx[/c] ya [c]@channel[/c])\n"
+        "3) Mode select karo: [b]Direct[/b] ya [b]Request[/b]\n\n"
+        "[u]Quick Actions[/u]\n"
+        "• [b]List[/b]: saved required channels dekho\n"
+        "• [b]Remove[/b]: specific channel hatao\n"
+        "• [b]Reset[/b]: sab force channels clear karo"
+    )
+
+
+def _bset_setpay_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton("👁 View", callback_data="bset:setpay_view"),
+                InlineKeyboardButton("🆔 Set UPI", callback_data="bset:setpay_upi"),
+            ],
+            [
+                InlineKeyboardButton("👤 Set Name", callback_data="bset:setpay_name"),
+                InlineKeyboardButton("🧾 Set Text", callback_data="bset:setpay_text"),
+            ],
+            [
+                InlineKeyboardButton("🗑 Clear UPI", callback_data="bset:setpay_clearupi"),
+                InlineKeyboardButton("⬅️ Back", callback_data="bset:back"),
+            ],
+        ]
+    )
+
+
+def _clear_bsettings_wait_states(context: ContextTypes.DEFAULT_TYPE) -> None:
+    for k in (
+        "bset_addadmin_wait",
+        "bset_removeadmin_wait",
+        "bset_gencode_wait",
+        "bset_forcech_remove_wait",
+        "bset_addpremium_wait",
+        "bset_removepremium_wait",
+        "bset_setcaption_wait",
+        "bset_settime_wait",
+        "bset_setstartimg_wait",
+        "bset_setpay_wait",
+    ):
+        context.user_data.pop(k, None)
+
+
 def _welcome_text() -> str:
     return (
         "🔐 [b]Secure Access System[/b]\n\n"
@@ -1666,16 +1731,25 @@ async def gencode(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         count = 1
     if count > 20:
         count = 20
+    await _generate_tokens_and_send(update.effective_chat.id, update.effective_user.id, count, db, context)
 
+
+async def _generate_tokens_and_send(
+    chat_id: int,
+    generated_by: int,
+    count: int,
+    db: Database,
+    context: ContextTypes.DEFAULT_TYPE,
+) -> None:
     tokens: list[str] = []
     for _ in range(count):
         t = new_token()
-        await db.create_token(t, update.effective_user.id, DAY_SECONDS)
+        await db.create_token(t, generated_by, DAY_SECONDS)
         tokens.append(t)
 
     if count == 1:
         await _send_emoji_text(
-            update.effective_chat.id,
+            chat_id,
             "🎟️ Token Generated\n\n"
             f"{tokens[0]}\n\n"
             "⭐ Grants: 1 day premium\n"
@@ -1684,10 +1758,9 @@ async def gencode(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
 
-    # Multi-token response
     token_lines = "\n".join(tokens)
     await _send_emoji_text(
-        update.effective_chat.id,
+        chat_id,
         "🎟️ Tokens Generated\n\n"
         f"🧾 Total: {count}\n\n"
         f"{token_lines}\n\n"
@@ -2233,6 +2306,7 @@ async def bsettings(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not await _is_admin_or_owner(update, context):
         await _send_emoji_text(update.effective_chat.id, "🚫 Access denied. (Admin/Owner only)", context)
         return
+    _clear_bsettings_wait_states(context)
     await _send_emoji_text(
         update.effective_chat.id,
         "⚙️ Admin Settings Panel\n\nSelect any command button to see detailed usage.",
@@ -2250,7 +2324,245 @@ async def bsettings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await _edit_emoji_text(update.effective_chat.id, q.message.message_id, "🚫 Access denied. (Admin/Owner only)", context)
         return
     data = q.data or ""
+    if data == "bset:addpremium_action":
+        context.user_data["bset_addpremium_wait"] = True
+        await _edit_emoji_text(
+            update.effective_chat.id,
+            q.message.message_id,
+            "⭐ [b]Add Premium[/b]\n\nFormat bhejo: [c]<user_id> [days][/c]\nExample: [c]123456789 7[/c]",
+            context,
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back", callback_data="bset:back")]]),
+        )
+        return
+    if data == "bset:removepremium_action":
+        context.user_data["bset_removepremium_wait"] = True
+        await _edit_emoji_text(
+            update.effective_chat.id,
+            q.message.message_id,
+            "❌ [b]Remove Premium[/b]\n\nUser ID bhejo:\n[c]123456789[/c]",
+            context,
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back", callback_data="bset:back")]]),
+        )
+        return
+    if data == "bset:setcaption_action":
+        context.user_data["bset_setcaption_wait"] = True
+        await _edit_emoji_text(
+            update.effective_chat.id,
+            q.message.message_id,
+            "📝 [b]Set Caption[/b]\n\nCaption text bhejo.\nHTML tags supported: [c]<b> <i> <code>[/c]",
+            context,
+            reply_markup=InlineKeyboardMarkup(
+                [
+                    [InlineKeyboardButton("🗑 Remove Caption", callback_data="bset:removecaption_action")],
+                    [InlineKeyboardButton("⬅️ Back", callback_data="bset:back")],
+                ]
+            ),
+        )
+        return
+    if data == "bset:removecaption_action":
+        db: Database = context.application.bot_data["db"]
+        await db.set_setting("caption", None)
+        context.user_data.pop("bset_setcaption_wait", None)
+        await _edit_emoji_text(
+            update.effective_chat.id,
+            q.message.message_id,
+            "🗑 [b]Default caption removed.[/b]",
+            context,
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back", callback_data="bset:back")]]),
+        )
+        return
+    if data == "bset:settime_action":
+        context.user_data["bset_settime_wait"] = True
+        await _edit_emoji_text(
+            update.effective_chat.id,
+            q.message.message_id,
+            "⏱ [b]Set Auto-Delete Time[/b]\n\nValue bhejo:\n[c]60[/c], [c]5m[/c], [c]1h[/c], [c]off[/c]",
+            context,
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back", callback_data="bset:back")]]),
+        )
+        return
+    if data == "bset:setstartimg_action":
+        context.user_data["bset_setstartimg_wait"] = True
+        await _edit_emoji_text(
+            update.effective_chat.id,
+            q.message.message_id,
+            "🖼 [b]Set Start Image[/b]\n\nImage URL bhejo ([c]http/https[/c]) ya [c]off[/c].",
+            context,
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back", callback_data="bset:back")]]),
+        )
+        return
+    if data == "bset:setpay_panel":
+        context.user_data.pop("bset_setpay_wait", None)
+        await _edit_emoji_text(
+            update.effective_chat.id,
+            q.message.message_id,
+            "💳 [b]Payment Settings[/b]\n\nChoose action below:",
+            context,
+            reply_markup=_bset_setpay_keyboard(),
+        )
+        return
+    if data == "bset:setpay_view":
+        db: Database = context.application.bot_data["db"]
+        upi = await db.get_setting(SETTINGS_PAY_UPI) or "-"
+        name = await db.get_setting(SETTINGS_PAY_NAME) or "Premium Store"
+        text = await db.get_setting(SETTINGS_PAY_TEXT) or "-"
+        await _edit_emoji_text(
+            update.effective_chat.id,
+            q.message.message_id,
+            "💳 [b]Payment Settings[/b]\n\n"
+            f"UPI ID: [c]{upi}[/c]\n"
+            f"Payee Name: {name}\n\n"
+            f"Text:\n{text}",
+            context,
+            reply_markup=_bset_setpay_keyboard(),
+        )
+        return
+    if data == "bset:setpay_clearupi":
+        db: Database = context.application.bot_data["db"]
+        await db.set_setting(SETTINGS_PAY_UPI, None)
+        await _edit_emoji_text(
+            update.effective_chat.id,
+            q.message.message_id,
+            "✅ Payment UPI cleared.",
+            context,
+            reply_markup=_bset_setpay_keyboard(),
+        )
+        return
+    if data in ("bset:setpay_upi", "bset:setpay_name", "bset:setpay_text"):
+        mode = data.split(":")[-1].replace("setpay_", "")
+        context.user_data["bset_setpay_wait"] = mode
+        prompts = {
+            "upi": "🆔 UPI ID bhejo (example: [c]name@bank[/c])",
+            "name": "👤 Payee name bhejo",
+            "text": "🧾 Payment instructions text bhejo",
+        }
+        await _edit_emoji_text(
+            update.effective_chat.id,
+            q.message.message_id,
+            f"💳 [b]SetPay[/b]\n\n{prompts.get(mode, 'Value bhejo')}",
+            context,
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back", callback_data="bset:setpay_panel")]]),
+        )
+        return
+    if data == "bset:forcech_panel":
+        context.user_data.pop("bset_forcech_remove_wait", None)
+        await _edit_emoji_text(
+            update.effective_chat.id,
+            q.message.message_id,
+            _bset_forcech_panel_text(),
+            context,
+            reply_markup=_bset_forcech_panel_keyboard(),
+        )
+        return
+    if data == "bset:forcech_add":
+        context.user_data.pop("bset_forcech_remove_wait", None)
+        context.user_data["forcech_state"] = {"step": "await_channel"}
+        await _edit_emoji_text(
+            update.effective_chat.id,
+            q.message.message_id,
+            "➕ [b]Force Channel Add[/b]\n\nChannel ID/username bhejo:\n[c]-100xxxx[/c] or [c]@channel[/c]",
+            context,
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back", callback_data="bset:forcech_panel")]]),
+        )
+        return
+    if data == "bset:forcech_list":
+        db: Database = context.application.bot_data["db"]
+        chans = await db.list_force_channels()
+        if not chans:
+            text = "📣 [b]Force Channels[/b]\n\nNo required channels set."
+        else:
+            lines = []
+            for ch in chans:
+                extra = ch.get("invite_link") or (f"@{ch['username']}" if ch.get("username") else "")
+                name = ch.get("title") or ""
+                mode = (ch.get("mode") or "direct").lower()
+                mode_label = "🔓 Direct" if mode == "direct" else "🛂 Request"
+                lines.append(f"• {ch['channel_id']} [{mode_label}] {name} {extra}".strip())
+            text = "📣 [b]Force Channels[/b]\n\n" + "\n".join(lines)
+        await _edit_emoji_text(
+            update.effective_chat.id,
+            q.message.message_id,
+            text,
+            context,
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back", callback_data="bset:forcech_panel")]]),
+        )
+        return
+    if data == "bset:forcech_remove":
+        context.user_data.pop("forcech_state", None)
+        context.user_data["bset_forcech_remove_wait"] = True
+        await _edit_emoji_text(
+            update.effective_chat.id,
+            q.message.message_id,
+            "➖ [b]Force Channel Remove[/b]\n\nChannel ID/username bhejo jise remove karna hai:\n[c]-100xxxx[/c] or [c]@channel[/c]",
+            context,
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back", callback_data="bset:forcech_panel")]]),
+        )
+        return
+    if data == "bset:forcech_reset":
+        db: Database = context.application.bot_data["db"]
+        await db.clear_force_channels()
+        context.user_data.pop("forcech_state", None)
+        context.user_data.pop("bset_forcech_remove_wait", None)
+        await _edit_emoji_text(
+            update.effective_chat.id,
+            q.message.message_id,
+            "✅ [b]Force channel reset done.[/b]\nAll required channels cleared.",
+            context,
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back", callback_data="bset:forcech_panel")]]),
+        )
+        return
+    if data == "bset:addadmin_action":
+        cfg = context.application.bot_data["cfg"]
+        if not _is_owner(update, cfg):
+            await q.answer("Owner only", show_alert=True)
+            return
+        context.user_data["bset_addadmin_wait"] = True
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back", callback_data="bset:back")]])
+        await _edit_emoji_text(
+            update.effective_chat.id,
+            q.message.message_id,
+            "👮 [b]Add Admin[/b]\n\n"
+            "Owner ID send kare: jis user ko admin banana hai uska numeric user_id bhejo.\n\n"
+            "Example: [c]123456789[/c]",
+            context,
+            reply_markup=kb,
+        )
+        return
+    if data == "bset:removeadmin_action":
+        cfg = context.application.bot_data["cfg"]
+        if not _is_owner(update, cfg):
+            await q.answer("Owner only", show_alert=True)
+            return
+        context.user_data["bset_removeadmin_wait"] = True
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back", callback_data="bset:back")]])
+        await _edit_emoji_text(
+            update.effective_chat.id,
+            q.message.message_id,
+            "🚫 [b]Remove Admin[/b]\n\n"
+            "Owner ID send kare: jis admin ko remove karna hai uska numeric user_id bhejo.\n\n"
+            "Example: [c]123456789[/c]",
+            context,
+            reply_markup=kb,
+        )
+        return
+    if data == "bset:gencode_action":
+        if not await _is_admin_or_owner(update, context):
+            await q.answer("Access denied", show_alert=True)
+            return
+        context.user_data["bset_gencode_wait"] = True
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back", callback_data="bset:back")]])
+        await _edit_emoji_text(
+            update.effective_chat.id,
+            q.message.message_id,
+            "🎟 [b]Generate Codes[/b]\n\n"
+            "Kitne codes generate karne hain? (1 to 20)\n\n"
+            "Example: [c]5[/c]",
+            context,
+            reply_markup=kb,
+        )
+        return
     if data == "bset:back":
+        _clear_bsettings_wait_states(context)
         await _edit_emoji_text(
             update.effective_chat.id,
             q.message.message_id,
@@ -2266,7 +2578,83 @@ async def bsettings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if not doc:
         await _edit_emoji_text(update.effective_chat.id, q.message.message_id, "❌ Unknown command doc.", context)
         return
-    kb = InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back", callback_data="bset:back")]])
+    if key == "addadmin":
+        kb = InlineKeyboardMarkup(
+            [
+                [InlineKeyboardButton("➕ Add Admin", callback_data="bset:addadmin_action")],
+                [InlineKeyboardButton("⬅️ Back", callback_data="bset:back")],
+            ]
+        )
+    elif key == "removeadmin":
+        kb = InlineKeyboardMarkup(
+            [
+                [InlineKeyboardButton("➖ Remove Admin", callback_data="bset:removeadmin_action")],
+                [InlineKeyboardButton("⬅️ Back", callback_data="bset:back")],
+            ]
+        )
+    elif key == "gencode":
+        kb = InlineKeyboardMarkup(
+            [
+                [InlineKeyboardButton("🎟 Generate Codes", callback_data="bset:gencode_action")],
+                [InlineKeyboardButton("⬅️ Back", callback_data="bset:back")],
+            ]
+        )
+    elif key == "forcech":
+        await _edit_emoji_text(
+            update.effective_chat.id,
+            q.message.message_id,
+            _bset_forcech_panel_text(),
+            context,
+            reply_markup=_bset_forcech_panel_keyboard(),
+        )
+        return
+    elif key == "addpremium":
+        kb = InlineKeyboardMarkup(
+            [
+                [InlineKeyboardButton("⭐ Add Premium", callback_data="bset:addpremium_action")],
+                [InlineKeyboardButton("⬅️ Back", callback_data="bset:back")],
+            ]
+        )
+    elif key == "removepremium":
+        kb = InlineKeyboardMarkup(
+            [
+                [InlineKeyboardButton("❌ Remove Premium", callback_data="bset:removepremium_action")],
+                [InlineKeyboardButton("⬅️ Back", callback_data="bset:back")],
+            ]
+        )
+    elif key == "setcaption":
+        kb = InlineKeyboardMarkup(
+            [
+                [InlineKeyboardButton("📝 Set Caption", callback_data="bset:setcaption_action")],
+                [InlineKeyboardButton("🗑 Remove Caption", callback_data="bset:removecaption_action")],
+                [InlineKeyboardButton("⬅️ Back", callback_data="bset:back")],
+            ]
+        )
+    elif key == "settime":
+        kb = InlineKeyboardMarkup(
+            [
+                [InlineKeyboardButton("⏱ Set Time", callback_data="bset:settime_action")],
+                [InlineKeyboardButton("⬅️ Back", callback_data="bset:back")],
+            ]
+        )
+    elif key == "setstartimg":
+        kb = InlineKeyboardMarkup(
+            [
+                [InlineKeyboardButton("🖼 Set Start Image", callback_data="bset:setstartimg_action")],
+                [InlineKeyboardButton("⬅️ Back", callback_data="bset:back")],
+            ]
+        )
+    elif key == "setpay":
+        await _edit_emoji_text(
+            update.effective_chat.id,
+            q.message.message_id,
+            "💳 [b]Payment Settings[/b]\n\nChoose action below:",
+            context,
+            reply_markup=_bset_setpay_keyboard(),
+        )
+        return
+    else:
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back", callback_data="bset:back")]])
     await _edit_emoji_text(
         update.effective_chat.id,
         q.message.message_id,
@@ -2274,6 +2662,191 @@ async def bsettings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         context,
         reply_markup=kb,
     )
+
+
+async def bsettings_owner_addadmin_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not update.effective_chat or not update.effective_user or not update.effective_message:
+        return
+    if not context.user_data.get("bset_addadmin_wait"):
+        return
+    cfg = context.application.bot_data["cfg"]
+    if not _is_owner(update, cfg):
+        context.user_data.pop("bset_addadmin_wait", None)
+        return
+
+    raw = (update.effective_message.text or "").strip()
+    try:
+        uid = int(raw)
+    except ValueError:
+        await _send_emoji_text(update.effective_chat.id, "❌ Invalid user_id. Numeric ID bhejo.", context)
+        return
+
+    db: Database = context.application.bot_data["db"]
+    await db.add_admin(uid, update.effective_user.id)
+    context.user_data.pop("bset_addadmin_wait", None)
+    await _send_emoji_text(update.effective_chat.id, f"✅ Admin added: {uid}", context)
+
+
+async def bsettings_owner_removeadmin_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not update.effective_chat or not update.effective_user or not update.effective_message:
+        return
+    if not context.user_data.get("bset_removeadmin_wait"):
+        return
+    cfg = context.application.bot_data["cfg"]
+    if not _is_owner(update, cfg):
+        context.user_data.pop("bset_removeadmin_wait", None)
+        return
+
+    raw = (update.effective_message.text or "").strip()
+    try:
+        uid = int(raw)
+    except ValueError:
+        await _send_emoji_text(update.effective_chat.id, "❌ Invalid user_id. Numeric ID bhejo.", context)
+        return
+
+    db: Database = context.application.bot_data["db"]
+    await db.remove_admin(uid)
+    context.user_data.pop("bset_removeadmin_wait", None)
+    await _send_emoji_text(update.effective_chat.id, f"✅ Admin removed: {uid}", context)
+
+
+async def bsettings_gencode_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not update.effective_chat or not update.effective_user or not update.effective_message:
+        return
+    if not context.user_data.get("bset_gencode_wait"):
+        return
+    if not await _is_admin_or_owner(update, context):
+        context.user_data.pop("bset_gencode_wait", None)
+        return
+
+    raw = (update.effective_message.text or "").strip()
+    try:
+        count = int(raw)
+    except ValueError:
+        await _send_emoji_text(update.effective_chat.id, "❌ Invalid number. 1 to 20 bhejo.", context)
+        return
+    if count < 1:
+        count = 1
+    if count > 20:
+        count = 20
+
+    db: Database = context.application.bot_data["db"]
+    context.user_data.pop("bset_gencode_wait", None)
+    await _generate_tokens_and_send(update.effective_chat.id, update.effective_user.id, count, db, context)
+
+
+async def bsettings_forcech_remove_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not update.effective_chat or not update.effective_user or not update.effective_message:
+        return
+    if not context.user_data.get("bset_forcech_remove_wait"):
+        return
+    if not await _is_admin_or_owner(update, context):
+        context.user_data.pop("bset_forcech_remove_wait", None)
+        return
+
+    db: Database = context.application.bot_data["db"]
+    ref = _parse_channel_ref((update.effective_message.text or "").strip())
+    if ref is None:
+        await _send_emoji_text(update.effective_chat.id, "❌ Invalid format. Send -100xxxx or @channelusername.", context)
+        return
+    try:
+        chat = await context.bot.get_chat(ref)
+        cid = int(chat.id)
+    except Exception:
+        if isinstance(ref, int):
+            cid = int(ref)
+        else:
+            await _send_emoji_text(update.effective_chat.id, "❌ Channel not found.", context)
+            return
+    await db.remove_force_channel(cid)
+    context.user_data.pop("bset_forcech_remove_wait", None)
+    await _send_emoji_text(update.effective_chat.id, f"✅ Force channel removed: {cid}", context)
+
+
+async def bsettings_misc_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not update.effective_chat or not update.effective_user or not update.effective_message:
+        return
+    if not await _is_admin_or_owner(update, context):
+        _clear_bsettings_wait_states(context)
+        return
+    text = (update.effective_message.text or "").strip()
+    if not text:
+        return
+
+    db: Database = context.application.bot_data["db"]
+
+    if context.user_data.get("bset_addpremium_wait"):
+        parts = text.split()
+        try:
+            uid = int(parts[0])
+            days = int(parts[1]) if len(parts) > 1 else 1
+        except Exception:
+            await _send_emoji_text(update.effective_chat.id, "❌ Invalid format. Use: <user_id> [days]", context)
+            return
+        days = max(1, days)
+        until = await db.add_premium_seconds(uid, days * DAY_SECONDS)
+        context.user_data.pop("bset_addpremium_wait", None)
+        await _send_emoji_text(update.effective_chat.id, f"✅ Premium granted to {uid} for {days} day(s).\n🕒 Until: {until}", context)
+        return
+
+    if context.user_data.get("bset_removepremium_wait"):
+        try:
+            uid = int(text)
+        except Exception:
+            await _send_emoji_text(update.effective_chat.id, "❌ Invalid user_id.", context)
+            return
+        await db.set_premium_until(uid, 0)
+        context.user_data.pop("bset_removepremium_wait", None)
+        await _send_emoji_text(update.effective_chat.id, f"✅ Premium removed for {uid}.", context)
+        return
+
+    if context.user_data.get("bset_setcaption_wait"):
+        await db.set_setting("caption", text)
+        context.user_data.pop("bset_setcaption_wait", None)
+        await _send_emoji_text(update.effective_chat.id, "✅ Default caption set.", context)
+        return
+
+    if context.user_data.get("bset_settime_wait"):
+        seconds = _parse_duration_seconds(text)
+        if seconds is None:
+            await _send_emoji_text(update.effective_chat.id, "❌ Invalid time. Examples: 60, 5m, 1h, off", context)
+            return
+        await db.set_setting(SETTINGS_AUTODELETE_SECONDS, str(int(seconds)))
+        context.user_data.pop("bset_settime_wait", None)
+        if seconds <= 0:
+            await _send_emoji_text(update.effective_chat.id, "✅ Auto-delete disabled.", context)
+        else:
+            await _send_emoji_text(update.effective_chat.id, f"✅ Auto-delete enabled: {seconds} seconds.", context)
+        return
+
+    if context.user_data.get("bset_setstartimg_wait"):
+        raw = text
+        if raw.lower() in ("off", "remove", "none", "disable", "disabled"):
+            await db.set_setting(SETTINGS_START_IMG_URL, None)
+            context.user_data.pop("bset_setstartimg_wait", None)
+            await _send_emoji_text(update.effective_chat.id, "✅ Start image removed.", context)
+            return
+        if not (raw.startswith("https://") or raw.startswith("http://")):
+            await _send_emoji_text(update.effective_chat.id, "❌ Invalid URL. Must start with http:// or https://", context)
+            return
+        await db.set_setting(SETTINGS_START_IMG_URL, raw)
+        context.user_data.pop("bset_setstartimg_wait", None)
+        await _send_emoji_text(update.effective_chat.id, "✅ Start image set.", context)
+        return
+
+    mode = context.user_data.get("bset_setpay_wait")
+    if mode:
+        if mode == "upi":
+            await db.set_setting(SETTINGS_PAY_UPI, text)
+            await _send_emoji_text(update.effective_chat.id, "✅ Payment UPI set.", context)
+        elif mode == "name":
+            await db.set_setting(SETTINGS_PAY_NAME, text)
+            await _send_emoji_text(update.effective_chat.id, "✅ Payment payee name set.", context)
+        elif mode == "text":
+            await db.set_setting(SETTINGS_PAY_TEXT, text)
+            await _send_emoji_text(update.effective_chat.id, "✅ Payment text set.", context)
+        context.user_data.pop("bset_setpay_wait", None)
+        return
 
 
 async def forcech(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -2784,6 +3357,11 @@ def build_handlers(app: Application) -> None:
 
     # /forcech uses guided text input + mode callback.
     app.add_handler(MessageHandler((filters.TEXT | filters.PHOTO | filters.Document.ALL) & ~filters.COMMAND, pay_utr_input), group=0)
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, bsettings_owner_addadmin_input), group=0)
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, bsettings_owner_removeadmin_input), group=0)
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, bsettings_gencode_input), group=0)
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, bsettings_forcech_remove_input), group=0)
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, bsettings_misc_input), group=0)
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, forcech_input), group=0)
     app.add_handler(CallbackQueryHandler(forcech_mode_callback, pattern=r"^forcech_mode:(direct|request)$"))
     app.add_handler(ChatJoinRequestHandler(on_chat_join_request))
