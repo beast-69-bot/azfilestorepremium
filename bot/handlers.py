@@ -38,6 +38,9 @@ SETTINGS_PAY_UPI = "pay_upi"
 SETTINGS_PAY_NAME = "pay_name"
 SETTINGS_PAY_TEXT = "pay_text"
 SETTINGS_PAY_ADMIN_MSGS_PREFIX = "pay_admin_msgs:"
+UI_EMOJI_CACHE_KEY = "_ui_emoji_map_cache"
+UI_EMOJI_CACHE_TS_KEY = "_ui_emoji_map_cache_ts"
+UI_EMOJI_CACHE_TTL_SECONDS = 120
 PRESET_UI_EMOJI_IDS = {
     "info": "6059839048065750021",
     "timer": "5440621591387980068",
@@ -416,21 +419,39 @@ def _u16len(s: str) -> int:
     return len(s.encode("utf-16-le")) // 2
 
 
-async def _build_custom_emoji_entities(text: str, context: ContextTypes.DEFAULT_TYPE) -> list[MessageEntity]:
-    db: Database = context.application.bot_data["db"]
-    # Load effective mapping from DB, fallback to preset map.
+def _invalidate_ui_emoji_cache(context: ContextTypes.DEFAULT_TYPE) -> None:
+    bd = context.application.bot_data
+    bd.pop(UI_EMOJI_CACHE_KEY, None)
+    bd.pop(UI_EMOJI_CACHE_TS_KEY, None)
+
+
+async def _get_ui_emoji_map(context: ContextTypes.DEFAULT_TYPE) -> dict[str, str]:
+    bd = context.application.bot_data
+    cached = bd.get(UI_EMOJI_CACHE_KEY)
+    cached_at = float(bd.get(UI_EMOJI_CACHE_TS_KEY, 0) or 0)
+    if isinstance(cached, dict) and (time.time() - cached_at) < UI_EMOJI_CACHE_TTL_SECONDS:
+        return cached
+
+    db: Database = bd["db"]
     name_to_id: dict[str, str] = {}
     for name, preset in PRESET_UI_EMOJI_IDS.items():
         v = await db.get_setting(f"{SETTINGS_UI_EMOJI_PREFIX}{name}")
         db_val = (v or "").strip()
         preset_val = (preset or "").strip()
-        # If DB has stale/invalid value (e.g. "off", empty, malformed), fallback to preset id.
         if db_val.isdigit():
             name_to_id[name] = db_val
         elif preset_val.isdigit():
             name_to_id[name] = preset_val
         else:
             name_to_id[name] = ""
+
+    bd[UI_EMOJI_CACHE_KEY] = name_to_id
+    bd[UI_EMOJI_CACHE_TS_KEY] = time.time()
+    return name_to_id
+
+
+async def _build_custom_emoji_entities(text: str, context: ContextTypes.DEFAULT_TYPE) -> list[MessageEntity]:
+    name_to_id = await _get_ui_emoji_map(context)
 
     entities: list[MessageEntity] = []
     off = 0
@@ -3318,6 +3339,7 @@ async def setuitemoji(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
     if val.lower() in ("off", "remove", "none", "disable", "disabled"):
         await db.set_setting(key, None)
+        _invalidate_ui_emoji_cache(context)
         await _send_emoji_text(update.effective_chat.id, f"✅ UI emoji removed for {name}.", context)
         return
 
@@ -3326,6 +3348,7 @@ async def setuitemoji(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         return
 
     await db.set_setting(key, val)
+    _invalidate_ui_emoji_cache(context)
     await _send_emoji_text(update.effective_chat.id, f"✅ UI emoji set: {name} -> {val}", context)
 
 
@@ -3340,6 +3363,7 @@ async def setemojipreset(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     db: Database = context.application.bot_data["db"]
     for name, eid in PRESET_UI_EMOJI_IDS.items():
         await db.set_setting(f"{SETTINGS_UI_EMOJI_PREFIX}{name}", eid)
+    _invalidate_ui_emoji_cache(context)
     await _send_emoji_text(
         update.effective_chat.id,
         "✅ UI emoji preset saved.\n\n"

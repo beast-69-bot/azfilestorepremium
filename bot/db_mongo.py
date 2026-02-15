@@ -24,8 +24,17 @@ class MongoDatabase:
         return self._db
 
     async def init(self) -> None:
-        self._client = AsyncIOMotorClient(self.uri)
+        # Keep connection setup strict so slow/failed cluster links don't stall bot handlers.
+        self._client = AsyncIOMotorClient(
+            self.uri,
+            serverSelectionTimeoutMS=5000,
+            connectTimeoutMS=10000,
+            socketTimeoutMS=20000,
+            maxPoolSize=100,
+            retryWrites=True,
+        )
         self._db = self._client[self.db_name]
+        await self._client.admin.command("ping")
         await self._ensure_schema()
 
     async def close(self) -> None:
@@ -37,12 +46,21 @@ class MongoDatabase:
     async def _ensure_schema(self) -> None:
         # Logical unique keys
         await self.db.users.create_index("user_id", unique=True)
+        await self.db.users.create_index("premium_until")
         await self.db.admins.create_index("user_id", unique=True)
+        await self.db.settings.create_index("key", unique=True)
+        await self.db.files.create_index("id", unique=True)
         await self.db.files.create_index("file_unique_id", sparse=True)
+        await self.db.messages.create_index("id", unique=True)
+        await self.db.batches.create_index("id", unique=True)
+        await self.db.channel_batches.create_index("id", unique=True)
         await self.db.links.create_index("code", unique=True)
+        await self.db.links.create_index("created_at")
         await self.db.tokens.create_index("token", unique=True)
         await self.db.force_channels.create_index("channel_id", unique=True)
         await self.db.force_join_requests.create_index([("channel_id", 1), ("user_id", 1)], unique=True)
+        await self.db.payment_requests.create_index("id", unique=True)
+        await self.db.payment_requests.create_index("expires_at")
         await self.db.payment_requests.create_index([("user_id", 1), ("status", 1)])
 
     async def _next_id(self, name: str) -> int:
