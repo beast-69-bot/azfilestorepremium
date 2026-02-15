@@ -1386,6 +1386,84 @@ async def getlink(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
+async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await _upsert_user(update, context)
+    if not update.effective_chat or not update.effective_user:
+        return
+
+    cancelled: list[str] = []
+
+    # Channel batch flow
+    st = context.user_data.pop("chbatch_state", None)
+    if st:
+        mid = st.get("prompt_message_id")
+        if mid:
+            try:
+                await context.bot.delete_message(chat_id=update.effective_chat.id, message_id=int(mid))
+            except Exception:
+                pass
+        cancelled.append("batch")
+
+    # Custom batch flow
+    sid = context.user_data.pop("custombatch_session_id", None)
+    sessions = context.application.bot_data.setdefault("custombatch_sessions", {})
+    cb_st = sessions.pop(str(sid), None) if sid else None
+    legacy_cb = context.user_data.pop("custombatch_state", None)
+    cb_effective = cb_st or (legacy_cb if isinstance(legacy_cb, dict) else None)
+    if cb_effective:
+        src_chat_id = cb_effective.get("chat_id") or cb_effective.get("source_chat_id")
+        for mid in cb_effective.get("source_message_ids") or []:
+            if src_chat_id:
+                try:
+                    await context.bot.delete_message(chat_id=int(src_chat_id), message_id=int(mid))
+                except Exception:
+                    pass
+        pmid = cb_effective.get("prompt_message_id")
+        if pmid and src_chat_id:
+            try:
+                await context.bot.delete_message(chat_id=int(src_chat_id), message_id=int(pmid))
+            except Exception:
+                pass
+        cancelled.append("custombatch")
+
+    # Payment UTR wait
+    if context.user_data.pop("pay_utr_request_id", None) is not None:
+        cancelled.append("pay_utr")
+
+    # Force channel add flow
+    if context.user_data.pop("forcech_state", None):
+        cancelled.append("forcech")
+
+    # bsettings waits
+    wait_keys = [
+        "bset_addpremium_wait",
+        "bset_removepremium_wait",
+        "bset_setcaption_wait",
+        "bset_settime_wait",
+        "bset_setstartimg_wait",
+        "bset_setpay_wait",
+        "bset_forcech_remove_wait",
+        "bset_addadmin_wait",
+        "bset_removeadmin_wait",
+        "bset_gencode_wait",
+    ]
+    bset_cancelled = False
+    for key in wait_keys:
+        if context.user_data.pop(key, None) is not None:
+            bset_cancelled = True
+    if bset_cancelled:
+        cancelled.append("bsettings")
+
+    if cancelled:
+        await _send_emoji_text(
+            update.effective_chat.id,
+            "Cancelled active process(es): " + ", ".join(cancelled),
+            context,
+        )
+    else:
+        await _send_emoji_text(update.effective_chat.id, "No active process to cancel.", context)
+
+
 async def batch(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     if not await _is_admin_or_owner(update, context):
@@ -2017,7 +2095,7 @@ async def pay_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         key = data.split(":", 1)[1]
         plan = PAY_PLANS.get(key)
         if not plan:
-            await _edit_emoji_text(update.effective_chat.id, q.message.message_id, "âŒ Invalid plan.", context)
+            await _edit_emoji_text(update.effective_chat.id, q.message.message_id, "❌ Invalid plan.", context)
             return
         rid = await db.create_payment_request(update.effective_user.id, key, int(plan["days"]), int(plan["amount"]))
         pay_text = await db.get_setting(SETTINGS_PAY_TEXT)
@@ -2033,7 +2111,7 @@ async def pay_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             await _edit_emoji_text(
                 update.effective_chat.id,
                 q.message.message_id,
-                "âš ï¸ Payment is not configured by admin yet.\nPlease contact admin.",
+                "⚠️ Payment is not configured by admin yet.\nPlease contact admin.",
                 context,
             )
             return
@@ -2044,29 +2122,29 @@ async def pay_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         plan_label = html.escape(str(plan["label"]))
         upi_html = html.escape(upi_id)
         caption = (
-            "ðŸ’Ž <b>Premium Purchase</b>\n\n"
-            f"ðŸ› Plan: <b>{plan_label}</b>\n"
-            f"ðŸ’° Amount: â‚¹{plan['amount']}\n\n"
-            "â”â”â”â”â”â”â”â”â”â”â”â”â”â”\n\n"
-            "ðŸ“² <b>Pay via UPI</b>\n"
+            "💎 <b>Premium Purchase</b>\n\n"
+            f"🛍 Plan: <b>{plan_label}</b>\n"
+            f"💰 Amount: ₹{plan['amount']}\n\n"
+            "━━━━━━━━━━━━━━\n\n"
+            "📲 <b>Pay via UPI</b>\n"
             "Scan the QR above\n"
             "OR send to:\n\n"
             f"<code>{upi_html}</code>\n\n"
-            f"ðŸ†” Order ID: <code>#{rid}</code>\n\n"
-            "â”â”â”â”â”â”â”â”â”â”â”â”â”â”\n\n"
-            "ðŸ“Œ <b>How to Activate</b>\n"
-            "1ï¸âƒ£ Complete payment\n"
-            "2ï¸âƒ£ Tap \"Submit UTR\"\n"
-            "3ï¸âƒ£ Send transaction ID\n"
-            "4ï¸âƒ£ Premium activates after verification\n\n"
-            "â³ Request expires in 5 minutes."
+            f"🆔 Order ID: <code>#{rid}</code>\n\n"
+            "━━━━━━━━━━━━━━\n\n"
+            "📌 <b>How to Activate</b>\n"
+            "1️⃣ Complete payment\n"
+            "2️⃣ Tap \"Submit UTR\"\n"
+            "3️⃣ Send transaction ID\n"
+            "4️⃣ Premium activates after verification\n\n"
+            "⏳ Request expires in 5 minutes."
         )
         # Keep optional admin-configured payment note, without clutter.
         pay_text_clean = (pay_text or "").strip()
         if pay_text_clean:
-            caption = f"{caption}\n\nðŸ§¾ <b>Note</b>\n{html.escape(pay_text_clean)}"
+            caption = f"{caption}\n\n🧾 <b>Note</b>\n{html.escape(pay_text_clean)}"
 
-        kb = InlineKeyboardMarkup([[InlineKeyboardButton("ðŸ“© Submit UTR", callback_data=f"payutr:{rid}")]])
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton("📩 Submit UTR", callback_data=f"payutr:{rid}")]])
 
         # Remove plan picker message to keep payment UI clean.
         try:
@@ -2088,7 +2166,7 @@ async def pay_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             # Fallback if remote QR URL fails for any reason.
             await _send_emoji_text(
                 update.effective_chat.id,
-                "âš ï¸ QR load failed. Pay via UPI ID shown above.\n"
+                "⚠️ QR load failed. Pay via UPI ID shown above.\n"
                 f"UPI URI:\n{upi_uri}",
                 context,
             )
@@ -3538,6 +3616,7 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 def build_handlers(app: Application) -> None:
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("cancel", cancel))
     app.add_handler(CallbackQueryHandler(recheck_callback, pattern=r"^(recheck:|noop)"))
     app.add_handler(CallbackQueryHandler(pay_callback, pattern=r"^pay(plan|utr):"))
     app.add_handler(CallbackQueryHandler(pay_admin_callback, pattern=r"^payadm:(approve|reject):"))

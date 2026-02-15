@@ -28,6 +28,7 @@ async def _post_init(app: Application) -> None:
     # Show who can use which command in the command menu descriptions.
     commands = [
         BotCommand("start", "Start / open link (User)"),
+        BotCommand("cancel", "Cancel current process (User/Admin)"),
         BotCommand("redeem", "Redeem token (User)"),
         BotCommand("plan", "View normal/premium plans (User)"),
         BotCommand("pay", "Buy premium plan (User)"),
