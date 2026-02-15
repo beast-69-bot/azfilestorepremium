@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import asyncio
 import datetime
@@ -69,31 +69,31 @@ PRESET_UI_EMOJI_IDS = {
     "premium_star": "5202218878888850186",
 }
 UNICODE_TO_UI_NAME = {
-    "ℹ": "info",
-    "⏱": "timer",
-    "⏳": "hourglass",
-    "⚠": "warning",
-    "✅": "check",
-    "❌": "cross",
-    "🆔": "id",
-    "🎟": "ticket",
-    "👤": "user",
-    "📊": "stats",
-    "📌": "pin",
-    "📣": "announce",
-    "📤": "outbox",
-    "📦": "box",
-    "🔄": "refresh",
-    "🔐": "lock_closed",
-    "🔒": "lock",
-    "🔓": "unlock",
-    "🕒": "clock",
-    "🖼": "image",
-    "🗑": "trash",
-    "🚫": "denied",
-    "🧩": "puzzle",
-    "🧾": "receipt",
-    "⭐": "premium_star",
+    "â„¹": "info",
+    "â±": "timer",
+    "â³": "hourglass",
+    "âš ": "warning",
+    "âœ…": "check",
+    "âŒ": "cross",
+    "ðŸ†”": "id",
+    "ðŸŽŸ": "ticket",
+    "ðŸ‘¤": "user",
+    "ðŸ“Š": "stats",
+    "ðŸ“Œ": "pin",
+    "ðŸ“£": "announce",
+    "ðŸ“¤": "outbox",
+    "ðŸ“¦": "box",
+    "ðŸ”„": "refresh",
+    "ðŸ”": "lock_closed",
+    "ðŸ”’": "lock",
+    "ðŸ”“": "unlock",
+    "ðŸ•’": "clock",
+    "ðŸ–¼": "image",
+    "ðŸ—‘": "trash",
+    "ðŸš«": "denied",
+    "ðŸ§©": "puzzle",
+    "ðŸ§¾": "receipt",
+    "â­": "premium_star",
 }
 
 PAY_PLANS: dict[str, dict[str, Any]] = {
@@ -104,22 +104,22 @@ PAY_PLANS: dict[str, dict[str, Any]] = {
 
 BSETTINGS_DOCS: dict[str, dict[str, str]] = {
     "getlink": {
-        "title": "🔗 /getlink",
+        "title": "ðŸ”— /getlink",
         "body": (
             "Purpose:\nGenerate dual links (Normal + Premium) for a file/message.\n\n"
             "Usage:\n"
             "1) Reply to a file/message and send: /getlink\n"
             "2) Or direct by id: /getlink <file_id>\n\n"
             "Output:\n"
-            "• Normal Link -> normal+premium users\n"
-            "• Premium Link -> premium users only\n\n"
+            "â€¢ Normal Link -> normal+premium users\n"
+            "â€¢ Premium Link -> premium users only\n\n"
             "Notes:\n"
-            "• Force-channel checks always apply\n"
-            "• Premium link checks active premium in real time"
+            "â€¢ Force-channel checks always apply\n"
+            "â€¢ Premium link checks active premium in real time"
         ),
     },
     "batch": {
-        "title": "📦 /batch",
+        "title": "ðŸ“¦ /batch",
         "body": (
             "Purpose:\nCreate one channel-post range batch link pair.\n\n"
             "Flow:\n"
@@ -128,13 +128,13 @@ BSETTINGS_DOCS: dict[str, dict[str, str]] = {
             "3) Send END post link\n"
             "4) Bot creates Normal + Premium links\n\n"
             "Cancel:\n"
-            "• /batch cancel\n\n"
+            "â€¢ /batch cancel\n\n"
             "Requirements:\n"
-            "• Bot must be admin in source channel"
+            "â€¢ Bot must be admin in source channel"
         ),
     },
     "custombatch": {
-        "title": "🧩 /custombatch",
+        "title": "ðŸ§© /custombatch",
         "body": (
             "Purpose:\nManually collect files/media and generate one batch pair.\n\n"
             "Flow:\n"
@@ -142,22 +142,22 @@ BSETTINGS_DOCS: dict[str, dict[str, str]] = {
             "2) Send multiple files/media\n"
             "3) Tap Generate Link\n\n"
             "Buttons:\n"
-            "• Generate Link\n"
-            "• Cancel Process\n\n"
+            "â€¢ Generate Link\n"
+            "â€¢ Cancel Process\n\n"
             "Extra:\n"
-            "• Temp upload messages are cleaned on finish/cancel"
+            "â€¢ Temp upload messages are cleaned on finish/cancel"
         ),
     },
     "addadmin": {
-        "title": "👮 /addadmin",
+        "title": "ðŸ‘® /addadmin",
         "body": "Owner-only.\n\nUsage:\n/addadmin <user_id>\n\nAdds user as bot admin.",
     },
     "removeadmin": {
-        "title": "🚫 /removeadmin",
+        "title": "ðŸš« /removeadmin",
         "body": "Owner-only.\n\nUsage:\n/removeadmin <user_id>\n\nRemoves bot admin role.",
     },
     "addpremium": {
-        "title": "⭐ /addpremium",
+        "title": "â­ /addpremium",
         "body": (
             "Admin/Owner.\n\nUsage:\n"
             "/addpremium <user_id> [days]\n\n"
@@ -166,11 +166,11 @@ BSETTINGS_DOCS: dict[str, dict[str, str]] = {
         ),
     },
     "removepremium": {
-        "title": "❌ /removepremium",
+        "title": "âŒ /removepremium",
         "body": "Admin/Owner.\n\nUsage:\n/removepremium <user_id>\n\nDisables premium instantly.",
     },
     "gencode": {
-        "title": "🎟 /gencode",
+        "title": "ðŸŽŸ /gencode",
         "body": (
             "Admin/Owner.\n\nUsage:\n"
             "/gencode\n"
@@ -182,7 +182,7 @@ BSETTINGS_DOCS: dict[str, dict[str, str]] = {
         ),
     },
     "forcech": {
-        "title": "📣 /forcech",
+        "title": "ðŸ“£ /forcech",
         "body": (
             "Admin/Owner force-join management.\n\n"
             "Add flow:\n"
@@ -190,22 +190,22 @@ BSETTINGS_DOCS: dict[str, dict[str, str]] = {
             "2) Send channel id/username\n"
             "3) Select mode (Direct/Request)\n\n"
             "Other:\n"
-            "• /forcech list\n"
-            "• /forcech remove <channel_id|@username>\n"
-            "• /forcech reset"
+            "â€¢ /forcech list\n"
+            "â€¢ /forcech remove <channel_id|@username>\n"
+            "â€¢ /forcech reset"
         ),
     },
     "forcechdebug": {
-        "title": "🧪 /forcechdebug",
+        "title": "ðŸ§ª /forcechdebug",
         "body": (
             "Admin/Owner debug helper.\n\nUsage:\n"
             "/forcechdebug <user_id>\n\n"
             "Shows per-channel evaluation:\n"
-            "• mode\n• joined\n• request\n• pass\n• error details"
+            "â€¢ mode\nâ€¢ joined\nâ€¢ request\nâ€¢ pass\nâ€¢ error details"
         ),
     },
     "broadcast": {
-        "title": "📢 /broadcast",
+        "title": "ðŸ“¢ /broadcast",
         "body": (
             "Admin/Owner.\n\nUsage:\n"
             "Reply to any message then send /broadcast\n\n"
@@ -213,23 +213,23 @@ BSETTINGS_DOCS: dict[str, dict[str, str]] = {
         ),
     },
     "stats": {
-        "title": "📊 /stats",
+        "title": "ðŸ“Š /stats",
         "body": "Admin/Owner.\n\nShows users, files, links, premium, tokens and other counts.",
     },
     "premiumdb": {
-        "title": "📥 /premiumdb",
+        "title": "ðŸ“¥ /premiumdb",
         "body": (
             "Admin/Owner.\n\n"
             "Exports full premium records to an Excel file.\n\n"
             "Output columns include:\n"
-            "• user_id, name, username\n"
-            "• premium_until (unix + UTC)\n"
-            "• active status\n"
-            "• created_at, last_seen"
+            "â€¢ user_id, name, username\n"
+            "â€¢ premium_until (unix + UTC)\n"
+            "â€¢ active status\n"
+            "â€¢ created_at, last_seen"
         ),
     },
     "setcaption": {
-        "title": "📝 /setcaption",
+        "title": "ðŸ“ /setcaption",
         "body": (
             "Admin/Owner.\n\nUsage:\n"
             "/setcaption <text>\n"
@@ -239,11 +239,11 @@ BSETTINGS_DOCS: dict[str, dict[str, str]] = {
         ),
     },
     "removecaption": {
-        "title": "🗑 /removecaption",
+        "title": "ðŸ—‘ /removecaption",
         "body": "Admin/Owner.\n\nRemoves default caption.",
     },
     "settime": {
-        "title": "⏱ /settime",
+        "title": "â± /settime",
         "body": (
             "Admin/Owner auto-delete setting.\n\nUsage:\n"
             "/settime 60\n"
@@ -254,7 +254,7 @@ BSETTINGS_DOCS: dict[str, dict[str, str]] = {
         ),
     },
     "setstartimg": {
-        "title": "🖼 /setstartimg",
+        "title": "ðŸ–¼ /setstartimg",
         "body": (
             "Admin/Owner.\n\nUsage:\n"
             "/setstartimg <image_url>\n"
@@ -263,7 +263,7 @@ BSETTINGS_DOCS: dict[str, dict[str, str]] = {
         ),
     },
     "setpay": {
-        "title": "💳 /setpay",
+        "title": "ðŸ’³ /setpay",
         "body": (
             "Admin/Owner payment config.\n\nUsage:\n"
             "/setpay view\n"
@@ -275,11 +275,11 @@ BSETTINGS_DOCS: dict[str, dict[str, str]] = {
         ),
     },
     "getemojiid": {
-        "title": "🆔 /getemojiid",
+        "title": "ðŸ†” /getemojiid",
         "body": "Admin/Owner.\n\nReply to a message with custom emojis and run /getemojiid to extract custom_emoji_id values.",
     },
     "setuitemoji": {
-        "title": "😀 /setuitemoji",
+        "title": "ðŸ˜€ /setuitemoji",
         "body": (
             "Admin/Owner.\n\nUsage:\n"
             "/setuitemoji <name> <custom_emoji_id>\n"
@@ -288,7 +288,7 @@ BSETTINGS_DOCS: dict[str, dict[str, str]] = {
         ),
     },
     "setemojipreset": {
-        "title": "✨ /setemojipreset",
+        "title": "âœ¨ /setemojipreset",
         "body": "Admin/Owner.\n\nApplies predefined custom emoji id preset in one shot.",
     },
 }
@@ -297,24 +297,24 @@ BSETTINGS_DOCS: dict[str, dict[str, str]] = {
 def _bsettings_keyboard() -> InlineKeyboardMarkup:
     # Intentionally exclude /getlink, /batch, /custombatch from this panel.
     button_items: list[tuple[str, str]] = [
-        ("addadmin", "👮 Add Admin"),
-        ("removeadmin", "🚫 Remove Admin"),
-        ("addpremium", "⭐ Add Premium"),
-        ("removepremium", "❌ Remove Premium"),
-        ("gencode", "🎟 Generate Codes"),
-        ("forcech", "📣 Force Channel"),
-        ("forcechdebug", "🧪 Force Debug"),
-        ("broadcast", "📢 Broadcast"),
-        ("stats", "📊 Stats"),
-        ("premiumdb", "📥 Premium DB"),
-        ("setcaption", "📝 Set Caption"),
-        ("removecaption", "🗑 Remove Caption"),
-        ("settime", "⏱ Set AutoDelete"),
-        ("setstartimg", "🖼 Start Image"),
-        ("setpay", "💳 Payment"),
-        ("getemojiid", "🆔 Emoji IDs"),
-        ("setuitemoji", "😀 UI Emoji"),
-        ("setemojipreset", "✨ Emoji Preset"),
+        ("addadmin", "ðŸ‘® Add Admin"),
+        ("removeadmin", "ðŸš« Remove Admin"),
+        ("addpremium", "â­ Add Premium"),
+        ("removepremium", "âŒ Remove Premium"),
+        ("gencode", "ðŸŽŸ Generate Codes"),
+        ("forcech", "ðŸ“£ Force Channel"),
+        ("forcechdebug", "ðŸ§ª Force Debug"),
+        ("broadcast", "ðŸ“¢ Broadcast"),
+        ("stats", "ðŸ“Š Stats"),
+        ("premiumdb", "ðŸ“¥ Premium DB"),
+        ("setcaption", "ðŸ“ Set Caption"),
+        ("removecaption", "ðŸ—‘ Remove Caption"),
+        ("settime", "â± Set AutoDelete"),
+        ("setstartimg", "ðŸ–¼ Start Image"),
+        ("setpay", "ðŸ’³ Payment"),
+        ("getemojiid", "ðŸ†” Emoji IDs"),
+        ("setuitemoji", "ðŸ˜€ UI Emoji"),
+        ("setemojipreset", "âœ¨ Emoji Preset"),
     ]
     rows: list[list[InlineKeyboardButton]] = []
     for i in range(0, len(button_items), 2):
@@ -332,29 +332,29 @@ def _bset_forcech_panel_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [
             [
-                InlineKeyboardButton("➕ Add", callback_data="bset:forcech_add"),
-                InlineKeyboardButton("📋 List", callback_data="bset:forcech_list"),
+                InlineKeyboardButton("âž• Add", callback_data="bset:forcech_add"),
+                InlineKeyboardButton("ðŸ“‹ List", callback_data="bset:forcech_list"),
             ],
             [
-                InlineKeyboardButton("➖ Remove", callback_data="bset:forcech_remove"),
-                InlineKeyboardButton("🗑 Reset", callback_data="bset:forcech_reset"),
+                InlineKeyboardButton("âž– Remove", callback_data="bset:forcech_remove"),
+                InlineKeyboardButton("ðŸ—‘ Reset", callback_data="bset:forcech_reset"),
             ],
-            [InlineKeyboardButton("⬅️ Back", callback_data="bset:back")],
+            [InlineKeyboardButton("â¬…ï¸ Back", callback_data="bset:back")],
         ]
     )
 
 
 def _bset_forcech_panel_text() -> str:
     return (
-        "📣 [b]Force Channel Manager[/b]\n\n"
+        "ðŸ“£ [b]Force Channel Manager[/b]\n\n"
         "[u]Instructions[/u]\n"
         "1) [b]Add[/b] pe click karo\n"
         "2) Channel ID/username bhejo ([c]-100xxxx[/c] ya [c]@channel[/c])\n"
         "3) Mode select karo: [b]Direct[/b] ya [b]Request[/b]\n\n"
         "[u]Quick Actions[/u]\n"
-        "• [b]List[/b]: saved required channels dekho\n"
-        "• [b]Remove[/b]: specific channel hatao\n"
-        "• [b]Reset[/b]: sab force channels clear karo"
+        "â€¢ [b]List[/b]: saved required channels dekho\n"
+        "â€¢ [b]Remove[/b]: specific channel hatao\n"
+        "â€¢ [b]Reset[/b]: sab force channels clear karo"
     )
 
 
@@ -362,16 +362,16 @@ def _bset_setpay_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [
             [
-                InlineKeyboardButton("👁 View", callback_data="bset:setpay_view"),
-                InlineKeyboardButton("🆔 Set UPI", callback_data="bset:setpay_upi"),
+                InlineKeyboardButton("ðŸ‘ View", callback_data="bset:setpay_view"),
+                InlineKeyboardButton("ðŸ†” Set UPI", callback_data="bset:setpay_upi"),
             ],
             [
-                InlineKeyboardButton("👤 Set Name", callback_data="bset:setpay_name"),
-                InlineKeyboardButton("🧾 Set Text", callback_data="bset:setpay_text"),
+                InlineKeyboardButton("ðŸ‘¤ Set Name", callback_data="bset:setpay_name"),
+                InlineKeyboardButton("ðŸ§¾ Set Text", callback_data="bset:setpay_text"),
             ],
             [
-                InlineKeyboardButton("🗑 Clear UPI", callback_data="bset:setpay_clearupi"),
-                InlineKeyboardButton("⬅️ Back", callback_data="bset:back"),
+                InlineKeyboardButton("ðŸ—‘ Clear UPI", callback_data="bset:setpay_clearupi"),
+                InlineKeyboardButton("â¬…ï¸ Back", callback_data="bset:back"),
             ],
         ]
     )
@@ -395,19 +395,19 @@ def _clear_bsettings_wait_states(context: ContextTypes.DEFAULT_TYPE) -> None:
 
 def _welcome_text() -> str:
     return (
-        "🔐 [b]Secure Access System[/b]\n\n"
-        "[b]❝ Access is protected. Delivery is verified. ❞[/b]\n\n"
-        "📌 [u]How It Works[/u]\n"
-        "› Open your unique deep link\n"
-        "› Complete channel verification\n"
-        "› Unlock instantly\n\n"
-        "⭐ [b]Upgrade to Premium[/b]\n"
-        "› No Ads\n"
-        "› Instant Delivery\n"
-        "› VIP Links\n\n"
-        "🎟 [c]/redeem <token>[/c]\n"
-        "💎 [c]/plan[/c] | 🛒 [c]/pay[/c]\n\n"
-        "🚫 Forwarded links will not work."
+        "ðŸ” [b]Secure Access System[/b]\n\n"
+        "[b]â Access is protected. Delivery is verified. âž[/b]\n\n"
+        "ðŸ“Œ [u]How It Works[/u]\n"
+        "â€º Open your unique deep link\n"
+        "â€º Complete channel verification\n"
+        "â€º Unlock instantly\n\n"
+        "â­ [b]Upgrade to Premium[/b]\n"
+        "â€º No Ads\n"
+        "â€º Instant Delivery\n"
+        "â€º VIP Links\n\n"
+        "ðŸŽŸ [c]/redeem <token>[/c]\n"
+        "ðŸ’Ž [c]/plan[/c] | ðŸ›’ [c]/pay[/c]\n\n"
+        "ðŸš« Forwarded links will not work."
     )
 
 
@@ -461,7 +461,7 @@ async def _build_custom_emoji_entities(text: str, context: ContextTypes.DEFAULT_
         ch = text[i]
         token = ch
         step = 1
-        # Handle variation-selector style emoji sequences like "ℹ️", "⚠️", "🗑️".
+        # Handle variation-selector style emoji sequences like "â„¹ï¸", "âš ï¸", "ðŸ—‘ï¸".
         if i + 1 < len(text) and text[i + 1] == vs16:
             token = ch + text[i + 1]
             step = 2
@@ -901,20 +901,20 @@ def _join_keyboard(channels: list[dict[str, Any]], recheck_code: str) -> InlineK
             url = f"https://t.me/{ch['username']}"
         if url:
             if mode == "request":
-                rows.append([InlineKeyboardButton(text=f"🛂 Send Join Request: {title}", url=url)])
+                rows.append([InlineKeyboardButton(text=f"ðŸ›‚ Send Join Request: {title}", url=url)])
             else:
-                rows.append([InlineKeyboardButton(text=f"📢 Join Channel: {title}", url=url)])
+                rows.append([InlineKeyboardButton(text=f"ðŸ“¢ Join Channel: {title}", url=url)])
         else:
-            rows.append([InlineKeyboardButton(text=f"🔒 Required: {title}", callback_data="noop")])
-    rows.append([InlineKeyboardButton(text="✅ I've Joined (Recheck)", callback_data=f"recheck:{recheck_code}")])
+            rows.append([InlineKeyboardButton(text=f"ðŸ”’ Required: {title}", callback_data="noop")])
+    rows.append([InlineKeyboardButton(text="âœ… I've Joined (Recheck)", callback_data=f"recheck:{recheck_code}")])
     return InlineKeyboardMarkup(rows)
 
 
 def _access_link_keyboard(normal_url: str, premium_url: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [
-            [InlineKeyboardButton(text="🔓 Open Normal Link", url=normal_url)],
-            [InlineKeyboardButton(text="⭐ Open Premium Link", url=premium_url)],
+            [InlineKeyboardButton(text="ðŸ”“ Open Normal Link", url=normal_url)],
+            [InlineKeyboardButton(text="â­ Open Premium Link", url=premium_url)],
         ]
     )
 
@@ -1116,16 +1116,16 @@ async def _deliver_by_code(update: Update, context: ContextTypes.DEFAULT_TYPE, c
 
     link = await db.get_link(code)
     if not link:
-        await _send_emoji_text(chat.id, "❌ Invalid or expired link.", context)
+        await _send_emoji_text(chat.id, "âŒ Invalid or expired link.", context)
         return
 
     ok_join, channels = await _joined_all_force_channels(user.id, context)
     if not ok_join:
         await _send_emoji_text(
             chat.id,
-            "🚫 Access Locked\n\n"
+            "ðŸš« Access Locked\n\n"
             "You must join all required channels to continue.\n"
-            "After joining, tap Recheck ✅.",
+            "After joining, tap Recheck âœ….",
             context,
             reply_markup=_join_keyboard(channels, code),
         )
@@ -1134,10 +1134,10 @@ async def _deliver_by_code(update: Update, context: ContextTypes.DEFAULT_TYPE, c
     if link["access"] == "premium" and not await db.is_premium_active(user.id):
         await _send_emoji_text(
             chat.id,
-            "⭐ [b]Premium Required[/b]\n\n"
+            "â­ [b]Premium Required[/b]\n\n"
             "This link is for premium users only.\n"
-            "• Redeem token: [c]/redeem <token>[/c]\n"
-            "• Plan buy karo: [c]/pay[/c]",
+            "â€¢ Redeem token: [c]/redeem <token>[/c]\n"
+            "â€¢ Plan buy karo: [c]/pay[/c]",
             context,
         )
         return
@@ -1147,7 +1147,7 @@ async def _deliver_by_code(update: Update, context: ContextTypes.DEFAULT_TYPE, c
     if link["target_type"] == "file":
         file_row = await db.get_file(link["target_id"])
         if not file_row:
-            await chat.send_message("❌ File not found (may have been removed).")
+            await chat.send_message("âŒ File not found (may have been removed).")
             return
         await _send_file(chat.id, file_row, caption, context)
         await db.mark_link_used(code)
@@ -1156,10 +1156,10 @@ async def _deliver_by_code(update: Update, context: ContextTypes.DEFAULT_TYPE, c
     if link["target_type"] == "batch":
         file_ids = await db.get_batch_file_ids(link["target_id"])
         if not file_ids:
-            await chat.send_message("❌ Batch is empty.")
+            await chat.send_message("âŒ Batch is empty.")
             return
         if len(file_ids) > 100:
-            await chat.send_message("⚠️ Batch too large to deliver.")
+            await chat.send_message("âš ï¸ Batch too large to deliver.")
             return
         for fid in file_ids:
             file_row = await db.get_file(fid)
@@ -1171,7 +1171,7 @@ async def _deliver_by_code(update: Update, context: ContextTypes.DEFAULT_TYPE, c
     if link["target_type"] == "msg":
         msg_row = await db.get_message(link["target_id"])
         if not msg_row:
-            await chat.send_message("❌ Message not found (may have been removed).")
+            await chat.send_message("âŒ Message not found (may have been removed).")
             return
         try:
             m = await context.bot.copy_message(
@@ -1181,7 +1181,7 @@ async def _deliver_by_code(update: Update, context: ContextTypes.DEFAULT_TYPE, c
             )
             await _maybe_schedule_autodelete(m.chat_id, m.message_id, context)
         except Exception:
-            await chat.send_message("❌ Unable to deliver this message (deleted or inaccessible).")
+            await chat.send_message("âŒ Unable to deliver this message (deleted or inaccessible).")
             return
         await db.mark_link_used(code)
         return
@@ -1189,16 +1189,16 @@ async def _deliver_by_code(update: Update, context: ContextTypes.DEFAULT_TYPE, c
     if link["target_type"] == "chbatch":
         chb = await db.get_channel_batch(link["target_id"])
         if not chb:
-            await chat.send_message("❌ Batch not found.")
+            await chat.send_message("âŒ Batch not found.")
             return
         if not await _bot_is_admin(chb["channel_id"], context):
-            await chat.send_message("🚫 Bot is not admin in the source channel.\n\nPehle bot ko admin banao, phir try karo.")
+            await chat.send_message("ðŸš« Bot is not admin in the source channel.\n\nPehle bot ko admin banao, phir try karo.")
             return
         start_id = int(chb["start_msg_id"])
         end_id = int(chb["end_msg_id"])
         total = end_id - start_id + 1
         if total <= 0 or total > MAX_CHANNEL_BATCH_POSTS:
-            await chat.send_message("⚠️ Batch range invalid or too large.")
+            await chat.send_message("âš ï¸ Batch range invalid or too large.")
             return
         for mid in range(start_id, end_id + 1):
             try:
@@ -1217,7 +1217,7 @@ async def _deliver_by_code(update: Update, context: ContextTypes.DEFAULT_TYPE, c
         await db.mark_link_used(code)
         return
 
-    await chat.send_message("❌ Unsupported link type.")
+    await chat.send_message("âŒ Unsupported link type.")
 
 
 def _extract_media_file(update: Update) -> Optional[dict[str, str]]:
@@ -1273,10 +1273,12 @@ async def admin_media_ingest(update: Update, context: ContextTypes.DEFAULT_TYPE)
     )
 
     # If custombatch mode is active, only collect files and show a confirmation prompt.
-    cb_state = context.user_data.get("custombatch_state")
-    if cb_state is not None:
+    sid = context.user_data.get("custombatch_session_id")
+    sessions = context.application.bot_data.setdefault("custombatch_sessions", {})
+    cb_state = sessions.get(sid) if sid else None
+    if cb_state is not None and int(cb_state.get("owner_user_id") or 0) == int(update.effective_user.id):
         cb_state.setdefault("source_message_ids", []).append(update.effective_message.message_id)
-        cb_state["source_chat_id"] = update.effective_chat.id
+        cb_state["chat_id"] = update.effective_chat.id
         cb_state.setdefault("file_ids", []).append(file_db_id)
         prev_prompt = cb_state.get("prompt_message_id")
         if prev_prompt:
@@ -1287,9 +1289,9 @@ async def admin_media_ingest(update: Update, context: ContextTypes.DEFAULT_TYPE)
         count = len(cb_state.get("file_ids") or [])
         msg = await _send_emoji_text(
             update.effective_chat.id,
-            f"✅ {count} file save ho gayi.\n\nLink generate karu ya process cancel karu?",
+            f"âœ… {count} file save ho gayi.\n\nLink generate karu ya process cancel karu?",
             context,
-            reply_markup=_custombatch_prompt_keyboard(),
+            reply_markup=_custombatch_prompt_keyboard(str(sid)),
         )
         cb_state["prompt_message_id"] = msg.message_id
         return
@@ -1302,11 +1304,11 @@ async def admin_media_ingest(update: Update, context: ContextTypes.DEFAULT_TYPE)
     premium_url = _deep_link(context, prem_code)
 
     await update.effective_chat.send_message(
-        "✅ File Saved Successfully\n\n"
-        f"🆔 File ID: {file_db_id}\n\n"
-        "🔓 Normal Link:\n"
+        "âœ… File Saved Successfully\n\n"
+        f"ðŸ†” File ID: {file_db_id}\n\n"
+        "ðŸ”“ Normal Link:\n"
         f"{normal_url}\n\n"
-        "⭐ Premium Link:\n"
+        "â­ Premium Link:\n"
         f"{premium_url}",
         reply_markup=_access_link_keyboard(normal_url, premium_url),
     )
@@ -1315,7 +1317,7 @@ async def admin_media_ingest(update: Update, context: ContextTypes.DEFAULT_TYPE)
 async def getlink(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     if not await _is_admin_or_owner(update, context):
-        await _send_emoji_text(update.effective_chat.id, "🚫 Access denied. (Admin/Owner only)", context)
+        await _send_emoji_text(update.effective_chat.id, "ðŸš« Access denied. (Admin/Owner only)", context)
         return
 
     db: Database = context.application.bot_data["db"]
@@ -1351,7 +1353,7 @@ async def getlink(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if target_file_id is None and target_msg_id is None:
         await _send_emoji_text(
             update.effective_chat.id,
-            "ℹ️ How to use /getlink\n\n"
+            "â„¹ï¸ How to use /getlink\n\n"
             "1) Reply to any message/file and send /getlink\n"
             "2) Or use: /getlink <file_id>",
             context,
@@ -1362,7 +1364,7 @@ async def getlink(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     prem_code = new_code()
     if target_file_id is not None:
         if not await db.get_file(target_file_id):
-            await update.effective_chat.send_message("❌ File not found.")
+            await update.effective_chat.send_message("âŒ File not found.")
             return
         await db.create_link(normal_code, "file", target_file_id, "normal", update.effective_user.id)
         await db.create_link(prem_code, "file", target_file_id, "premium", update.effective_user.id)
@@ -1374,10 +1376,10 @@ async def getlink(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     await _send_emoji_text(
         update.effective_chat.id,
-        "✅ Links Generated\n\n"
-        "🔓 Normal Link:\n"
+        "âœ… Links Generated\n\n"
+        "ðŸ”“ Normal Link:\n"
         f"{normal_url}\n\n"
-        "⭐ Premium Link:\n"
+        "â­ Premium Link:\n"
         f"{premium_url}",
         context,
         reply_markup=_access_link_keyboard(normal_url, premium_url),
@@ -1399,19 +1401,19 @@ async def batch(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 await context.bot.delete_message(chat_id=update.effective_chat.id, message_id=int(st["prompt_message_id"]))
             except Exception:
                 pass
-        await update.effective_chat.send_message("❌ Batch creation cancelled.")
+        await update.effective_chat.send_message("âŒ Batch creation cancelled.")
         return
 
     # Channel-range batch (start/end post links).
     msg = await update.effective_chat.send_message(
-        "📦 Channel Batch Mode Started\n\n"
-        "Step 1️⃣\n"
+        "ðŸ“¦ Channel Batch Mode Started\n\n"
+        "Step 1ï¸âƒ£\n"
         "Send the STARTING channel post link.\n\n"
         "Examples:\n"
         "https://t.me/channelusername/123\n"
         "or\n"
         "https://t.me/c/123456789/123\n\n"
-        "❌ Cancel: /batch cancel"
+        "âŒ Cancel: /batch cancel"
     )
     context.user_data["chbatch_state"] = {"step": "start", "prompt_message_id": msg.message_id}
 
@@ -1458,8 +1460,8 @@ async def batch_link_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         await _batch_ui_edit(
             update,
             context,
-            "✅ Starting post received.\n\n"
-            "Step 2️⃣\n"
+            "âœ… Starting post received.\n\n"
+            "Step 2ï¸âƒ£\n"
             "Now send the ENDING channel post link.",
         )
         return
@@ -1489,7 +1491,7 @@ async def batch_link_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         await update.effective_chat.send_message("Bot is not admin in that channel. Pehle bot ko admin banao, phir /batch run karo.")
         return
 
-    await _batch_ui_edit(update, context, "🔄 Creating batch...\nPlease wait...")
+    await _batch_ui_edit(update, context, "ðŸ”„ Creating batch...\nPlease wait...")
 
     db: Database = context.application.bot_data["db"]
     chbatch_id = await db.create_channel_batch(update.effective_user.id, int(chat_id), start_id, end_id)
@@ -1503,15 +1505,15 @@ async def batch_link_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     await _batch_ui_edit(
         update,
         context,
-        "✅ Channel Batch Created Successfully!\n\n"
-        f"📦 Total Posts: {total}\n\n"
-        "🔓 Normal Access Link:\n"
+        "âœ… Channel Batch Created Successfully!\n\n"
+        f"ðŸ“¦ Total Posts: {total}\n\n"
+        "ðŸ”“ Normal Access Link:\n"
         f"{_deep_link(context, normal_code)}\n\n"
-        "⭐ Premium Access Link:\n"
+        "â­ Premium Access Link:\n"
         f"{_deep_link(context, prem_code)}\n\n"
-        "ℹ️ Rules:\n"
-        "• Required channels join karna mandatory hai\n"
-        "• Premium link sirf premium users ke liye kaam karega",
+        "â„¹ï¸ Rules:\n"
+        "â€¢ Required channels join karna mandatory hai\n"
+        "â€¢ Premium link sirf premium users ke liye kaam karega",
     )
 
 
@@ -1539,23 +1541,23 @@ async def _batch_ui_error(update: Update, context: ContextTypes.DEFAULT_TYPE, er
         await _batch_ui_edit(
             update,
             context,
-            "📦 Channel Batch Mode Started\n\n"
-            f"⚠️ Error: {err}\n\n"
-            "Step 1️⃣\n"
+            "ðŸ“¦ Channel Batch Mode Started\n\n"
+            f"âš ï¸ Error: {err}\n\n"
+            "Step 1ï¸âƒ£\n"
             "Send the STARTING channel post link.\n\n"
             "Examples:\n"
             "https://t.me/channelusername/123\n"
             "or\n"
             "https://t.me/c/123456789/123\n\n"
-            "❌ Cancel: /batch cancel",
+            "âŒ Cancel: /batch cancel",
         )
         return
     await _batch_ui_edit(
         update,
         context,
-        "✅ Starting post received.\n\n"
-        f"⚠️ Error: {err}\n\n"
-        "Step 2️⃣\n"
+        "âœ… Starting post received.\n\n"
+        f"âš ï¸ Error: {err}\n\n"
+        "Step 2ï¸âƒ£\n"
         "Now send the ENDING channel post link.",
     )
 
@@ -1568,26 +1570,38 @@ async def batch_ingest(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 async def custombatch(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     if not await _is_admin_or_owner(update, context):
-        await _send_emoji_text(update.effective_chat.id, "🚫 Access denied. (Admin/Owner only)", context)
+        await _send_emoji_text(update.effective_chat.id, "ðŸš« Access denied. (Admin/Owner only)", context)
         return
-    # Start a temporary "collect files" flow.
-    context.user_data["custombatch_state"] = {"file_ids": [], "prompt_message_id": None}
+    # Start a temporary "collect files" flow (session-based to avoid state loss on heavy ingest).
+    sid = new_code()[:10]
+    sessions = context.application.bot_data.setdefault("custombatch_sessions", {})
+    sessions[sid] = {
+        "owner_user_id": int(update.effective_user.id),
+        "chat_id": int(update.effective_chat.id),
+        "file_ids": [],
+        "source_message_ids": [],
+        "prompt_message_id": None,
+        "started_at": _now(),
+    }
+    context.user_data["custombatch_session_id"] = sid
+    # Backward compatibility for any old code path still checking this key.
+    context.user_data["custombatch_state"] = {"session_id": sid}
     await _send_emoji_text(
         update.effective_chat.id,
-        "🧩 Custom Batch Mode Started\n\n"
-        "📤 Files / media bhejo.\n"
+        "ðŸ§© Custom Batch Mode Started\n\n"
+        "ðŸ“¤ Files / media bhejo.\n"
         "Main unko custom batch me add karta rahunga.\n\n"
-        "❌ Cancel anytime: press Cancel Process button.",
+        "âŒ Cancel anytime: press Cancel Process button.",
         context,
     )
 
 
-def _custombatch_prompt_keyboard() -> InlineKeyboardMarkup:
+def _custombatch_prompt_keyboard(session_id: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [
             [
-                InlineKeyboardButton(text="Generate Link", callback_data="cbgen"),
-                InlineKeyboardButton(text="Cancel Process", callback_data="cbcancel"),
+                InlineKeyboardButton(text="Generate Link", callback_data=f"cbgen:{session_id}"),
+                InlineKeyboardButton(text="Cancel Process", callback_data=f"cbcancel:{session_id}"),
             ]
         ]
     )
@@ -1599,22 +1613,31 @@ async def custombatch_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         return
     await q.answer()
     if not await _is_admin_or_owner(update, context):
-        await q.edit_message_text("🚫 Access denied. (Admin/Owner only)")
+        await q.edit_message_text("Access denied. (Admin/Owner only)")
         return
 
     data = q.data or ""
-    state = context.user_data.get("custombatch_state")
+    action, _, sid_from_cb = data.partition(":")
+    sid = (sid_from_cb or context.user_data.get("custombatch_session_id") or "").strip()
+
+    sessions = context.application.bot_data.setdefault("custombatch_sessions", {})
+    state = sessions.get(sid) if sid else None
+    if (not state) and isinstance(context.user_data.get("custombatch_state"), dict):
+        legacy = context.user_data.get("custombatch_state") or {}
+        if legacy.get("file_ids"):
+            state = legacy
+
     if not state:
         try:
-            await q.edit_message_text("ℹ️ No active custom batch.\n\nStart it with: /custombatch")
+            await q.edit_message_text("No active custom batch.\n\nStart it with: /custombatch")
         except Exception:
             pass
         return
 
-    if data == "cbcancel":
-        # Clear temp state and delete uploaded media messages (clean UI).
-        st = context.user_data.pop("custombatch_state", None) or {}
-        src_chat_id = st.get("source_chat_id")
+    if action == "cbcancel":
+        st = sessions.pop(sid, None) or context.user_data.pop("custombatch_state", None) or {}
+        context.user_data.pop("custombatch_session_id", None)
+        src_chat_id = st.get("chat_id") or st.get("source_chat_id")
         for mid in st.get("source_message_ids") or []:
             if src_chat_id:
                 try:
@@ -1625,16 +1648,17 @@ async def custombatch_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             await q.delete_message()
         except Exception:
             try:
-                await q.edit_message_text("❌ Custom batch cancelled.")
+                await q.edit_message_text("Custom batch cancelled.")
             except Exception:
                 pass
         return
 
-    if data == "cbgen":
+    if action == "cbgen":
         file_ids = state.get("file_ids") or []
         if not file_ids:
-            await q.edit_message_text("⚠️ No files received yet.\n\nSend files first, or cancel.")
+            await q.edit_message_text("No files received yet.\n\nSend files first, or cancel.")
             return
+
         db: Database = context.application.bot_data["db"]
         batch_id = await db.create_batch(update.effective_user.id, list(file_ids))
 
@@ -1643,83 +1667,83 @@ async def custombatch_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         await db.create_link(normal_code, "batch", batch_id, "normal", update.effective_user.id)
         await db.create_link(prem_code, "batch", batch_id, "premium", update.effective_user.id)
 
-        # Clear temp state and delete uploaded media messages (clean UI).
-        st = context.user_data.pop("custombatch_state", None) or {}
-        src_chat_id = st.get("source_chat_id")
+        st = sessions.pop(sid, None) or context.user_data.pop("custombatch_state", None) or {}
+        context.user_data.pop("custombatch_session_id", None)
+        src_chat_id = st.get("chat_id") or st.get("source_chat_id")
         for mid in st.get("source_message_ids") or []:
             if src_chat_id:
                 try:
                     await context.bot.delete_message(chat_id=int(src_chat_id), message_id=int(mid))
                 except Exception:
                     pass
+
         await _edit_emoji_text(
             update.effective_chat.id,
             q.message.message_id,
-            "✅ Custom Batch Created Successfully!\n\n"
-            f"📦 Total Files: {len(file_ids)}\n\n"
-            "🔓 Normal Access Link:\n"
+            "Custom Batch Created Successfully.\n\n"
+            f"Total Files: {len(file_ids)}\n\n"
+            "Normal Access Link:\n"
             f"{_deep_link(context, normal_code)}\n\n"
-            "⭐ Premium Access Link:\n"
+            "Premium Access Link:\n"
             f"{_deep_link(context, prem_code)}\n\n"
-            "ℹ️ Rules:\n"
+            "Rules:\n"
             "• Required channels join karna mandatory hai\n"
             "• Premium link sirf premium users ke liye kaam karega",
             context,
         )
         return
 
-
 async def addadmin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     cfg = context.application.bot_data["cfg"]
     if not _is_owner(update, cfg):
-        await _send_emoji_text(update.effective_chat.id, "🚫 Owner only.", context)
+        await _send_emoji_text(update.effective_chat.id, "ðŸš« Owner only.", context)
         return
     if not context.args:
-        await _send_emoji_text(update.effective_chat.id, "ℹ️ Usage: /addadmin <user_id>", context)
+        await _send_emoji_text(update.effective_chat.id, "â„¹ï¸ Usage: /addadmin <user_id>", context)
         return
     try:
         uid = int(context.args[0])
     except ValueError:
-        await _send_emoji_text(update.effective_chat.id, "❌ Invalid user_id.", context)
+        await _send_emoji_text(update.effective_chat.id, "âŒ Invalid user_id.", context)
         return
     db: Database = context.application.bot_data["db"]
     await db.add_admin(uid, update.effective_user.id)
-    await _send_emoji_text(update.effective_chat.id, f"✅ Admin added: {uid}", context)
+    await _send_emoji_text(update.effective_chat.id, f"âœ… Admin added: {uid}", context)
 
 
 async def removeadmin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     cfg = context.application.bot_data["cfg"]
     if not _is_owner(update, cfg):
-        await _send_emoji_text(update.effective_chat.id, "🚫 Owner only.", context)
+        await _send_emoji_text(update.effective_chat.id, "ðŸš« Owner only.", context)
         return
     if not context.args:
-        await _send_emoji_text(update.effective_chat.id, "ℹ️ Usage: /removeadmin <user_id>", context)
+        await _send_emoji_text(update.effective_chat.id, "â„¹ï¸ Usage: /removeadmin <user_id>", context)
         return
     try:
         uid = int(context.args[0])
     except ValueError:
-        await _send_emoji_text(update.effective_chat.id, "❌ Invalid user_id.", context)
+        await _send_emoji_text(update.effective_chat.id, "âŒ Invalid user_id.", context)
         return
     db: Database = context.application.bot_data["db"]
     await db.remove_admin(uid)
-    await _send_emoji_text(update.effective_chat.id, f"✅ Admin removed: {uid}", context)
+    await _send_emoji_text(update.effective_chat.id, f"âœ… Admin removed: {uid}", context)
 
 
 async def addpremium(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     if not await _is_admin_or_owner(update, context):
-        await _send_emoji_text(update.effective_chat.id, "🚫 Access denied. (Admin/Owner only)", context)
+        await _send_emoji_text(update.effective_chat.id, "ðŸš« Access denied. (Admin/Owner only)", context)
         return
     if not context.args:
-        await _send_emoji_text(update.effective_chat.id, "ℹ️ Usage: /addpremium <user_id> [days]", context)
+        await _send_emoji_text(update.effective_chat.id, "â„¹ï¸ Usage: /addpremium <user_id> [days]", context)
         return
     try:
         uid = int(context.args[0])
         days = int(context.args[1]) if len(context.args) > 1 else 1
     except ValueError:
-        await _send_emoji_text(update.effective_chat.id, "❌ Invalid args.", context)
+        await _send_emoji_text(update.effective_chat.id, "âŒ Invalid args.", context)
         return
     db: Database = context.application.bot_data["db"]
     grant_days = max(1, days)
@@ -1730,10 +1754,10 @@ async def addpremium(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     try:
         await _send_html_text(
             uid,
-            "✅ <b>Premium Activated</b>\n"
+            "âœ… <b>Premium Activated</b>\n"
             "<i>Your premium access has been enabled.</i>\n\n"
-            f"⏳ <b>Duration:</b> {grant_days} day(s)\n"
-            f"🕒 <b>Expires:</b> <code>{html.escape(expiry_utc)}</code>",
+            f"â³ <b>Duration:</b> {grant_days} day(s)\n"
+            f"ðŸ•’ <b>Expires:</b> <code>{html.escape(expiry_utc)}</code>",
             context,
         )
         user_notified = True
@@ -1742,11 +1766,11 @@ async def addpremium(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 
     await _send_emoji_text(
         update.effective_chat.id,
-        "✅ Premium Granted\n\n"
-        f"👤 User: {uid}\n"
-        f"⏳ Days: {grant_days}\n"
-        f"🕒 premium_until (unix): {until}\n"
-        f"📣 User notified: {'Yes' if user_notified else 'No (user must /start bot)'}",
+        "âœ… Premium Granted\n\n"
+        f"ðŸ‘¤ User: {uid}\n"
+        f"â³ Days: {grant_days}\n"
+        f"ðŸ•’ premium_until (unix): {until}\n"
+        f"ðŸ“£ User notified: {'Yes' if user_notified else 'No (user must /start bot)'}",
         context,
     )
 
@@ -1754,25 +1778,25 @@ async def addpremium(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 async def removepremium(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     if not await _is_admin_or_owner(update, context):
-        await _send_emoji_text(update.effective_chat.id, "🚫 Access denied. (Admin/Owner only)", context)
+        await _send_emoji_text(update.effective_chat.id, "ðŸš« Access denied. (Admin/Owner only)", context)
         return
     if not context.args:
-        await _send_emoji_text(update.effective_chat.id, "ℹ️ Usage: /removepremium <user_id>", context)
+        await _send_emoji_text(update.effective_chat.id, "â„¹ï¸ Usage: /removepremium <user_id>", context)
         return
     try:
         uid = int(context.args[0])
     except ValueError:
-        await _send_emoji_text(update.effective_chat.id, "❌ Invalid user_id.", context)
+        await _send_emoji_text(update.effective_chat.id, "âŒ Invalid user_id.", context)
         return
     db: Database = context.application.bot_data["db"]
     await db.set_premium_until(uid, 0)
-    await _send_emoji_text(update.effective_chat.id, f"✅ Premium removed for {uid}.", context)
+    await _send_emoji_text(update.effective_chat.id, f"âœ… Premium removed for {uid}.", context)
 
 
 async def gencode(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     if not await _is_admin_or_owner(update, context):
-        await _send_emoji_text(update.effective_chat.id, "🚫 Access denied. (Admin/Owner only)", context)
+        await _send_emoji_text(update.effective_chat.id, "ðŸš« Access denied. (Admin/Owner only)", context)
         return
     db: Database = context.application.bot_data["db"]
     count = 1
@@ -1805,10 +1829,10 @@ async def _generate_tokens_and_send(
     if count == 1:
         await _send_emoji_text(
             chat_id,
-            "🎟️ Token Generated\n\n"
+            "ðŸŽŸï¸ Token Generated\n\n"
             f"{tokens[0]}\n\n"
-            "⭐ Grants: 1 day premium\n"
-            "🔒 One-time use only",
+            "â­ Grants: 1 day premium\n"
+            "ðŸ”’ One-time use only",
             context,
         )
         return
@@ -1816,12 +1840,12 @@ async def _generate_tokens_and_send(
     token_lines = "\n".join(tokens)
     await _send_emoji_text(
         chat_id,
-        "🎟️ Tokens Generated\n\n"
-        f"🧾 Total: {count}\n\n"
+        "ðŸŽŸï¸ Tokens Generated\n\n"
+        f"ðŸ§¾ Total: {count}\n\n"
         f"{token_lines}\n\n"
-        "⭐ Each grants: 1 day premium\n"
-        "🔒 Each is one-time use only\n\n"
-        "ℹ️ Users redeem: /redeem <token>",
+        "â­ Each grants: 1 day premium\n"
+        "ðŸ”’ Each is one-time use only\n\n"
+        "â„¹ï¸ Users redeem: /redeem <token>",
         context,
     )
 
@@ -1831,19 +1855,19 @@ async def redeem(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.effective_chat or not update.effective_user:
         return
     if not context.args:
-        await _send_emoji_text(update.effective_chat.id, "ℹ️ Usage: /redeem <token>", context)
+        await _send_emoji_text(update.effective_chat.id, "â„¹ï¸ Usage: /redeem <token>", context)
         return
     token = context.args[0].strip()
     db: Database = context.application.bot_data["db"]
     grant = await db.redeem_token(token, update.effective_user.id)
     if not grant:
-        await _send_emoji_text(update.effective_chat.id, "❌ Invalid or already-used token.", context)
+        await _send_emoji_text(update.effective_chat.id, "âŒ Invalid or already-used token.", context)
         return
     until = await db.add_premium_seconds(update.effective_user.id, grant)
     await _send_emoji_text(
         update.effective_chat.id,
-        "✅ Token Redeemed Successfully\n\n"
-        f"⭐ Premium active until (unix): {until}",
+        "âœ… Token Redeemed Successfully\n\n"
+        f"â­ Premium active until (unix): {until}",
         context,
     )
 
@@ -1859,27 +1883,27 @@ async def plan(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     active = premium_until >= now
     if active:
         dt = datetime.datetime.utcfromtimestamp(premium_until).strftime("%Y-%m-%d %H:%M:%S UTC")
-        status = f"✅ [b]Active[/b]\n⏳ Expires: [c]{dt}[/c]"
+        status = f"âœ… [b]Active[/b]\nâ³ Expires: [c]{dt}[/c]"
     else:
-        status = "❌ [b]Not Active[/b]"
+        status = "âŒ [b]Not Active[/b]"
 
     await _send_emoji_text(
         update.effective_chat.id,
-        "💎 [b]Premium Plans[/b]\n\n"
-        "• [b]1 Day[/b]: ₹9\n"
-        "• [b]7 Days[/b]: ₹29\n"
-        "• [b]1 Month[/b]: ₹99\n\n"
-        "🔓 [b]Normal User Benefit[/b]\n"
-        "• Final link access ke liye ads dekhne honge\n\n"
-        "⭐ [b]Premium User Benefit[/b]\n"
-        "• Direct access milta hai (no ads)\n\n"
-        "🛒 [b]Buy Premium[/b]: [c]/pay[/c]",
+        "ðŸ’Ž [b]Premium Plans[/b]\n\n"
+        "â€¢ [b]1 Day[/b]: â‚¹9\n"
+        "â€¢ [b]7 Days[/b]: â‚¹29\n"
+        "â€¢ [b]1 Month[/b]: â‚¹99\n\n"
+        "ðŸ”“ [b]Normal User Benefit[/b]\n"
+        "â€¢ Final link access ke liye ads dekhne honge\n\n"
+        "â­ [b]Premium User Benefit[/b]\n"
+        "â€¢ Direct access milta hai (no ads)\n\n"
+        "ðŸ›’ [b]Buy Premium[/b]: [c]/pay[/c]",
         context,
     )
 
     await _send_emoji_text(
         update.effective_chat.id,
-        f"👤 [b]Your Premium Status[/b]\n\n{status}",
+        f"ðŸ‘¤ [b]Your Premium Status[/b]\n\n{status}",
         context,
     )
 
@@ -1887,9 +1911,9 @@ async def plan(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 def _pay_plan_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [
-            [InlineKeyboardButton("💎 1 Day - ₹9", callback_data="payplan:1d")],
-            [InlineKeyboardButton("💎 7 Days - ₹29", callback_data="payplan:7d")],
-            [InlineKeyboardButton("💎 1 Month - ₹99", callback_data="payplan:30d")],
+            [InlineKeyboardButton("ðŸ’Ž 1 Day - â‚¹9", callback_data="payplan:1d")],
+            [InlineKeyboardButton("ðŸ’Ž 7 Days - â‚¹29", callback_data="payplan:7d")],
+            [InlineKeyboardButton("ðŸ’Ž 1 Month - â‚¹99", callback_data="payplan:30d")],
         ]
     )
 
@@ -1948,7 +1972,7 @@ async def _payment_timeout_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
         await _send_emoji_text(
             int(req["user_id"]),
-            "⏳ Payment request expired.\n\n"
+            "â³ Payment request expired.\n\n"
             "No UTR received within 5 minutes.\n"
             "Please run /pay again.",
             context,
@@ -1961,7 +1985,7 @@ async def pay(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     await _send_emoji_text(
         update.effective_chat.id,
-        "🛒 Choose Your Plan\n\nSelect one plan to continue payment:",
+        "ðŸ›’ Choose Your Plan\n\nSelect one plan to continue payment:",
         context,
         reply_markup=_pay_plan_keyboard(),
     )
@@ -1993,7 +2017,7 @@ async def pay_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         key = data.split(":", 1)[1]
         plan = PAY_PLANS.get(key)
         if not plan:
-            await _edit_emoji_text(update.effective_chat.id, q.message.message_id, "❌ Invalid plan.", context)
+            await _edit_emoji_text(update.effective_chat.id, q.message.message_id, "âŒ Invalid plan.", context)
             return
         rid = await db.create_payment_request(update.effective_user.id, key, int(plan["days"]), int(plan["amount"]))
         pay_text = await db.get_setting(SETTINGS_PAY_TEXT)
@@ -2009,7 +2033,7 @@ async def pay_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             await _edit_emoji_text(
                 update.effective_chat.id,
                 q.message.message_id,
-                "⚠️ Payment is not configured by admin yet.\nPlease contact admin.",
+                "âš ï¸ Payment is not configured by admin yet.\nPlease contact admin.",
                 context,
             )
             return
@@ -2020,29 +2044,29 @@ async def pay_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         plan_label = html.escape(str(plan["label"]))
         upi_html = html.escape(upi_id)
         caption = (
-            "💎 <b>Premium Purchase</b>\n\n"
-            f"🛍 Plan: <b>{plan_label}</b>\n"
-            f"💰 Amount: ₹{plan['amount']}\n\n"
-            "━━━━━━━━━━━━━━\n\n"
-            "📲 <b>Pay via UPI</b>\n"
+            "ðŸ’Ž <b>Premium Purchase</b>\n\n"
+            f"ðŸ› Plan: <b>{plan_label}</b>\n"
+            f"ðŸ’° Amount: â‚¹{plan['amount']}\n\n"
+            "â”â”â”â”â”â”â”â”â”â”â”â”â”â”\n\n"
+            "ðŸ“² <b>Pay via UPI</b>\n"
             "Scan the QR above\n"
             "OR send to:\n\n"
             f"<code>{upi_html}</code>\n\n"
-            f"🆔 Order ID: <code>#{rid}</code>\n\n"
-            "━━━━━━━━━━━━━━\n\n"
-            "📌 <b>How to Activate</b>\n"
-            "1️⃣ Complete payment\n"
-            "2️⃣ Tap \"Submit UTR\"\n"
-            "3️⃣ Send transaction ID\n"
-            "4️⃣ Premium activates after verification\n\n"
-            "⏳ Request expires in 5 minutes."
+            f"ðŸ†” Order ID: <code>#{rid}</code>\n\n"
+            "â”â”â”â”â”â”â”â”â”â”â”â”â”â”\n\n"
+            "ðŸ“Œ <b>How to Activate</b>\n"
+            "1ï¸âƒ£ Complete payment\n"
+            "2ï¸âƒ£ Tap \"Submit UTR\"\n"
+            "3ï¸âƒ£ Send transaction ID\n"
+            "4ï¸âƒ£ Premium activates after verification\n\n"
+            "â³ Request expires in 5 minutes."
         )
         # Keep optional admin-configured payment note, without clutter.
         pay_text_clean = (pay_text or "").strip()
         if pay_text_clean:
-            caption = f"{caption}\n\n🧾 <b>Note</b>\n{html.escape(pay_text_clean)}"
+            caption = f"{caption}\n\nðŸ§¾ <b>Note</b>\n{html.escape(pay_text_clean)}"
 
-        kb = InlineKeyboardMarkup([[InlineKeyboardButton("📩 Submit UTR", callback_data=f"payutr:{rid}")]])
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton("ðŸ“© Submit UTR", callback_data=f"payutr:{rid}")]])
 
         # Remove plan picker message to keep payment UI clean.
         try:
@@ -2064,7 +2088,7 @@ async def pay_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             # Fallback if remote QR URL fails for any reason.
             await _send_emoji_text(
                 update.effective_chat.id,
-                "⚠️ QR load failed. Pay via UPI ID shown above.\n"
+                "âš ï¸ QR load failed. Pay via UPI ID shown above.\n"
                 f"UPI URI:\n{upi_uri}",
                 context,
             )
@@ -2091,9 +2115,10 @@ async def pay_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             await q.answer("Invalid request id", show_alert=True)
             return
         context.user_data["pay_utr_request_id"] = rid
-        await _edit_emoji_text(
+        # This button is on a photo message; editing text there fails.
+        # Keep payment message intact and send a separate UTR prompt.
+        await _send_emoji_text(
             update.effective_chat.id,
-            q.message.message_id,
             f"📩 Send your UTR now for Request ID {rid}.\n\n"
             "You can send text UTR or payment screenshot.\n"
             "Admin will verify and activate manually.",
@@ -2110,20 +2135,20 @@ async def _notify_payment_admins(update: Update, context: ContextTypes.DEFAULT_T
     user = update.effective_user
     username = f"@{user.username}" if user and user.username else "-"
     note = (
-        "💰 New Payment UTR Submitted\n\n"
+        "ðŸ’° New Payment UTR Submitted\n\n"
         f"Request ID: {req['id']}\n"
         f"User ID: {req['user_id']}\n"
         f"Username: {username}\n"
         f"Plan: {req['plan_key']} ({req['plan_days']} days)\n"
-        f"Amount: ₹{req['amount_rs']}\n"
+        f"Amount: â‚¹{req['amount_rs']}\n"
         f"UTR: {utr_preview}\n\n"
         "Review and use buttons below."
     )
     kb = InlineKeyboardMarkup(
         [
             [
-                InlineKeyboardButton("✅ Approve", callback_data=f"payadm:approve:{req['id']}"),
-                InlineKeyboardButton("❌ Reject", callback_data=f"payadm:reject:{req['id']}"),
+                InlineKeyboardButton("âœ… Approve", callback_data=f"payadm:approve:{req['id']}"),
+                InlineKeyboardButton("âŒ Reject", callback_data=f"payadm:reject:{req['id']}"),
             ]
         ]
     )
@@ -2153,7 +2178,7 @@ async def pay_utr_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     req = await db.get_payment_request(int(rid))
     if not req:
         context.user_data.pop("pay_utr_request_id", None)
-        await _send_emoji_text(update.effective_chat.id, "❌ Payment request expired/invalid. Please run /pay again.", context)
+        await _send_emoji_text(update.effective_chat.id, "âŒ Payment request expired/invalid. Please run /pay again.", context)
         return
     now = int(time.time())
     if req["status"] == "pending" and int(req.get("expires_at") or 0) > 0 and int(req.get("expires_at") or 0) <= now:
@@ -2161,7 +2186,7 @@ async def pay_utr_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         await _cleanup_payment_user_ui(req, context)
         await db.delete_payment_request(int(rid))
         context.user_data.pop("pay_utr_request_id", None)
-        await _send_emoji_text(update.effective_chat.id, "⏳ Payment request expired. Please run /pay again.", context)
+        await _send_emoji_text(update.effective_chat.id, "â³ Payment request expired. Please run /pay again.", context)
         return
 
     utr_text = (update.effective_message.text or "").strip()
@@ -2171,20 +2196,20 @@ async def pay_utr_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         elif update.effective_message.document:
             utr_text = f"document:{update.effective_message.document.file_id[:12]}"
         else:
-            await _send_emoji_text(update.effective_chat.id, "⚠️ Please send UTR text or payment screenshot.", context)
+            await _send_emoji_text(update.effective_chat.id, "âš ï¸ Please send UTR text or payment screenshot.", context)
             return
 
     ok = await db.set_payment_utr(int(rid), utr_text)
     context.user_data.pop("pay_utr_request_id", None)
     if not ok:
-        await _send_emoji_text(update.effective_chat.id, "❌ Payment request expired/invalid. Please run /pay again.", context)
+        await _send_emoji_text(update.effective_chat.id, "âŒ Payment request expired/invalid. Please run /pay again.", context)
         return
     req = await db.get_payment_request(int(rid))
     if req:
         await _notify_payment_admins(update, context, req, utr_text)
     await _send_emoji_text(
         update.effective_chat.id,
-        "✅ UTR submitted successfully.\n"
+        "âœ… UTR submitted successfully.\n"
         "Admin ko notify kar diya gaya hai.\n"
         "Plan verification ke baad manually activate kiya jayega.",
         context,
@@ -2226,7 +2251,7 @@ async def pay_admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if req["status"] in ("processed", "rejected"):
         who = req.get("processed_by") or "-"
         status_text = (
-            "ℹ️ Payment request already handled.\n\n"
+            "â„¹ï¸ Payment request already handled.\n\n"
             f"Request ID: {req['id']}\n"
             f"Status: {req['status']}\n"
             f"Processed by: {who}"
@@ -2247,19 +2272,19 @@ async def pay_admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         try:
             await _send_emoji_text(
                 int(req["user_id"]),
-                "✅ Payment Verified\n\n"
-                f"💎 Plan activated: {req['plan_key']} ({req['plan_days']} days)\n"
-                f"🕒 Expires: {expiry_utc}",
+                "âœ… Payment Verified\n\n"
+                f"ðŸ’Ž Plan activated: {req['plan_key']} ({req['plan_days']} days)\n"
+                f"ðŸ•’ Expires: {expiry_utc}",
                 context,
             )
         except Exception:
             pass
         approved_text = (
-            "✅ Payment Approved\n\n"
+            "âœ… Payment Approved\n\n"
             f"Request ID: {req['id']}\n"
             f"User ID: {req['user_id']}\n"
             f"Plan: {req['plan_key']} ({req['plan_days']} days)\n"
-            f"Amount: ₹{req['amount_rs']}\n"
+            f"Amount: â‚¹{req['amount_rs']}\n"
             f"By Admin: {admin_name}\n"
             f"Reviewed At: {reviewed_at}\n"
             f"Premium Until: {expiry_utc}"
@@ -2278,7 +2303,7 @@ async def pay_admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     try:
         await _send_emoji_text(
             int(req["user_id"]),
-            "❌ Payment Rejected\n\n"
+            "âŒ Payment Rejected\n\n"
             "Your submitted payment could not be verified.\n"
             "Please contact admin with proper payment proof.",
             context,
@@ -2286,11 +2311,11 @@ async def pay_admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     except Exception:
         pass
     rejected_text = (
-        "❌ Payment Rejected\n\n"
+        "âŒ Payment Rejected\n\n"
         f"Request ID: {req['id']}\n"
         f"User ID: {req['user_id']}\n"
         f"Plan: {req['plan_key']} ({req['plan_days']} days)\n"
-        f"Amount: ₹{req['amount_rs']}\n"
+        f"Amount: â‚¹{req['amount_rs']}\n"
         f"By Admin: {admin_name}\n"
         f"Reviewed At: {reviewed_at}"
     )
@@ -2301,20 +2326,20 @@ async def pay_admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
 async def setpay(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     if not await _is_admin_or_owner(update, context):
-        await _send_emoji_text(update.effective_chat.id, "🚫 Access denied. (Admin/Owner only)", context)
+        await _send_emoji_text(update.effective_chat.id, "ðŸš« Access denied. (Admin/Owner only)", context)
         return
     db: Database = context.application.bot_data["db"]
     if not context.args:
         await _send_emoji_text(
             update.effective_chat.id,
-            "ℹ️ [b]Payment Settings[/b]\n"
+            "â„¹ï¸ [b]Payment Settings[/b]\n"
             "[i]Admin configuration guide[/i]\n\n"
             "[u]Commands[/u]\n"
-            "• [c]/setpay view[/c]\n"
-            "• [c]/setpay upi <upi_id>[/c]\n"
-            "• [c]/setpay name <payee_name>[/c]\n"
-            "• [c]/setpay text <payment_instructions>[/c]\n"
-            "• [c]/setpay clearupi[/c]",
+            "â€¢ [c]/setpay view[/c]\n"
+            "â€¢ [c]/setpay upi <upi_id>[/c]\n"
+            "â€¢ [c]/setpay name <payee_name>[/c]\n"
+            "â€¢ [c]/setpay text <payment_instructions>[/c]\n"
+            "â€¢ [c]/setpay clearupi[/c]",
             context,
         )
         return
@@ -2327,44 +2352,44 @@ async def setpay(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
     if sub == "clearupi":
         await db.set_setting(SETTINGS_PAY_UPI, None)
-        await _send_emoji_text(update.effective_chat.id, "✅ Payment UPI cleared.", context)
+        await _send_emoji_text(update.effective_chat.id, "âœ… Payment UPI cleared.", context)
         return
     if sub == "upi":
         if len(context.args) < 2:
-            await _send_emoji_text(update.effective_chat.id, "❌ Usage: /setpay upi <upi_id>", context)
+            await _send_emoji_text(update.effective_chat.id, "âŒ Usage: /setpay upi <upi_id>", context)
             return
         v = context.args[1].strip()
         await db.set_setting(SETTINGS_PAY_UPI, v)
-        await _send_emoji_text(update.effective_chat.id, "✅ Payment UPI set.", context)
+        await _send_emoji_text(update.effective_chat.id, "âœ… Payment UPI set.", context)
         return
     if sub == "name":
         if len(context.args) < 2:
-            await _send_emoji_text(update.effective_chat.id, "❌ Usage: /setpay name <payee_name>", context)
+            await _send_emoji_text(update.effective_chat.id, "âŒ Usage: /setpay name <payee_name>", context)
             return
         v = " ".join(context.args[1:]).strip()
         await db.set_setting(SETTINGS_PAY_NAME, v)
-        await _send_emoji_text(update.effective_chat.id, "✅ Payment payee name set.", context)
+        await _send_emoji_text(update.effective_chat.id, "âœ… Payment payee name set.", context)
         return
     if sub == "text":
         text = " ".join(context.args[1:]).strip()
         if not text:
-            await _send_emoji_text(update.effective_chat.id, "❌ Usage: /setpay text <payment instructions>", context)
+            await _send_emoji_text(update.effective_chat.id, "âŒ Usage: /setpay text <payment instructions>", context)
             return
         await db.set_setting(SETTINGS_PAY_TEXT, text)
-        await _send_emoji_text(update.effective_chat.id, "✅ Payment text set.", context)
+        await _send_emoji_text(update.effective_chat.id, "âœ… Payment text set.", context)
         return
-    await _send_emoji_text(update.effective_chat.id, "❌ Invalid /setpay option.", context)
+    await _send_emoji_text(update.effective_chat.id, "âŒ Invalid /setpay option.", context)
 
 
 async def bsettings(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     if not await _is_admin_or_owner(update, context):
-        await _send_emoji_text(update.effective_chat.id, "🚫 Access denied. (Admin/Owner only)", context)
+        await _send_emoji_text(update.effective_chat.id, "ðŸš« Access denied. (Admin/Owner only)", context)
         return
     _clear_bsettings_wait_states(context)
     await _send_emoji_text(
         update.effective_chat.id,
-        "⚙️ [b]Admin Settings Panel[/b]\n\nTap any option below to open guided actions.",
+        "âš™ï¸ [b]Admin Settings Panel[/b]\n\nTap any option below to open guided actions.",
         context,
         reply_markup=_bsettings_keyboard(),
     )
@@ -2376,7 +2401,7 @@ async def bsettings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return
     await q.answer()
     if not await _is_admin_or_owner(update, context):
-        await _edit_emoji_text(update.effective_chat.id, q.message.message_id, "🚫 Access denied. (Admin/Owner only)", context)
+        await _edit_emoji_text(update.effective_chat.id, q.message.message_id, "ðŸš« Access denied. (Admin/Owner only)", context)
         return
     data = q.data or ""
     if data == "bset:addpremium_action":
@@ -2384,9 +2409,9 @@ async def bsettings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await _edit_emoji_text(
             update.effective_chat.id,
             q.message.message_id,
-            "⭐ [b]Add Premium[/b]\n\nFormat bhejo: [c]<user_id> [days][/c]\nExample: [c]123456789 7[/c]",
+            "â­ [b]Add Premium[/b]\n\nFormat bhejo: [c]<user_id> [days][/c]\nExample: [c]123456789 7[/c]",
             context,
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back", callback_data="bset:back")]]),
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("â¬…ï¸ Back", callback_data="bset:back")]]),
         )
         return
     if data == "bset:removepremium_action":
@@ -2394,9 +2419,9 @@ async def bsettings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await _edit_emoji_text(
             update.effective_chat.id,
             q.message.message_id,
-            "❌ [b]Remove Premium[/b]\n\nUser ID bhejo:\n[c]123456789[/c]",
+            "âŒ [b]Remove Premium[/b]\n\nUser ID bhejo:\n[c]123456789[/c]",
             context,
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back", callback_data="bset:back")]]),
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("â¬…ï¸ Back", callback_data="bset:back")]]),
         )
         return
     if data == "bset:setcaption_action":
@@ -2404,12 +2429,12 @@ async def bsettings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await _edit_emoji_text(
             update.effective_chat.id,
             q.message.message_id,
-            "📝 [b]Set Caption[/b]\n\nCaption text bhejo.\nHTML tags supported: [c]<b> <i> <code>[/c]",
+            "ðŸ“ [b]Set Caption[/b]\n\nCaption text bhejo.\nHTML tags supported: [c]<b> <i> <code>[/c]",
             context,
             reply_markup=InlineKeyboardMarkup(
                 [
-                    [InlineKeyboardButton("🗑 Remove Caption", callback_data="bset:removecaption_action")],
-                    [InlineKeyboardButton("⬅️ Back", callback_data="bset:back")],
+                    [InlineKeyboardButton("ðŸ—‘ Remove Caption", callback_data="bset:removecaption_action")],
+                    [InlineKeyboardButton("â¬…ï¸ Back", callback_data="bset:back")],
                 ]
             ),
         )
@@ -2421,9 +2446,9 @@ async def bsettings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await _edit_emoji_text(
             update.effective_chat.id,
             q.message.message_id,
-            "🗑 [b]Default caption removed.[/b]",
+            "ðŸ—‘ [b]Default caption removed.[/b]",
             context,
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back", callback_data="bset:back")]]),
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("â¬…ï¸ Back", callback_data="bset:back")]]),
         )
         return
     if data == "bset:settime_action":
@@ -2431,9 +2456,9 @@ async def bsettings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await _edit_emoji_text(
             update.effective_chat.id,
             q.message.message_id,
-            "⏱ [b]Set Auto-Delete Time[/b]\n\nValue bhejo:\n[c]60[/c], [c]5m[/c], [c]1h[/c], [c]off[/c]",
+            "â± [b]Set Auto-Delete Time[/b]\n\nValue bhejo:\n[c]60[/c], [c]5m[/c], [c]1h[/c], [c]off[/c]",
             context,
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back", callback_data="bset:back")]]),
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("â¬…ï¸ Back", callback_data="bset:back")]]),
         )
         return
     if data == "bset:setstartimg_action":
@@ -2441,9 +2466,9 @@ async def bsettings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await _edit_emoji_text(
             update.effective_chat.id,
             q.message.message_id,
-            "🖼 [b]Set Start Image[/b]\n\nImage URL bhejo ([c]http/https[/c]) ya [c]off[/c].",
+            "ðŸ–¼ [b]Set Start Image[/b]\n\nImage URL bhejo ([c]http/https[/c]) ya [c]off[/c].",
             context,
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back", callback_data="bset:back")]]),
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("â¬…ï¸ Back", callback_data="bset:back")]]),
         )
         return
     if data == "bset:setpay_panel":
@@ -2451,7 +2476,7 @@ async def bsettings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await _edit_emoji_text(
             update.effective_chat.id,
             q.message.message_id,
-            "💳 [b]Payment Settings[/b]\n\nChoose action below:",
+            "ðŸ’³ [b]Payment Settings[/b]\n\nChoose action below:",
             context,
             reply_markup=_bset_setpay_keyboard(),
         )
@@ -2467,7 +2492,7 @@ async def bsettings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await _edit_emoji_text(
             update.effective_chat.id,
             q.message.message_id,
-            "💳 [b]Payment Settings[/b]\n\n"
+            "ðŸ’³ [b]Payment Settings[/b]\n\n"
             f"UPI ID: [c]{upi}[/c]\n"
             f"Payee Name: {name}\n\n"
             f"Text:\n{text}",
@@ -2481,7 +2506,7 @@ async def bsettings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await _edit_emoji_text(
             update.effective_chat.id,
             q.message.message_id,
-            "✅ Payment UPI cleared.",
+            "âœ… Payment UPI cleared.",
             context,
             reply_markup=_bset_setpay_keyboard(),
         )
@@ -2490,16 +2515,16 @@ async def bsettings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         mode = data.split(":")[-1].replace("setpay_", "")
         context.user_data["bset_setpay_wait"] = mode
         prompts = {
-            "upi": "🆔 UPI ID bhejo (example: [c]name@bank[/c])",
-            "name": "👤 Payee name bhejo",
-            "text": "🧾 Payment instructions text bhejo",
+            "upi": "ðŸ†” UPI ID bhejo (example: [c]name@bank[/c])",
+            "name": "ðŸ‘¤ Payee name bhejo",
+            "text": "ðŸ§¾ Payment instructions text bhejo",
         }
         await _edit_emoji_text(
             update.effective_chat.id,
             q.message.message_id,
-            f"💳 [b]SetPay[/b]\n\n{prompts.get(mode, 'Value bhejo')}",
+            f"ðŸ’³ [b]SetPay[/b]\n\n{prompts.get(mode, 'Value bhejo')}",
             context,
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back", callback_data="bset:setpay_panel")]]),
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("â¬…ï¸ Back", callback_data="bset:setpay_panel")]]),
         )
         return
     if data == "bset:forcech_panel":
@@ -2518,31 +2543,31 @@ async def bsettings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await _edit_emoji_text(
             update.effective_chat.id,
             q.message.message_id,
-            "➕ [b]Force Channel Add[/b]\n\nChannel ID/username bhejo:\n[c]-100xxxx[/c] or [c]@channel[/c]",
+            "âž• [b]Force Channel Add[/b]\n\nChannel ID/username bhejo:\n[c]-100xxxx[/c] or [c]@channel[/c]",
             context,
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back", callback_data="bset:forcech_panel")]]),
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("â¬…ï¸ Back", callback_data="bset:forcech_panel")]]),
         )
         return
     if data == "bset:forcech_list":
         db: Database = context.application.bot_data["db"]
         chans = await db.list_force_channels()
         if not chans:
-            text = "📣 [b]Force Channels[/b]\n\nNo required channels set."
+            text = "ðŸ“£ [b]Force Channels[/b]\n\nNo required channels set."
         else:
             lines = []
             for ch in chans:
                 extra = ch.get("invite_link") or (f"@{ch['username']}" if ch.get("username") else "")
                 name = ch.get("title") or ""
                 mode = (ch.get("mode") or "direct").lower()
-                mode_label = "🔓 Direct" if mode == "direct" else "🛂 Request"
-                lines.append(f"• {ch['channel_id']} [{mode_label}] {name} {extra}".strip())
-            text = "📣 [b]Force Channels[/b]\n\n" + "\n".join(lines)
+                mode_label = "ðŸ”“ Direct" if mode == "direct" else "ðŸ›‚ Request"
+                lines.append(f"â€¢ {ch['channel_id']} [{mode_label}] {name} {extra}".strip())
+            text = "ðŸ“£ [b]Force Channels[/b]\n\n" + "\n".join(lines)
         await _edit_emoji_text(
             update.effective_chat.id,
             q.message.message_id,
             text,
             context,
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back", callback_data="bset:forcech_panel")]]),
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("â¬…ï¸ Back", callback_data="bset:forcech_panel")]]),
         )
         return
     if data == "bset:forcech_remove":
@@ -2551,9 +2576,9 @@ async def bsettings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await _edit_emoji_text(
             update.effective_chat.id,
             q.message.message_id,
-            "➖ [b]Force Channel Remove[/b]\n\nChannel ID/username bhejo jise remove karna hai:\n[c]-100xxxx[/c] or [c]@channel[/c]",
+            "âž– [b]Force Channel Remove[/b]\n\nChannel ID/username bhejo jise remove karna hai:\n[c]-100xxxx[/c] or [c]@channel[/c]",
             context,
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back", callback_data="bset:forcech_panel")]]),
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("â¬…ï¸ Back", callback_data="bset:forcech_panel")]]),
         )
         return
     if data == "bset:forcech_reset":
@@ -2564,9 +2589,9 @@ async def bsettings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await _edit_emoji_text(
             update.effective_chat.id,
             q.message.message_id,
-            "✅ [b]Force channel reset done.[/b]\nAll required channels cleared.",
+            "âœ… [b]Force channel reset done.[/b]\nAll required channels cleared.",
             context,
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back", callback_data="bset:forcech_panel")]]),
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("â¬…ï¸ Back", callback_data="bset:forcech_panel")]]),
         )
         return
     if data == "bset:addadmin_action":
@@ -2575,11 +2600,11 @@ async def bsettings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
             await q.answer("Owner only", show_alert=True)
             return
         context.user_data["bset_addadmin_wait"] = True
-        kb = InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back", callback_data="bset:back")]])
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton("â¬…ï¸ Back", callback_data="bset:back")]])
         await _edit_emoji_text(
             update.effective_chat.id,
             q.message.message_id,
-            "👮 [b]Add Admin[/b]\n\n"
+            "ðŸ‘® [b]Add Admin[/b]\n\n"
             "Owner ID send kare: jis user ko admin banana hai uska numeric user_id bhejo.\n\n"
             "Example: [c]123456789[/c]",
             context,
@@ -2592,11 +2617,11 @@ async def bsettings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
             await q.answer("Owner only", show_alert=True)
             return
         context.user_data["bset_removeadmin_wait"] = True
-        kb = InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back", callback_data="bset:back")]])
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton("â¬…ï¸ Back", callback_data="bset:back")]])
         await _edit_emoji_text(
             update.effective_chat.id,
             q.message.message_id,
-            "🚫 [b]Remove Admin[/b]\n\n"
+            "ðŸš« [b]Remove Admin[/b]\n\n"
             "Owner ID send kare: jis admin ko remove karna hai uska numeric user_id bhejo.\n\n"
             "Example: [c]123456789[/c]",
             context,
@@ -2608,11 +2633,11 @@ async def bsettings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
             await q.answer("Access denied", show_alert=True)
             return
         context.user_data["bset_gencode_wait"] = True
-        kb = InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back", callback_data="bset:back")]])
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton("â¬…ï¸ Back", callback_data="bset:back")]])
         await _edit_emoji_text(
             update.effective_chat.id,
             q.message.message_id,
-            "🎟 [b]Generate Codes[/b]\n\n"
+            "ðŸŽŸ [b]Generate Codes[/b]\n\n"
             "Kitne codes generate karne hain? (1 to 20)\n\n"
             "Example: [c]5[/c]",
             context,
@@ -2624,7 +2649,7 @@ async def bsettings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await _edit_emoji_text(
             update.effective_chat.id,
             q.message.message_id,
-            "⚙️ [b]Admin Settings Panel[/b]\n\nTap any option below to open guided actions.",
+            "âš™ï¸ [b]Admin Settings Panel[/b]\n\nTap any option below to open guided actions.",
             context,
             reply_markup=_bsettings_keyboard(),
         )
@@ -2634,27 +2659,27 @@ async def bsettings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     key = data.split(":", 1)[1]
     doc = BSETTINGS_DOCS.get(key)
     if not doc:
-        await _edit_emoji_text(update.effective_chat.id, q.message.message_id, "❌ Unknown command doc.", context)
+        await _edit_emoji_text(update.effective_chat.id, q.message.message_id, "âŒ Unknown command doc.", context)
         return
     if key == "addadmin":
         kb = InlineKeyboardMarkup(
             [
-                [InlineKeyboardButton("➕ Add Admin", callback_data="bset:addadmin_action")],
-                [InlineKeyboardButton("⬅️ Back", callback_data="bset:back")],
+                [InlineKeyboardButton("âž• Add Admin", callback_data="bset:addadmin_action")],
+                [InlineKeyboardButton("â¬…ï¸ Back", callback_data="bset:back")],
             ]
         )
     elif key == "removeadmin":
         kb = InlineKeyboardMarkup(
             [
-                [InlineKeyboardButton("➖ Remove Admin", callback_data="bset:removeadmin_action")],
-                [InlineKeyboardButton("⬅️ Back", callback_data="bset:back")],
+                [InlineKeyboardButton("âž– Remove Admin", callback_data="bset:removeadmin_action")],
+                [InlineKeyboardButton("â¬…ï¸ Back", callback_data="bset:back")],
             ]
         )
     elif key == "gencode":
         kb = InlineKeyboardMarkup(
             [
-                [InlineKeyboardButton("🎟 Generate Codes", callback_data="bset:gencode_action")],
-                [InlineKeyboardButton("⬅️ Back", callback_data="bset:back")],
+                [InlineKeyboardButton("ðŸŽŸ Generate Codes", callback_data="bset:gencode_action")],
+                [InlineKeyboardButton("â¬…ï¸ Back", callback_data="bset:back")],
             ]
         )
     elif key == "forcech":
@@ -2669,44 +2694,44 @@ async def bsettings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     elif key == "addpremium":
         kb = InlineKeyboardMarkup(
             [
-                [InlineKeyboardButton("⭐ Add Premium", callback_data="bset:addpremium_action")],
-                [InlineKeyboardButton("⬅️ Back", callback_data="bset:back")],
+                [InlineKeyboardButton("â­ Add Premium", callback_data="bset:addpremium_action")],
+                [InlineKeyboardButton("â¬…ï¸ Back", callback_data="bset:back")],
             ]
         )
     elif key == "removepremium":
         kb = InlineKeyboardMarkup(
             [
-                [InlineKeyboardButton("❌ Remove Premium", callback_data="bset:removepremium_action")],
-                [InlineKeyboardButton("⬅️ Back", callback_data="bset:back")],
+                [InlineKeyboardButton("âŒ Remove Premium", callback_data="bset:removepremium_action")],
+                [InlineKeyboardButton("â¬…ï¸ Back", callback_data="bset:back")],
             ]
         )
     elif key == "setcaption":
         kb = InlineKeyboardMarkup(
             [
-                [InlineKeyboardButton("📝 Set Caption", callback_data="bset:setcaption_action")],
-                [InlineKeyboardButton("🗑 Remove Caption", callback_data="bset:removecaption_action")],
-                [InlineKeyboardButton("⬅️ Back", callback_data="bset:back")],
+                [InlineKeyboardButton("ðŸ“ Set Caption", callback_data="bset:setcaption_action")],
+                [InlineKeyboardButton("ðŸ—‘ Remove Caption", callback_data="bset:removecaption_action")],
+                [InlineKeyboardButton("â¬…ï¸ Back", callback_data="bset:back")],
             ]
         )
     elif key == "settime":
         kb = InlineKeyboardMarkup(
             [
-                [InlineKeyboardButton("⏱ Set Time", callback_data="bset:settime_action")],
-                [InlineKeyboardButton("⬅️ Back", callback_data="bset:back")],
+                [InlineKeyboardButton("â± Set Time", callback_data="bset:settime_action")],
+                [InlineKeyboardButton("â¬…ï¸ Back", callback_data="bset:back")],
             ]
         )
     elif key == "setstartimg":
         kb = InlineKeyboardMarkup(
             [
-                [InlineKeyboardButton("🖼 Set Start Image", callback_data="bset:setstartimg_action")],
-                [InlineKeyboardButton("⬅️ Back", callback_data="bset:back")],
+                [InlineKeyboardButton("ðŸ–¼ Set Start Image", callback_data="bset:setstartimg_action")],
+                [InlineKeyboardButton("â¬…ï¸ Back", callback_data="bset:back")],
             ]
         )
     elif key == "setpay":
         await _edit_emoji_text(
             update.effective_chat.id,
             q.message.message_id,
-            "💳 [b]Payment Settings[/b]\n\nChoose action below:",
+            "ðŸ’³ [b]Payment Settings[/b]\n\nChoose action below:",
             context,
             reply_markup=_bset_setpay_keyboard(),
         )
@@ -2714,12 +2739,12 @@ async def bsettings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     elif key == "premiumdb":
         kb = InlineKeyboardMarkup(
             [
-                [InlineKeyboardButton("📥 Export Premium DB", callback_data="bset:premiumdb_action")],
-                [InlineKeyboardButton("⬅️ Back", callback_data="bset:back")],
+                [InlineKeyboardButton("ðŸ“¥ Export Premium DB", callback_data="bset:premiumdb_action")],
+                [InlineKeyboardButton("â¬…ï¸ Back", callback_data="bset:back")],
             ]
         )
     else:
-        kb = InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back", callback_data="bset:back")]])
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton("â¬…ï¸ Back", callback_data="bset:back")]])
     await _edit_emoji_text(
         update.effective_chat.id,
         q.message.message_id,
@@ -2743,13 +2768,13 @@ async def bsettings_owner_addadmin_input(update: Update, context: ContextTypes.D
     try:
         uid = int(raw)
     except ValueError:
-        await _send_emoji_text(update.effective_chat.id, "❌ Invalid user_id. Numeric ID bhejo.", context)
+        await _send_emoji_text(update.effective_chat.id, "âŒ Invalid user_id. Numeric ID bhejo.", context)
         return
 
     db: Database = context.application.bot_data["db"]
     await db.add_admin(uid, update.effective_user.id)
     context.user_data.pop("bset_addadmin_wait", None)
-    await _send_emoji_text(update.effective_chat.id, f"✅ Admin added: {uid}", context)
+    await _send_emoji_text(update.effective_chat.id, f"âœ… Admin added: {uid}", context)
 
 
 async def bsettings_owner_removeadmin_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -2766,13 +2791,13 @@ async def bsettings_owner_removeadmin_input(update: Update, context: ContextType
     try:
         uid = int(raw)
     except ValueError:
-        await _send_emoji_text(update.effective_chat.id, "❌ Invalid user_id. Numeric ID bhejo.", context)
+        await _send_emoji_text(update.effective_chat.id, "âŒ Invalid user_id. Numeric ID bhejo.", context)
         return
 
     db: Database = context.application.bot_data["db"]
     await db.remove_admin(uid)
     context.user_data.pop("bset_removeadmin_wait", None)
-    await _send_emoji_text(update.effective_chat.id, f"✅ Admin removed: {uid}", context)
+    await _send_emoji_text(update.effective_chat.id, f"âœ… Admin removed: {uid}", context)
 
 
 async def bsettings_gencode_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -2788,7 +2813,7 @@ async def bsettings_gencode_input(update: Update, context: ContextTypes.DEFAULT_
     try:
         count = int(raw)
     except ValueError:
-        await _send_emoji_text(update.effective_chat.id, "❌ Invalid number. 1 to 20 bhejo.", context)
+        await _send_emoji_text(update.effective_chat.id, "âŒ Invalid number. 1 to 20 bhejo.", context)
         return
     if count < 1:
         count = 1
@@ -2812,7 +2837,7 @@ async def bsettings_forcech_remove_input(update: Update, context: ContextTypes.D
     db: Database = context.application.bot_data["db"]
     ref = _parse_channel_ref((update.effective_message.text or "").strip())
     if ref is None:
-        await _send_emoji_text(update.effective_chat.id, "❌ Invalid format. Send -100xxxx or @channelusername.", context)
+        await _send_emoji_text(update.effective_chat.id, "âŒ Invalid format. Send -100xxxx or @channelusername.", context)
         return
     try:
         chat = await context.bot.get_chat(ref)
@@ -2821,11 +2846,11 @@ async def bsettings_forcech_remove_input(update: Update, context: ContextTypes.D
         if isinstance(ref, int):
             cid = int(ref)
         else:
-            await _send_emoji_text(update.effective_chat.id, "❌ Channel not found.", context)
+            await _send_emoji_text(update.effective_chat.id, "âŒ Channel not found.", context)
             return
     await db.remove_force_channel(cid)
     context.user_data.pop("bset_forcech_remove_wait", None)
-    await _send_emoji_text(update.effective_chat.id, f"✅ Force channel removed: {cid}", context)
+    await _send_emoji_text(update.effective_chat.id, f"âœ… Force channel removed: {cid}", context)
 
 
 async def bsettings_misc_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -2846,42 +2871,42 @@ async def bsettings_misc_input(update: Update, context: ContextTypes.DEFAULT_TYP
             uid = int(parts[0])
             days = int(parts[1]) if len(parts) > 1 else 1
         except Exception:
-            await _send_emoji_text(update.effective_chat.id, "❌ Invalid format. Use: <user_id> [days]", context)
+            await _send_emoji_text(update.effective_chat.id, "âŒ Invalid format. Use: <user_id> [days]", context)
             return
         days = max(1, days)
         until = await db.add_premium_seconds(uid, days * DAY_SECONDS)
         context.user_data.pop("bset_addpremium_wait", None)
-        await _send_emoji_text(update.effective_chat.id, f"✅ Premium granted to {uid} for {days} day(s).\n🕒 Until: {until}", context)
+        await _send_emoji_text(update.effective_chat.id, f"âœ… Premium granted to {uid} for {days} day(s).\nðŸ•’ Until: {until}", context)
         return
 
     if context.user_data.get("bset_removepremium_wait"):
         try:
             uid = int(text)
         except Exception:
-            await _send_emoji_text(update.effective_chat.id, "❌ Invalid user_id.", context)
+            await _send_emoji_text(update.effective_chat.id, "âŒ Invalid user_id.", context)
             return
         await db.set_premium_until(uid, 0)
         context.user_data.pop("bset_removepremium_wait", None)
-        await _send_emoji_text(update.effective_chat.id, f"✅ Premium removed for {uid}.", context)
+        await _send_emoji_text(update.effective_chat.id, f"âœ… Premium removed for {uid}.", context)
         return
 
     if context.user_data.get("bset_setcaption_wait"):
         await db.set_setting("caption", text)
         context.user_data.pop("bset_setcaption_wait", None)
-        await _send_emoji_text(update.effective_chat.id, "✅ Default caption set.", context)
+        await _send_emoji_text(update.effective_chat.id, "âœ… Default caption set.", context)
         return
 
     if context.user_data.get("bset_settime_wait"):
         seconds = _parse_duration_seconds(text)
         if seconds is None:
-            await _send_emoji_text(update.effective_chat.id, "❌ Invalid time. Examples: 60, 5m, 1h, off", context)
+            await _send_emoji_text(update.effective_chat.id, "âŒ Invalid time. Examples: 60, 5m, 1h, off", context)
             return
         await db.set_setting(SETTINGS_AUTODELETE_SECONDS, str(int(seconds)))
         context.user_data.pop("bset_settime_wait", None)
         if seconds <= 0:
-            await _send_emoji_text(update.effective_chat.id, "✅ Auto-delete disabled.", context)
+            await _send_emoji_text(update.effective_chat.id, "âœ… Auto-delete disabled.", context)
         else:
-            await _send_emoji_text(update.effective_chat.id, f"✅ Auto-delete enabled: {seconds} seconds.", context)
+            await _send_emoji_text(update.effective_chat.id, f"âœ… Auto-delete enabled: {seconds} seconds.", context)
         return
 
     if context.user_data.get("bset_setstartimg_wait"):
@@ -2889,27 +2914,27 @@ async def bsettings_misc_input(update: Update, context: ContextTypes.DEFAULT_TYP
         if raw.lower() in ("off", "remove", "none", "disable", "disabled"):
             await db.set_setting(SETTINGS_START_IMG_URL, None)
             context.user_data.pop("bset_setstartimg_wait", None)
-            await _send_emoji_text(update.effective_chat.id, "✅ Start image removed.", context)
+            await _send_emoji_text(update.effective_chat.id, "âœ… Start image removed.", context)
             return
         if not (raw.startswith("https://") or raw.startswith("http://")):
-            await _send_emoji_text(update.effective_chat.id, "❌ Invalid URL. Must start with http:// or https://", context)
+            await _send_emoji_text(update.effective_chat.id, "âŒ Invalid URL. Must start with http:// or https://", context)
             return
         await db.set_setting(SETTINGS_START_IMG_URL, raw)
         context.user_data.pop("bset_setstartimg_wait", None)
-        await _send_emoji_text(update.effective_chat.id, "✅ Start image set.", context)
+        await _send_emoji_text(update.effective_chat.id, "âœ… Start image set.", context)
         return
 
     mode = context.user_data.get("bset_setpay_wait")
     if mode:
         if mode == "upi":
             await db.set_setting(SETTINGS_PAY_UPI, text)
-            await _send_emoji_text(update.effective_chat.id, "✅ Payment UPI set.", context)
+            await _send_emoji_text(update.effective_chat.id, "âœ… Payment UPI set.", context)
         elif mode == "name":
             await db.set_setting(SETTINGS_PAY_NAME, text)
-            await _send_emoji_text(update.effective_chat.id, "✅ Payment payee name set.", context)
+            await _send_emoji_text(update.effective_chat.id, "âœ… Payment payee name set.", context)
         elif mode == "text":
             await db.set_setting(SETTINGS_PAY_TEXT, text)
-            await _send_emoji_text(update.effective_chat.id, "✅ Payment text set.", context)
+            await _send_emoji_text(update.effective_chat.id, "âœ… Payment text set.", context)
         context.user_data.pop("bset_setpay_wait", None)
         return
 
@@ -2917,7 +2942,7 @@ async def bsettings_misc_input(update: Update, context: ContextTypes.DEFAULT_TYP
 async def forcech(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     if not await _is_admin_or_owner(update, context):
-        await _send_emoji_text(update.effective_chat.id, "🚫 Access denied. (Admin/Owner only)", context)
+        await _send_emoji_text(update.effective_chat.id, "ðŸš« Access denied. (Admin/Owner only)", context)
         return
     db: Database = context.application.bot_data["db"]
 
@@ -2926,13 +2951,13 @@ async def forcech(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not chans:
             await _send_emoji_text(
                 update.effective_chat.id,
-                "📣 Force Channels\n\n"
+                "ðŸ“£ Force Channels\n\n"
                 "No required channels set.\n\n"
-                "✅ Usage\n"
-                "• /forcech (add flow)\n"
-                "• /forcech list\n"
-                "• /forcech remove <channel_id|@username>\n"
-                "• /forcech reset",
+                "âœ… Usage\n"
+                "â€¢ /forcech (add flow)\n"
+                "â€¢ /forcech list\n"
+                "â€¢ /forcech remove <channel_id|@username>\n"
+                "â€¢ /forcech reset",
                 context,
             )
             return
@@ -2941,18 +2966,18 @@ async def forcech(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             extra = ch.get("invite_link") or (f"@{ch['username']}" if ch.get("username") else "")
             name = ch.get("title") or ""
             mode = (ch.get("mode") or "direct").lower()
-            mode_label = "🔓 Direct" if mode == "direct" else "🛂 Request"
-            lines.append(f"• {ch['channel_id']} [{mode_label}] {name} {extra}".strip())
-        await _send_emoji_text(update.effective_chat.id, "📣 Force Channels\n\n" + "\n".join(lines), context)
+            mode_label = "ðŸ”“ Direct" if mode == "direct" else "ðŸ›‚ Request"
+            lines.append(f"â€¢ {ch['channel_id']} [{mode_label}] {name} {extra}".strip())
+        await _send_emoji_text(update.effective_chat.id, "ðŸ“£ Force Channels\n\n" + "\n".join(lines), context)
         return
 
     if context.args and context.args[0].lower() == "remove":
         if len(context.args) < 2:
-            await _send_emoji_text(update.effective_chat.id, "ℹ️ Usage: /forcech remove <channel_id|@username>", context)
+            await _send_emoji_text(update.effective_chat.id, "â„¹ï¸ Usage: /forcech remove <channel_id|@username>", context)
             return
         ref = _parse_channel_ref(context.args[1])
         if ref is None:
-            await _send_emoji_text(update.effective_chat.id, "❌ Invalid channel id/username.", context)
+            await _send_emoji_text(update.effective_chat.id, "âŒ Invalid channel id/username.", context)
             return
         try:
             chat = await context.bot.get_chat(ref)
@@ -2962,44 +2987,44 @@ async def forcech(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             if isinstance(ref, int):
                 cid = int(ref)
             else:
-                await _send_emoji_text(update.effective_chat.id, "❌ Channel not found.", context)
+                await _send_emoji_text(update.effective_chat.id, "âŒ Channel not found.", context)
                 return
         await db.remove_force_channel(cid)
-        await _send_emoji_text(update.effective_chat.id, f"✅ Force channel removed: {cid}", context)
+        await _send_emoji_text(update.effective_chat.id, f"âœ… Force channel removed: {cid}", context)
         return
 
     if context.args and context.args[0].lower() == "reset":
         await db.clear_force_channels()
         context.user_data.pop("forcech_state", None)
-        await _send_emoji_text(update.effective_chat.id, "✅ Force channel DB reset done. All required channels cleared.", context)
+        await _send_emoji_text(update.effective_chat.id, "âœ… Force channel DB reset done. All required channels cleared.", context)
         return
 
     # Default: interactive add flow.
     context.user_data["forcech_state"] = {"step": "await_channel"}
-    await _send_emoji_text(update.effective_chat.id, "📣 Channel ID/username bhejo", context)
+    await _send_emoji_text(update.effective_chat.id, "ðŸ“£ Channel ID/username bhejo", context)
 
 
 async def forcechdebug(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     if not await _is_admin_or_owner(update, context):
-        await _send_emoji_text(update.effective_chat.id, "🚫 Access denied. (Admin/Owner only)", context)
+        await _send_emoji_text(update.effective_chat.id, "ðŸš« Access denied. (Admin/Owner only)", context)
         return
     if not context.args:
-        await _send_emoji_text(update.effective_chat.id, "ℹ️ Usage: /forcechdebug <user_id>", context)
+        await _send_emoji_text(update.effective_chat.id, "â„¹ï¸ Usage: /forcechdebug <user_id>", context)
         return
     try:
         uid = int(context.args[0])
     except ValueError:
-        await _send_emoji_text(update.effective_chat.id, "❌ Invalid user_id.", context)
+        await _send_emoji_text(update.effective_chat.id, "âŒ Invalid user_id.", context)
         return
     ok, _, details = await _joined_all_force_channels_details(uid, context)
     if not details:
-        await _send_emoji_text(update.effective_chat.id, "ℹ️ No force channels configured.", context)
+        await _send_emoji_text(update.effective_chat.id, "â„¹ï¸ No force channels configured.", context)
         return
     lines = [f"Result: {'PASS' if ok else 'BLOCK'} for user {uid}", ""]
     for d in details:
         lines.append(
-            f"• {d['channel_id']} mode={d['mode']} joined={d['joined']} request={d['request']} pass={d['passed']} "
+            f"â€¢ {d['channel_id']} mode={d['mode']} joined={d['joined']} request={d['request']} pass={d['passed']} "
             f"member_err={d['member_error'] or '-'} req_api_err={d['request_api_error'] or '-'}"
         )
     await _send_emoji_text(update.effective_chat.id, "\n".join(lines), context)
@@ -3020,20 +3045,20 @@ async def forcech_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     db: Database = context.application.bot_data["db"]
     ref = _parse_channel_ref((update.effective_message.text or "").strip())
     if ref is None:
-        await _send_emoji_text(update.effective_chat.id, "❌ Invalid format. Send -100xxxx or @channelusername.", context)
+        await _send_emoji_text(update.effective_chat.id, "âŒ Invalid format. Send -100xxxx or @channelusername.", context)
         return
 
     try:
         chat = await context.bot.get_chat(ref)
     except Exception:
-        await _send_emoji_text(update.effective_chat.id, "❌ Channel not found / inaccessible.", context)
+        await _send_emoji_text(update.effective_chat.id, "âŒ Channel not found / inaccessible.", context)
         return
     if chat.type != "channel":
-        await _send_emoji_text(update.effective_chat.id, "❌ Only channel is supported for force-join.", context)
+        await _send_emoji_text(update.effective_chat.id, "âŒ Only channel is supported for force-join.", context)
         return
     if not await _bot_is_admin(int(chat.id), context):
         context.user_data.pop("forcech_state", None)
-        await _send_emoji_text(update.effective_chat.id, "❌ Bot is not admin in this channel. Add bot as admin and try again.", context)
+        await _send_emoji_text(update.effective_chat.id, "âŒ Bot is not admin in this channel. Add bot as admin and try again.", context)
         return
 
     state["channel_id"] = int(chat.id)
@@ -3045,8 +3070,8 @@ async def forcech_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     kb = InlineKeyboardMarkup(
         [
             [
-                InlineKeyboardButton("🔓 Direct Mode", callback_data="forcech_mode:direct"),
-                InlineKeyboardButton("🛂 Request Mode", callback_data="forcech_mode:request"),
+                InlineKeyboardButton("ðŸ”“ Direct Mode", callback_data="forcech_mode:direct"),
+                InlineKeyboardButton("ðŸ›‚ Request Mode", callback_data="forcech_mode:request"),
             ]
         ]
     )
@@ -3060,7 +3085,7 @@ async def forcech_mode_callback(update: Update, context: ContextTypes.DEFAULT_TY
     await q.answer()
     await _upsert_user(update, context)
     if not await _is_admin_or_owner(update, context):
-        await _edit_emoji_text(update.effective_chat.id, q.message.message_id, "🚫 Access denied. (Admin/Owner only)", context)
+        await _edit_emoji_text(update.effective_chat.id, q.message.message_id, "ðŸš« Access denied. (Admin/Owner only)", context)
         return
 
     data = q.data or ""
@@ -3068,24 +3093,24 @@ async def forcech_mode_callback(update: Update, context: ContextTypes.DEFAULT_TY
         return
     mode = data.split(":", 1)[1]
     if mode not in ("direct", "request"):
-        await _edit_emoji_text(update.effective_chat.id, q.message.message_id, "❌ Invalid mode.", context)
+        await _edit_emoji_text(update.effective_chat.id, q.message.message_id, "âŒ Invalid mode.", context)
         return
 
     state = context.user_data.get("forcech_state") or {}
     if state.get("step") != "await_mode":
-        await _edit_emoji_text(update.effective_chat.id, q.message.message_id, "ℹ️ No active forcech add flow. Run /forcech again.", context)
+        await _edit_emoji_text(update.effective_chat.id, q.message.message_id, "â„¹ï¸ No active forcech add flow. Run /forcech again.", context)
         return
 
     cid = int(state.get("channel_id", 0))
     if not cid:
         context.user_data.pop("forcech_state", None)
-        await _edit_emoji_text(update.effective_chat.id, q.message.message_id, "❌ Missing channel state. Run /forcech again.", context)
+        await _edit_emoji_text(update.effective_chat.id, q.message.message_id, "âŒ Missing channel state. Run /forcech again.", context)
         return
 
     # Re-validate admin before saving.
     if not await _bot_is_admin(cid, context):
         context.user_data.pop("forcech_state", None)
-        await _edit_emoji_text(update.effective_chat.id, q.message.message_id, "❌ Bot is not admin in this channel. Add bot as admin and try again.", context)
+        await _edit_emoji_text(update.effective_chat.id, q.message.message_id, "âŒ Bot is not admin in this channel. Add bot as admin and try again.", context)
         return
 
     username = state.get("username")
@@ -3105,7 +3130,7 @@ async def forcech_mode_callback(update: Update, context: ContextTypes.DEFAULT_TY
             await _edit_emoji_text(
                 update.effective_chat.id,
                 q.message.message_id,
-                "❌ Request mode invite link generate nahi hua.\n"
+                "âŒ Request mode invite link generate nahi hua.\n"
                 "Channel settings me Join Requests enable karo, phir /forcech fir se run karo.",
                 context,
             )
@@ -3126,7 +3151,7 @@ async def forcech_mode_callback(update: Update, context: ContextTypes.DEFAULT_TY
                 await _edit_emoji_text(
                     update.effective_chat.id,
                     q.message.message_id,
-                    "❌ Invite link generate nahi hua. Check bot admin permissions.",
+                    "âŒ Invite link generate nahi hua. Check bot admin permissions.",
                     context,
                 )
                 context.user_data.pop("forcech_state", None)
@@ -3135,11 +3160,11 @@ async def forcech_mode_callback(update: Update, context: ContextTypes.DEFAULT_TY
     db: Database = context.application.bot_data["db"]
     await db.add_force_channel(cid, mode, invite_link, title, username, update.effective_user.id)
     context.user_data.pop("forcech_state", None)
-    mode_label = "🔓 Direct Mode" if mode == "direct" else "🛂 Request Mode"
+    mode_label = "ðŸ”“ Direct Mode" if mode == "direct" else "ðŸ›‚ Request Mode"
     await _edit_emoji_text(
         update.effective_chat.id,
         q.message.message_id,
-        "✅ Force channel saved\n\n"
+        "âœ… Force channel saved\n\n"
         f"Channel: {cid}\n"
         f"Mode: {mode_label}\n"
         f"Join Link: {invite_link}",
@@ -3159,7 +3184,7 @@ async def on_chat_join_request(update: Update, context: ContextTypes.DEFAULT_TYP
 async def setcaption(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     if not await _is_admin_or_owner(update, context):
-        await _send_emoji_text(update.effective_chat.id, "🚫 Access denied. (Admin/Owner only)", context)
+        await _send_emoji_text(update.effective_chat.id, "ðŸš« Access denied. (Admin/Owner only)", context)
         return
     text = " ".join(context.args).strip() if context.args else ""
     if not text and update.effective_message and update.effective_message.reply_to_message:
@@ -3167,69 +3192,69 @@ async def setcaption(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     if not text:
         await _send_emoji_text(
             update.effective_chat.id,
-            "ℹ️ Usage: /setcaption <text> (or reply to a text message)\n"
+            "â„¹ï¸ Usage: /setcaption <text> (or reply to a text message)\n"
             "HTML styles supported, e.g. `<b>bold</b> <i>italic</i> <code>code</code>`",
             context,
         )
         return
     db: Database = context.application.bot_data["db"]
     await db.set_setting("caption", text)
-    await _send_emoji_text(update.effective_chat.id, "✅ Default caption set.", context)
+    await _send_emoji_text(update.effective_chat.id, "âœ… Default caption set.", context)
 
 
 async def removecaption(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     if not await _is_admin_or_owner(update, context):
-        await _send_emoji_text(update.effective_chat.id, "🚫 Access denied. (Admin/Owner only)", context)
+        await _send_emoji_text(update.effective_chat.id, "ðŸš« Access denied. (Admin/Owner only)", context)
         return
     db: Database = context.application.bot_data["db"]
     await db.set_setting("caption", None)
-    await _send_emoji_text(update.effective_chat.id, "🗑️ Default caption removed.", context)
+    await _send_emoji_text(update.effective_chat.id, "ðŸ—‘ï¸ Default caption removed.", context)
 
 
 async def settime(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     if not await _is_admin_or_owner(update, context):
-        await _send_emoji_text(update.effective_chat.id, "🚫 Access denied. (Admin/Owner only)", context)
+        await _send_emoji_text(update.effective_chat.id, "ðŸš« Access denied. (Admin/Owner only)", context)
         return
     if not context.args:
         await _send_emoji_text(
             update.effective_chat.id,
-            "⏱️ Auto-Delete Time\n\n"
+            "â±ï¸ Auto-Delete Time\n\n"
             "Set time after which files/messages delivered via links will be auto-deleted.\n\n"
-            "✅ Usage:\n"
-            "• /settime 60 (seconds)\n"
-            "• /settime 5m\n"
-            "• /settime 1h\n"
-            "• /settime off\n",
+            "âœ… Usage:\n"
+            "â€¢ /settime 60 (seconds)\n"
+            "â€¢ /settime 5m\n"
+            "â€¢ /settime 1h\n"
+            "â€¢ /settime off\n",
             context,
         )
         return
     seconds = _parse_duration_seconds(context.args[0])
     if seconds is None:
-        await _send_emoji_text(update.effective_chat.id, "❌ Invalid time. Examples: 60, 5m, 1h, off", context)
+        await _send_emoji_text(update.effective_chat.id, "âŒ Invalid time. Examples: 60, 5m, 1h, off", context)
         return
     db: Database = context.application.bot_data["db"]
     await db.set_setting(SETTINGS_AUTODELETE_SECONDS, str(int(seconds)))
     if seconds <= 0:
-        await _send_emoji_text(update.effective_chat.id, "✅ Auto-delete disabled.", context)
+        await _send_emoji_text(update.effective_chat.id, "âœ… Auto-delete disabled.", context)
         return
-    await _send_emoji_text(update.effective_chat.id, f"✅ Auto-delete enabled: messages will be deleted after {seconds} seconds.", context)
+    await _send_emoji_text(update.effective_chat.id, f"âœ… Auto-delete enabled: messages will be deleted after {seconds} seconds.", context)
 
 
 async def setstartimg(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     if not await _is_admin_or_owner(update, context):
-        await _send_emoji_text(update.effective_chat.id, "🚫 Access denied. (Admin/Owner only)", context)
+        await _send_emoji_text(update.effective_chat.id, "ðŸš« Access denied. (Admin/Owner only)", context)
         return
     if not context.args:
         await _send_emoji_text(
             update.effective_chat.id,
-            "🖼️ Start Image\n\n"
+            "ðŸ–¼ï¸ Start Image\n\n"
             "Set an image URL that will be shown with `/start` message.\n\n"
-            "✅ Usage:\n"
-            "• /setstartimg <image_url>\n"
-            "• /setstartimg off",
+            "âœ… Usage:\n"
+            "â€¢ /setstartimg <image_url>\n"
+            "â€¢ /setstartimg off",
             context,
         )
         return
@@ -3237,14 +3262,14 @@ async def setstartimg(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     if raw.lower() in ("off", "remove", "none", "disable", "disabled"):
         db: Database = context.application.bot_data["db"]
         await db.set_setting(SETTINGS_START_IMG_URL, None)
-        await _send_emoji_text(update.effective_chat.id, "✅ Start image removed.", context)
+        await _send_emoji_text(update.effective_chat.id, "âœ… Start image removed.", context)
         return
     if not (raw.startswith("https://") or raw.startswith("http://")):
-        await _send_emoji_text(update.effective_chat.id, "❌ Invalid URL. Must start with http:// or https://", context)
+        await _send_emoji_text(update.effective_chat.id, "âŒ Invalid URL. Must start with http:// or https://", context)
         return
     db: Database = context.application.bot_data["db"]
     await db.set_setting(SETTINGS_START_IMG_URL, raw)
-    await _send_emoji_text(update.effective_chat.id, "✅ Start image set. Now /start will show the image.", context)
+    await _send_emoji_text(update.effective_chat.id, "âœ… Start image set. Now /start will show the image.", context)
 
 
 async def getemojiid(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -3253,12 +3278,12 @@ async def getemojiid(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     """
     await _upsert_user(update, context)
     if not await _is_admin_or_owner(update, context):
-        await _send_emoji_text(update.effective_chat.id, "🚫 Access denied. (Admin/Owner only)", context)
+        await _send_emoji_text(update.effective_chat.id, "ðŸš« Access denied. (Admin/Owner only)", context)
         return
     if not update.effective_message or not update.effective_message.reply_to_message:
         await _send_emoji_text(
             update.effective_chat.id,
-            "ℹ️ Reply to a message that contains Premium/custom emojis, then send: /getemojiid",
+            "â„¹ï¸ Reply to a message that contains Premium/custom emojis, then send: /getemojiid",
             context,
         )
         return
@@ -3284,19 +3309,19 @@ async def getemojiid(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     if not uniq:
         await _send_emoji_text(
             update.effective_chat.id,
-            "⚠️ No custom emoji IDs found in that message.\n\n"
+            "âš ï¸ No custom emoji IDs found in that message.\n\n"
             "Tip: Premium/custom emojis are detectable only when they are custom emoji entities (not normal Unicode emojis).",
             context,
         )
         return
 
-    out = "\n".join([f"• {cid}" for cid in uniq])
+    out = "\n".join([f"â€¢ {cid}" for cid in uniq])
     await _send_emoji_text(
         update.effective_chat.id,
-        "✅ Custom Emoji IDs Found\n\n"
+        "âœ… Custom Emoji IDs Found\n\n"
         f"{out}\n\n"
         "Set for UI:\n"
-        "• /setuitemoji <name> <custom_emoji_id>\n"
+        "â€¢ /setuitemoji <name> <custom_emoji_id>\n"
         "Example: /setuitemoji lock 54545454545454545",
         context,
     )
@@ -3309,28 +3334,28 @@ async def setuitemoji(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     """
     await _upsert_user(update, context)
     if not await _is_admin_or_owner(update, context):
-        await _send_emoji_text(update.effective_chat.id, "🚫 Access denied. (Admin/Owner only)", context)
+        await _send_emoji_text(update.effective_chat.id, "ðŸš« Access denied. (Admin/Owner only)", context)
         return
     if len(context.args) < 1:
         await _send_emoji_text(
             update.effective_chat.id,
-            "🧩 UI Emoji Settings\n\n"
-            "✅ Usage:\n"
-            "• /setuitemoji <name> <custom_emoji_id>\n"
-            "• /setuitemoji <name> off\n\n"
+            "ðŸ§© UI Emoji Settings\n\n"
+            "âœ… Usage:\n"
+            "â€¢ /setuitemoji <name> <custom_emoji_id>\n"
+            "â€¢ /setuitemoji <name> off\n\n"
             "Example:\n"
-            "• /setuitemoji lock 54545454545454545",
+            "â€¢ /setuitemoji lock 54545454545454545",
             context,
         )
         return
 
     name = context.args[0].strip().lower()
     if not name or any(c not in "abcdefghijklmnopqrstuvwxyz0123456789_-" for c in name) or len(name) > 32:
-        await _send_emoji_text(update.effective_chat.id, "❌ Invalid name. Use letters/numbers/_/- (max 32).", context)
+        await _send_emoji_text(update.effective_chat.id, "âŒ Invalid name. Use letters/numbers/_/- (max 32).", context)
         return
 
     if len(context.args) < 2:
-        await _send_emoji_text(update.effective_chat.id, "ℹ️ Missing value. Use: /setuitemoji <name> <custom_emoji_id|off>", context)
+        await _send_emoji_text(update.effective_chat.id, "â„¹ï¸ Missing value. Use: /setuitemoji <name> <custom_emoji_id|off>", context)
         return
 
     val = context.args[1].strip()
@@ -3340,16 +3365,16 @@ async def setuitemoji(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     if val.lower() in ("off", "remove", "none", "disable", "disabled"):
         await db.set_setting(key, None)
         _invalidate_ui_emoji_cache(context)
-        await _send_emoji_text(update.effective_chat.id, f"✅ UI emoji removed for {name}.", context)
+        await _send_emoji_text(update.effective_chat.id, f"âœ… UI emoji removed for {name}.", context)
         return
 
     if not val.isdigit():
-        await _send_emoji_text(update.effective_chat.id, "❌ Invalid custom_emoji_id. It must be numeric.", context)
+        await _send_emoji_text(update.effective_chat.id, "âŒ Invalid custom_emoji_id. It must be numeric.", context)
         return
 
     await db.set_setting(key, val)
     _invalidate_ui_emoji_cache(context)
-    await _send_emoji_text(update.effective_chat.id, f"✅ UI emoji set: {name} -> {val}", context)
+    await _send_emoji_text(update.effective_chat.id, f"âœ… UI emoji set: {name} -> {val}", context)
 
 
 async def setemojipreset(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -3358,7 +3383,7 @@ async def setemojipreset(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     """
     await _upsert_user(update, context)
     if not await _is_admin_or_owner(update, context):
-        await _send_emoji_text(update.effective_chat.id, "🚫 Access denied. (Admin/Owner only)", context)
+        await _send_emoji_text(update.effective_chat.id, "ðŸš« Access denied. (Admin/Owner only)", context)
         return
     db: Database = context.application.bot_data["db"]
     for name, eid in PRESET_UI_EMOJI_IDS.items():
@@ -3366,8 +3391,8 @@ async def setemojipreset(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     _invalidate_ui_emoji_cache(context)
     await _send_emoji_text(
         update.effective_chat.id,
-        "✅ UI emoji preset saved.\n\n"
-        f"🧾 Total mapped: {len(PRESET_UI_EMOJI_IDS)}\n"
+        "âœ… UI emoji preset saved.\n\n"
+        f"ðŸ§¾ Total mapped: {len(PRESET_UI_EMOJI_IDS)}\n"
         "Next step: UI rendering me in IDs ko apply karna.",
         context,
     )
@@ -3376,14 +3401,14 @@ async def setemojipreset(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     if not await _is_admin_or_owner(update, context):
-        await _send_emoji_text(update.effective_chat.id, "🚫 Access denied. (Admin/Owner only)", context)
+        await _send_emoji_text(update.effective_chat.id, "ðŸš« Access denied. (Admin/Owner only)", context)
         return
     db: Database = context.application.bot_data["db"]
     s = await db.stats()
-    lines = [f"• [b]{k}:[/b] [c]{v}[/c]" for k, v in s.items()]
+    lines = [f"â€¢ [b]{k}:[/b] [c]{v}[/c]" for k, v in s.items()]
     await _send_emoji_text(
         update.effective_chat.id,
-        "📊 [b]Bot Stats[/b]\n[i]Live summary[/i]\n\n" + "\n".join(lines),
+        "ðŸ“Š [b]Bot Stats[/b]\n[i]Live summary[/i]\n\n" + "\n".join(lines),
         context,
     )
 
@@ -3391,7 +3416,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def premiumdb(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     if not await _is_admin_or_owner(update, context):
-        await _send_emoji_text(update.effective_chat.id, "🚫 Access denied. (Admin/Owner only)", context)
+        await _send_emoji_text(update.effective_chat.id, "ðŸš« Access denied. (Admin/Owner only)", context)
         return
     if not update.effective_chat:
         return
@@ -3399,7 +3424,7 @@ async def premiumdb(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     rows = await db.list_premium_records()
     payment_meta = await db.list_latest_payment_meta()
     if not rows:
-        await _send_emoji_text(update.effective_chat.id, "ℹ️ No premium records found.", context)
+        await _send_emoji_text(update.effective_chat.id, "â„¹ï¸ No premium records found.", context)
         return
 
     try:
@@ -3407,7 +3432,7 @@ async def premiumdb(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     except Exception:
         await _send_emoji_text(
             update.effective_chat.id,
-            "❌ Excel export dependency missing.\nInstall: [c]pip install openpyxl[/c]",
+            "âŒ Excel export dependency missing.\nInstall: [c]pip install openpyxl[/c]",
             context,
         )
         return
@@ -3473,7 +3498,7 @@ async def premiumdb(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 chat_id=update.effective_chat.id,
                 document=fh,
                 filename=f"premium_records_{date_tag}.xlsx",
-                caption=f"📦 Premium DB export\n🧾 Total records: {len(rows)}",
+                caption=f"ðŸ“¦ Premium DB export\nðŸ§¾ Total records: {len(rows)}",
             )
     finally:
         if tmp_path and os.path.exists(tmp_path):
@@ -3486,10 +3511,10 @@ async def premiumdb(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     if not await _is_admin_or_owner(update, context):
-        await _send_emoji_text(update.effective_chat.id, "🚫 Access denied. (Admin/Owner only)", context)
+        await _send_emoji_text(update.effective_chat.id, "ðŸš« Access denied. (Admin/Owner only)", context)
         return
     if not update.effective_message or not update.effective_message.reply_to_message:
-        await _send_emoji_text(update.effective_chat.id, "ℹ️ Reply to a message, then send: /broadcast", context)
+        await _send_emoji_text(update.effective_chat.id, "â„¹ï¸ Reply to a message, then send: /broadcast", context)
         return
     db: Database = context.application.bot_data["db"]
     user_ids = await db.list_user_ids()
@@ -3504,9 +3529,9 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             fail += 1
     await _send_emoji_text(
         update.effective_chat.id,
-        "📣 Broadcast Completed\n\n"
-        f"✅ Sent: {ok}\n"
-        f"⚠️ Failed: {fail}",
+        "ðŸ“£ Broadcast Completed\n\n"
+        f"âœ… Sent: {ok}\n"
+        f"âš ï¸ Failed: {fail}",
         context,
     )
 
@@ -3535,7 +3560,7 @@ def build_handlers(app: Application) -> None:
     app.add_handler(CommandHandler("getlink", getlink))
     app.add_handler(CommandHandler("batch", batch))
     app.add_handler(CommandHandler("custombatch", custombatch))
-    app.add_handler(CallbackQueryHandler(custombatch_callback, pattern=r"^(cbgen|cbcancel)$"))
+    app.add_handler(CallbackQueryHandler(custombatch_callback, pattern=r"^(cbgen|cbcancel)(:.+)?$"))
     app.add_handler(CommandHandler("addadmin", addadmin))
     app.add_handler(CommandHandler("removeadmin", removeadmin))
     app.add_handler(CommandHandler("addpremium", addpremium))
@@ -3563,4 +3588,6 @@ def build_handlers(app: Application) -> None:
     # PTB v20+ uses uppercase filter shortcuts (VIDEO/AUDIO/PHOTO). Document is namespaced.
     media_filter = filters.Document.ALL | filters.VIDEO | filters.AUDIO | filters.PHOTO
     app.add_handler(MessageHandler(filters.ALL & media_filter, admin_media_ingest))
+
+
 
