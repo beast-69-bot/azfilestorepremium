@@ -3704,19 +3704,34 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     db: Database = context.application.bot_data["db"]
     user_ids = await db.list_user_ids()
     src = update.effective_message.reply_to_message
+    src_chat_id = int(src.chat.id) if getattr(src, "chat", None) else int(src.chat_id)
     ok = 0
     fail = 0
+    retried = 0
     for uid in user_ids:
         try:
-            await context.bot.copy_message(chat_id=uid, from_chat_id=src.chat_id, message_id=src.message_id)
+            await context.bot.copy_message(chat_id=uid, from_chat_id=src_chat_id, message_id=src.message_id)
             ok += 1
+        except RetryAfter as e:
+            # Handle Telegram flood control and retry once.
+            retried += 1
+            wait_s = max(1.0, float(getattr(e, "retry_after", 1.0)))
+            await asyncio.sleep(wait_s)
+            try:
+                await context.bot.copy_message(chat_id=uid, from_chat_id=src_chat_id, message_id=src.message_id)
+                ok += 1
+            except Exception:
+                fail += 1
+        except Forbidden:
+            fail += 1
         except Exception:
             fail += 1
     await _send_emoji_text(
         update.effective_chat.id,
         "📣 Broadcast Completed\n\n"
         f"✅ Sent: {ok}\n"
-        f"⚠️ Failed: {fail}",
+        f"⚠️ Failed: {fail}\n"
+        f"⏱️ Retried (floodwait): {retried}",
         context,
     )
 
