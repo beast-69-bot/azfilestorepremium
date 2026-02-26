@@ -14,7 +14,7 @@ from urllib.parse import parse_qs, quote, urlparse
 import httpx
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, MessageEntity, Update
 from telegram.constants import ChatMemberStatus, MessageEntityType
-from telegram.error import RetryAfter
+from telegram.error import Forbidden, RetryAfter
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
@@ -2264,15 +2264,16 @@ async def _notify_payment_admins(update: Update, context: ContextTypes.DEFAULT_T
 
 
 async def pay_utr_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    rid = context.user_data.get("pay_utr_request_id")
-    if not rid:
-        return
     if not update.effective_user or not update.effective_chat or not update.effective_message:
+        return
+    ud = context.user_data or {}
+    rid = ud.get("pay_utr_request_id")
+    if not rid:
         return
     db: Database = context.application.bot_data["db"]
     req = await db.get_payment_request(int(rid))
     if not req:
-        context.user_data.pop("pay_utr_request_id", None)
+        ud.pop("pay_utr_request_id", None)
         await _send_emoji_text(update.effective_chat.id, "❌ Payment request expired/invalid. Please run /pay again.", context)
         return
     now = int(time.time())
@@ -2280,7 +2281,7 @@ async def pay_utr_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         await db.expire_payment_request_if_pending(int(rid))
         await _cleanup_payment_user_ui(req, context)
         await db.delete_payment_request(int(rid))
-        context.user_data.pop("pay_utr_request_id", None)
+        ud.pop("pay_utr_request_id", None)
         await _send_emoji_text(update.effective_chat.id, "⏳ Payment request expired. Please run /pay again.", context)
         return
 
@@ -2295,7 +2296,7 @@ async def pay_utr_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             return
 
     ok = await db.set_payment_utr(int(rid), utr_text)
-    context.user_data.pop("pay_utr_request_id", None)
+    ud.pop("pay_utr_request_id", None)
     if not ok:
         await _send_emoji_text(update.effective_chat.id, "❌ Payment request expired/invalid. Please run /pay again.", context)
         return
@@ -2309,6 +2310,12 @@ async def pay_utr_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         "Plan verification ke baad manually activate kiya jayega.",
         context,
     )
+
+
+async def on_error(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    # Expected runtime cases: blocked users, transient retries, etc.
+    if isinstance(context.error, Forbidden):
+        return
 
 
 async def pay_admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -3684,6 +3691,7 @@ def build_handlers(app: Application) -> None:
     # PTB v20+ uses uppercase filter shortcuts (VIDEO/AUDIO/PHOTO). Document is namespaced.
     media_filter = filters.Document.ALL | filters.VIDEO | filters.AUDIO | filters.PHOTO
     app.add_handler(MessageHandler(filters.ALL & media_filter, admin_media_ingest))
+    app.add_error_handler(on_error)
 
 
 
