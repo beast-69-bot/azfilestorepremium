@@ -762,3 +762,32 @@ class Database:
     async def delete_payment_request(self, request_id: int) -> None:
         await self.conn.execute("DELETE FROM payment_requests WHERE id=?", (int(request_id),))
         await self.conn.commit()
+
+    async def list_processed_payment_requests(self, since_ts: int, until_ts: int) -> list[dict[str, Any]]:
+        cur = await self.conn.execute(
+            """
+            SELECT id, user_id, plan_key, plan_days, amount_rs, processed_at
+            FROM payment_requests
+            WHERE status='processed'
+              AND processed_at IS NOT NULL
+              AND processed_at>=?
+              AND processed_at<=?
+            ORDER BY processed_at ASC, id ASC
+            """,
+            (int(since_ts), int(until_ts)),
+        )
+        rows = await cur.fetchall()
+        await cur.close()
+        out: list[dict[str, Any]] = []
+        for r in rows:
+            out.append(
+                {
+                    "id": int(r[0]),
+                    "user_id": int(r[1]),
+                    "plan_key": str(r[2] or ""),
+                    "plan_days": int(r[3]) if r[3] is not None else 0,
+                    "amount_rs": int(r[4]) if r[4] is not None else 0,
+                    "processed_at": int(r[5]) if r[5] is not None else 0,
+                }
+            )
+        return out

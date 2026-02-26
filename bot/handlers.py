@@ -38,6 +38,7 @@ SETTINGS_PAY_UPI = "pay_upi"
 SETTINGS_PAY_NAME = "pay_name"
 SETTINGS_PAY_TEXT = "pay_text"
 SETTINGS_PAY_ADMIN_MSGS_PREFIX = "pay_admin_msgs:"
+SETTINGS_EXTEND_24H_PREFIX = "extend_24h_done:"
 UI_EMOJI_CACHE_KEY = "_ui_emoji_map_cache"
 UI_EMOJI_CACHE_TS_KEY = "_ui_emoji_map_cache_ts"
 UI_EMOJI_CACHE_TTL_SECONDS = 120
@@ -1888,6 +1889,88 @@ async def removepremium(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     await _send_emoji_text(update.effective_chat.id, f"✅ Premium removed for {uid}.", context)
 
 
+async def extendlast24h(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await _upsert_user(update, context)
+    if not await _is_admin_or_owner(update, context):
+        await _send_emoji_text(update.effective_chat.id, "🚫 Access denied. (Admin/Owner only)", context)
+        return
+    if not update.effective_chat:
+        return
+
+    db: Database = context.application.bot_data["db"]
+    now_ts = int(time.time())
+    since_ts = now_ts - DAY_SECONDS
+
+    reqs = await db.list_processed_payment_requests(since_ts, now_ts)
+    if not reqs:
+        await _send_emoji_text(
+            update.effective_chat.id,
+            "ℹ️ No processed premium plans found in last 24 hours.",
+            context,
+        )
+        return
+
+    by_user: dict[int, list[dict[str, Any]]] = {}
+    for r in reqs:
+        uid = int(r.get("user_id") or 0)
+        rid = int(r.get("id") or 0)
+        if uid <= 0 or rid <= 0:
+            continue
+        marker_key = f"{SETTINGS_EXTEND_24H_PREFIX}{rid}"
+        if await db.get_setting(marker_key):
+            continue
+        by_user.setdefault(uid, []).append(r)
+
+    if not by_user:
+        await _send_emoji_text(
+            update.effective_chat.id,
+            "ℹ️ Nothing to extend. All eligible requests were already processed earlier.",
+            context,
+        )
+        return
+
+    users_extended = 0
+    users_notified = 0
+    requests_marked = 0
+    failed_users = 0
+
+    for uid, user_reqs in by_user.items():
+        try:
+            until = await db.add_premium_seconds(uid, DAY_SECONDS)
+        except Exception:
+            failed_users += 1
+            continue
+
+        users_extended += 1
+        for r in user_reqs:
+            await db.set_setting(f"{SETTINGS_EXTEND_24H_PREFIX}{int(r['id'])}", str(now_ts))
+            requests_marked += 1
+
+        expiry_utc = datetime.datetime.utcfromtimestamp(until).strftime("%Y-%m-%d %H:%M:%S UTC")
+        try:
+            await _send_emoji_text(
+                uid,
+                "🎁 Premium Plan Extended\n\n"
+                "Aapka premium plan goodwill me +1 day extend kiya gaya hai.\n"
+                f"⏳ New Expiry: [c]{expiry_utc}[/c]",
+                context,
+            )
+            users_notified += 1
+        except Exception:
+            pass
+
+    await _send_emoji_text(
+        update.effective_chat.id,
+        "✅ Last-24h plan extension completed.\n\n"
+        f"🧾 Eligible requests scanned: {len(reqs)}\n"
+        f"👤 Users extended: {users_extended}\n"
+        f"🏷️ Requests marked: {requests_marked}\n"
+        f"📣 Users notified: {users_notified}\n"
+        f"⚠️ Failed users: {failed_users}",
+        context,
+    )
+
+
 async def gencode(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     if not await _is_admin_or_owner(update, context):
@@ -3668,6 +3751,7 @@ def build_handlers(app: Application) -> None:
     app.add_handler(CommandHandler("removeadmin", removeadmin))
     app.add_handler(CommandHandler("addpremium", addpremium))
     app.add_handler(CommandHandler("removepremium", removepremium))
+    app.add_handler(CommandHandler("extendlast24h", extendlast24h))
     app.add_handler(CommandHandler("gencode", gencode))
     app.add_handler(CommandHandler("forcech", forcech))
     app.add_handler(CommandHandler("forcechdebug", forcechdebug))

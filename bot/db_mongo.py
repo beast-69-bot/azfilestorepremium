@@ -628,3 +628,28 @@ class MongoDatabase:
 
     async def delete_payment_request(self, request_id: int) -> None:
         await self.db.payment_requests.delete_one({"id": int(request_id)})
+
+    async def list_processed_payment_requests(self, since_ts: int, until_ts: int) -> list[dict[str, Any]]:
+        rows = self.db.payment_requests.find(
+            {
+                "status": "processed",
+                "processed_at": {
+                    "$gte": int(since_ts),
+                    "$lte": int(until_ts),
+                },
+            },
+            {"_id": 0, "id": 1, "user_id": 1, "plan_key": 1, "plan_days": 1, "amount_rs": 1, "processed_at": 1},
+        ).sort([("processed_at", 1), ("id", 1)])
+        out: list[dict[str, Any]] = []
+        async for r in rows:
+            out.append(
+                {
+                    "id": int(r.get("id") or 0),
+                    "user_id": int(r.get("user_id") or 0),
+                    "plan_key": str(r.get("plan_key") or ""),
+                    "plan_days": int(r.get("plan_days") or 0),
+                    "amount_rs": int(r.get("amount_rs") or 0),
+                    "processed_at": int(r.get("processed_at") or 0),
+                }
+            )
+        return out
