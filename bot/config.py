@@ -13,6 +13,8 @@ class Config:
     db_backend: str = "sqlite"  # sqlite|mongo
     mongo_uri: str = ""
     mongo_db_name: str = "azfilestorepremium"
+    xwallet_api_key: str = ""
+    payment_gateway: str = "manual"
 
     @staticmethod
     def from_env() -> "Config":
@@ -23,6 +25,8 @@ class Config:
         db_backend = os.getenv("DB_BACKEND", "sqlite").strip().lower()
         mongo_uri = os.getenv("MONGO_URI", "").strip()
         mongo_db_name = os.getenv("MONGO_DB_NAME", "azfilestorepremium").strip()
+        xwallet_api_key = os.getenv("XWALLET_API_KEY", "").strip()
+        payment_gateway = os.getenv("PAYMENT_GATEWAY", "manual").strip()
 
         if not bot_token:
             raise RuntimeError("BOT_TOKEN is required")
@@ -49,4 +53,6 @@ class Config:
             db_backend=db_backend,
             mongo_uri=mongo_uri,
             mongo_db_name=mongo_db_name,
+            xwallet_api_key=xwallet_api_key,
+            payment_gateway=payment_gateway,
         )
