@@ -2405,23 +2405,30 @@ async def _handle_xwallet_payment(update: Update, context: ContextTypes.DEFAULT_
             except Exception:
                 pass
 
-        # Step 4: Send payment link as an inline URL button.
+        # Step 4: Send payment link with process instructions and custom emojis.
         plan_label = html.escape(str(plan["label"]))
         text = (
-            "💎 <b>Premium Purchase</b>\n\n"
-            f"🛍 Plan: <b>{plan_label}</b>\n"
-            f"💰 Amount: ₹{int(amount)}\n"
-            f"🆔 Order ID: <code>#{rid}</code>\n\n"
-            "Tap button below → browser mein payment karo.\n"
-            "⏳ 5 minutes mein pay karo.\n"
-            "<i>Payment hote hi plan automatically activate ho jaayega.</i>"
+            "💎 [b]Premium Purchase[/b]\n\n"
+            f"🛍 Plan: [b]{plan_label}[/b]\n"
+            f"💰 Amount: [b]₹{int(amount)}[/b]\n"
+            f"🆔 Order ID: [c]#{rid}[/c]\n\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            "📌 [b]Payment Process:[/b]\n"
+            "1️⃣ Niche diye gaye button par tap karke link open karein.\n"
+            "2️⃣ Payment complete karein.\n"
+            "3️⃣ Payment ke baad browser ko close na karein, site refresh hone dein.\n\n"
+            "⚠️ [b]Note:[/b] Agar browser galti se band ho jaye, toh wapis link open karein, refresh ho jayega.\n"
+            "━━━━━━━━━━━━━━━━━━━━\n\n"
+            "⏳ [b]5 minutes[/b] mein pay karo.\n"
+            "🚀 [b]Automatic activation[/b] payment ke baad ho jaayega."
         )
         kb = InlineKeyboardMarkup([
             [InlineKeyboardButton(f"💳 Pay ₹{int(amount)} — Tap Here", url=payment_link)],
         ])
-        payment_msg = await update.effective_chat.send_message(
-            text,
-            parse_mode="HTML",
+        payment_msg = await _send_emoji_text(
+            chat_id=update.effective_chat.id,
+            text=text,
+            context=context,
             reply_markup=kb,
         )
         await db.set_payment_ui_messages(
