@@ -93,6 +93,19 @@ class MongoDatabase:
         row = await self.db.users.find_one({"user_id": int(user_id)}, {"premium_until": 1, "_id": 0})
         return int(row.get("premium_until") or 0) if row else 0
 
+    async def get_user(self, user_id: int) -> Optional[dict[str, Any]]:
+        row = await self.db.users.find_one({"user_id": int(user_id)}, {"_id": 0})
+        if not row:
+            return None
+        return {
+            "user_id": int(row.get("user_id") or 0),
+            "first_name": row.get("first_name") or "",
+            "username": row.get("username") or "",
+            "premium_until": int(row.get("premium_until") or 0),
+            "created_at": int(row.get("created_at") or 0),
+            "last_seen": int(row.get("last_seen") or 0),
+        }
+
     async def add_premium_seconds(self, user_id: int, seconds: int) -> int:
         now = _now()
         current = await self.get_premium_until(int(user_id))

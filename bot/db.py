@@ -210,6 +210,24 @@ class Database:
         await cur.close()
         return int(row[0]) if row and row[0] is not None else 0
 
+    async def get_user(self, user_id: int) -> Optional[dict[str, Any]]:
+        cur = await self.conn.execute(
+            "SELECT user_id, first_name, username, premium_until, created_at, last_seen FROM users WHERE user_id=?",
+            (int(user_id),),
+        )
+        row = await cur.fetchone()
+        await cur.close()
+        if not row:
+            return None
+        return {
+            "user_id": int(row[0]),
+            "first_name": row[1] or "",
+            "username": row[2] or "",
+            "premium_until": int(row[3]) if row[3] is not None else 0,
+            "created_at": int(row[4]) if row[4] is not None else 0,
+            "last_seen": int(row[5]) if row[5] is not None else 0,
+        }
+
     async def add_premium_seconds(self, user_id: int, seconds: int) -> int:
         now = _now()
         cur = await self.conn.execute("SELECT premium_until FROM users WHERE user_id=?", (int(user_id),))

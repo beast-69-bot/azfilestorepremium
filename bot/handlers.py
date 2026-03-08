@@ -2271,6 +2271,38 @@ async def _get_premium_channels_text(db: Database) -> str:
     return "\n".join(lines)
 
 
+async def _notify_autoverify_success(context: ContextTypes.DEFAULT_TYPE, req: dict[str, Any]) -> None:
+    db: Database = context.application.bot_data["db"]
+    cfg = context.application.bot_data["cfg"]
+    admin_ids = await db.list_admin_ids()
+    targets = {int(cfg.owner_id), *[int(x) for x in admin_ids]}
+
+    uid = int(req["user_id"])
+    user_data = await db.get_user(uid)
+    first_name = user_data.get("first_name", "Unknown") if user_data else "Unknown"
+    username = f"@{user_data.get('username')}" if user_data and user_data.get("username") else "-"
+
+    plan_info = PAY_PLANS.get(req['plan_key'], {"label": req['plan_key']})
+    plan_name = plan_info.get("label", req['plan_key'])
+
+    note = (
+        "🚀 [b]Autoverify: Plan Activated![/b]\n\n"
+        f"🆔 Request ID: [c]#{req['id']}[/c]\n"
+        f"👤 User: [b]{first_name}[/b] ({uid})\n"
+        f"👤 Username: {username}\n"
+        f"💎 Plan: [b]{plan_name}[/b] ({req['plan_days']} days)\n"
+        f"💰 Amount: ₹{req['amount_rs']}\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "✅ Payment auto-verify ho gayi aur plan activate kar diya gaya hai."
+    )
+
+    for aid in targets:
+        try:
+            await _send_emoji_text(aid, note, context)
+        except Exception:
+            pass
+
+
 async def _poll_and_complete(context: ContextTypes.DEFAULT_TYPE, rid: int, qr_code_id: str) -> None:
     """Background task: polls XWallet until payment succeeds, fails, or times out."""
     success = await xwallet_service.wait_for_payment(qr_code_id, timeout_minutes=5)
@@ -2285,6 +2317,9 @@ async def _poll_and_complete(context: ContextTypes.DEFAULT_TYPE, rid: int, qr_co
         if not ok:
             return  # Race condition — already handled elsewhere.
         until = await db.add_premium_seconds(int(req["user_id"]), int(req["plan_days"]) * DAY_SECONDS)
+
+        # Notify owner and admins about autoverify success
+        await _notify_autoverify_success(context, req)
         expiry_utc = datetime.datetime.utcfromtimestamp(until).strftime("%Y-%m-%d %H:%M:%S UTC")
         # 1. Edit the old payment message to remove the Pay button and show Success status with custom emoji
         user_chat_id = req.get("user_chat_id")
