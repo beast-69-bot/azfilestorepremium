@@ -2424,6 +2424,7 @@ async def _handle_xwallet_payment(update: Update, context: ContextTypes.DEFAULT_
         )
         kb = InlineKeyboardMarkup([
             [InlineKeyboardButton(f"💳 Pay ₹{int(amount)} — Tap Here", url=payment_link)],
+            [InlineKeyboardButton("❌ Cancel Order", callback_data=f"paycancel:{rid}")],
         ])
         payment_msg = await _send_emoji_text(
             chat_id=update.effective_chat.id,
