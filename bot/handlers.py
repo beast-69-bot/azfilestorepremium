@@ -2286,39 +2286,39 @@ async def _poll_and_complete(context: ContextTypes.DEFAULT_TYPE, rid: int, qr_co
             return  # Race condition — already handled elsewhere.
         until = await db.add_premium_seconds(int(req["user_id"]), int(req["plan_days"]) * DAY_SECONDS)
         expiry_utc = datetime.datetime.utcfromtimestamp(until).strftime("%Y-%m-%d %H:%M:%S UTC")
-        # 1. Edit the old payment message to remove the Pay button and show Success
+        # 1. Edit the old payment message to remove the Pay button and show Success status with custom emoji
         user_chat_id = req.get("user_chat_id")
         details_msg_id = req.get("details_msg_id")
         if user_chat_id and details_msg_id:
             try:
-                await context.bot.edit_message_text(
+                await _edit_emoji_text(
                     chat_id=int(user_chat_id),
                     message_id=int(details_msg_id),
-                    text="✅ <b>Payment Status: SUCCESS</b>\n\nIs order ki payment verify ho chuki hai.",
-                    parse_mode="HTML",
+                    text="✅ [b]Payment Status: SUCCESS[/b]\n\nIs order ki payment verify ho chuki hai.",
+                    context=context,
                 )
             except Exception:
                 pass
 
-        # 2. Send a BRAND NEW detailed message
+        # 2. Send a BRAND NEW detailed message with premium custom emojis
         try:
             plan_info = PAY_PLANS.get(req['plan_key'], {"label": req['plan_key']})
             plan_name = plan_info.get("label", req['plan_key'])
             
             success_text = (
-                "✨ <b>Premium Activated Successfully!</b> ✨\n\n"
-                "🎉 <b>Congratulations!</b> Aapka payment verify ho gaya hai aur aapka account premium mein upgrade ho chuka hai.\n\n"
+                "⭐ [b]Premium Activated Successfully![/b] ⭐\n\n"
+                "⭐ [b]Congratulations![/b] Aapka payment verify ho gaya hai aur aapka account premium mein upgrade ho chuka hai.\n\n"
                 "━━━━━━━━━━━━━━━━━━━━\n"
-                f"💎 <b>Plan:</b> <code>{plan_name}</code>\n"
-                f"📅 <b>Duration:</b> <code>{req['plan_days']} Days</code>\n"
-                f"🆔 <b>Order ID:</b> <code>#{req['id']}</code>\n"
-                f"🕒 <b>Expiry Date:</b> <code>{expiry_utc}</code>\n"
+                f"🎟 [b]Plan:[/b] [c]{plan_name}[/c]\n"
+                f"📅 [b]Duration:[/b] [c]{req['plan_days']} Days[/c]\n"
+                f"🆔 [b]Order ID:[/b] [c]#{req['id']}[/c]\n"
+                f"🕒 [b]Expiry Date:[/b] [c]{expiry_utc}[/c]\n"
                 "━━━━━━━━━━━━━━━━━━━━\n\n"
                 "✅ Aap ab bina kisi ads ke sabhi files access aur download kar sakte hain.\n"
-                "🚀 <b>Enjoy Premium Experience!</b>"
+                "🚀 [b]Enjoy Premium Experience![/b]"
             )
             
-            await _send_html_text(
+            await _send_emoji_text(
                 int(req["user_id"]),
                 success_text,
                 context,
