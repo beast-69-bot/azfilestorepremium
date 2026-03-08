@@ -40,6 +40,7 @@ SETTINGS_PAY_NAME = "pay_name"
 SETTINGS_PAY_TEXT = "pay_text"
 SETTINGS_PAY_ADMIN_MSGS_PREFIX = "pay_admin_msgs:"
 SETTINGS_EXTEND_24H_PREFIX = "extend_24h_done:"
+SETTINGS_PREMIUM_CHANNELS = "premium_channels"
 UI_EMOJI_CACHE_KEY = "_ui_emoji_map_cache"
 UI_EMOJI_CACHE_TS_KEY = "_ui_emoji_map_cache_ts"
 UI_EMOJI_CACHE_TTL_SECONDS = 120
@@ -99,9 +100,9 @@ UNICODE_TO_UI_NAME = {
 }
 
 PAY_PLANS: dict[str, dict[str, Any]] = {
-    "1d": {"label": "1 Day", "days": 1, "amount": 9},
-    "7d": {"label": "7 Days", "days": 7, "amount": 29},
-    "30d": {"label": "1 Month", "days": 30, "amount": 99},
+    "1d": {"label": "1 Day", "days": 1, "amount": 10},
+    "7d": {"label": "7 Days", "days": 7, "amount": 35},
+    "30d": {"label": "1 Month", "days": 30, "amount": 115},
 }
 
 BSETTINGS_DOCS: dict[str, dict[str, str]] = {
@@ -2069,9 +2070,9 @@ async def plan(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _send_emoji_text(
         update.effective_chat.id,
         "💎 [b]Premium Plans[/b]\n\n"
-        "• [b]1 Day[/b]: ₹9\n"
-        "• [b]7 Days[/b]: ₹29\n"
-        "• [b]1 Month[/b]: ₹99\n\n"
+        "• [b]1 Day[/b]: ₹10\n"
+        "• [b]7 Days[/b]: ₹35\n"
+        "• [b]1 Month[/b]: ₹115\n\n"
         "🔓 [b]Normal User Benefit[/b]\n"
         "• Final link access ke liye ads dekhne honge\n\n"
         "⭐ [b]Premium User Benefit[/b]\n"
@@ -2090,9 +2091,9 @@ async def plan(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 def _pay_plan_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [
-            [InlineKeyboardButton("💎 1 Day - ₹9", callback_data="payplan:1d")],
-            [InlineKeyboardButton("💎 7 Days - ₹29", callback_data="payplan:7d")],
-            [InlineKeyboardButton("💎 1 Month - ₹99", callback_data="payplan:30d")],
+            [InlineKeyboardButton("💎 1 Day - ₹10", callback_data="payplan:1d")],
+            [InlineKeyboardButton("💎 7 Days - ₹35", callback_data="payplan:7d")],
+            [InlineKeyboardButton("💎 1 Month - ₹115", callback_data="payplan:30d")],
         ]
     )
 
@@ -2248,75 +2249,168 @@ async def _handle_manual_payment(update: Update, context: ContextTypes.DEFAULT_T
             name=f"pay-timeout-{rid}",
         )
 
+async def _get_premium_channels_text(db: Database) -> str:
+    """Returns a formatted string of premium channels for approval messages."""
+    raw = await db.get_setting(SETTINGS_PREMIUM_CHANNELS)
+    if not raw:
+        return ""
+    try:
+        channels: list[dict] = json.loads(raw)
+    except Exception:
+        return ""
+    if not channels:
+        return ""
+    lines = []
+    for ch in channels:
+        name = ch.get("name") or "Channel"
+        link = ch.get("link") or ""
+        if link:
+            lines.append(f"• <a href='{link}'>{name}</a>")
+        else:
+            lines.append(f"• {name}")
+    return "\n".join(lines)
+
+
 async def _poll_and_complete(context: ContextTypes.DEFAULT_TYPE, rid: int, qr_code_id: str) -> None:
-    success = await xwallet_service.wait_for_payment(qr_code_id)
+    """Background task: polls XWallet until payment succeeds, fails, or times out."""
+    success = await xwallet_service.wait_for_payment(qr_code_id, timeout_minutes=5)
     db: Database = context.application.bot_data["db"]
     req = await db.get_payment_request(rid)
     if not req or req.get("status") != "pending":
+        # User cancelled or admin already handled it — do nothing.
         return
-        
+
     if success:
-        await db.approve_payment_request(rid, admin_id=0)
-        await db.add_premium_seconds(int(req["user_id"]), int(req["plan_days"]) * DAY_SECONDS)
-        try:
-            await _send_emoji_text(
-                int(req["user_id"]),
-                "✅ Payment Received! Premium activated successfully.",
-                context,
-            )
-        except Exception:
-            pass
+        ok = await db.approve_payment_request(rid, admin_id=0)
+        if not ok:
+            return  # Race condition — already handled elsewhere.
+        until = await db.add_premium_seconds(int(req["user_id"]), int(req["plan_days"]) * DAY_SECONDS)
+        expiry_utc = datetime.datetime.utcfromtimestamp(until).strftime("%Y-%m-%d %H:%M:%S UTC")
+        # Try editing the payment message in-place to show success.
+        user_chat_id = req.get("user_chat_id")
+        details_msg_id = req.get("details_msg_id")
+        if user_chat_id and details_msg_id:
+            try:
+                await context.bot.edit_message_text(
+                    chat_id=int(user_chat_id),
+                    message_id=int(details_msg_id),
+                    text="✅ <b>Payment Received!</b>\n\nPremium activated successfully. 🎉",
+                    parse_mode="HTML",
+                )
+            except Exception:
+                try:
+                    await _send_html_text(
+                        int(req["user_id"]),
+                        "✅ <b>Payment Received!</b>\n\nPremium activated successfully. 🎉",
+                        context,
+                    )
+                except Exception:
+                    pass
+        else:
+            try:
+                await _send_html_text(
+                    int(req["user_id"]),
+                    "✅ <b>Payment Received!</b>\n\nPremium activated successfully. 🎉",
+                    context,
+                )
+            except Exception:
+                pass
         await _cleanup_payment_user_ui(req, context)
     else:
-        await db.expire_payment_request_if_pending(rid)
-        try:
-            await _send_emoji_text(
-                int(req["user_id"]),
-                "⏰ Payment request expired. Please use /plan to create a new order.",
-                context,
-            )
-        except Exception:
-            pass
-        await _cleanup_payment_user_ui(req, context)
+        changed = await db.expire_payment_request_if_pending(rid)
+        if changed:
+            user_chat_id = req.get("user_chat_id")
+            details_msg_id = req.get("details_msg_id")
+            if user_chat_id and details_msg_id:
+                try:
+                    await context.bot.edit_message_text(
+                        chat_id=int(user_chat_id),
+                        message_id=int(details_msg_id),
+                        text="⏰ <b>Payment Expired</b>\n\nTime out ho gaya. /pay se dobara try karo.",
+                        parse_mode="HTML",
+                    )
+                except Exception:
+                    try:
+                        await _send_emoji_text(
+                            int(req["user_id"]),
+                            "⏰ Payment time expired.\n\nOrder expire ho gaya. Please /pay se naya order banao.",
+                            context,
+                        )
+                    except Exception:
+                        pass
+            else:
+                try:
+                    await _send_emoji_text(
+                        int(req["user_id"]),
+                        "⏰ Payment time expired.\n\nOrder expire ho gaya. Please /pay se naya order banao.",
+                        context,
+                    )
+                except Exception:
+                    pass
+            await _cleanup_payment_user_ui(req, context)
+
 
 async def _handle_xwallet_payment(update: Update, context: ContextTypes.DEFAULT_TYPE, q: Any, rid: int, plan: dict, cfg: Any) -> None:
+    """Handle XWallet payment flow: create order → send payment_link button → poll."""
+    db: Database = context.application.bot_data["db"]
+    loading = None
     try:
-        loading = await _send_emoji_text(update.effective_chat.id, "⏳ Generating payment QR...", context)
-        db: Database = context.application.bot_data["db"]
+        loading = await _send_emoji_text(update.effective_chat.id, "⏳ Payment link generate ho raha hai...", context)
         amount = float(plan["amount"])
-        
-        create_res = await xwallet_service.create_payment(amount, str(rid), cfg.xwallet_api_key)
-        qr_code_id = create_res.get("status_data", {}).get("qr_code_id") or create_res.get("qr_code_id")
-        
-        qr_res = await xwallet_service.get_qr_image_url(qr_code_id)
-        qr_url = qr_res.get("status_data", {}).get("qr_url") or qr_res.get("qr_url")
-        
-        plan_label = html.escape(str(plan["label"]))
-        caption = (
-            "💎 <b>Premium Purchase (XWallet)</b>\n\n"
-            f"🛍 Plan: <b>{plan_label}</b>\n"
-            f"💰 Amount: ₹{amount}\n"
-            f"🆔 Order ID: <code>#{rid}</code>\n\n"
-            "⏳ Pay within 10 minutes.\n"
-            "<i>Do NOT close this message. Your plan will activate automatically once you pay.</i>"
-        )
-        
-        if loading and hasattr(loading, "message_id"):
+        api_key = getattr(cfg, "xwallet_api_key", "")
+
+        # Step 1: Create payment order.
+        create_res = await xwallet_service.create_payment(amount, api_key)
+        qr_code_id = create_res.get("qr_code_id")
+        if not qr_code_id:
+            raise ValueError(f"No qr_code_id in create_payment response: {create_res}")
+
+        # Step 2: Extract payment_link (browser-based UPI — confirmed working in live testing).
+        payment_link = str(create_res.get("payment_link", ""))
+        if not payment_link:
+            if loading and hasattr(loading, "delete"):
+                try:
+                    await loading.delete()
+                except Exception:
+                    pass
+            await _send_emoji_text(
+                update.effective_chat.id,
+                "⚠️ Payment gateway error. Please try again.",
+                context,
+            )
+            return
+
+        # Step 3: Delete loading message and plan picker.
+        if loading and hasattr(loading, "delete"):
             try:
                 await loading.delete()
             except Exception:
                 pass
-                
+            loading = None
         if q.message:
             try:
                 await q.message.delete()
             except Exception:
                 pass
-                
-        payment_msg = await update.effective_chat.send_photo(
-            photo=qr_url,
-            caption=caption,
-            parse_mode="HTML"
+
+        # Step 4: Send payment link as an inline URL button.
+        plan_label = html.escape(str(plan["label"]))
+        text = (
+            "💎 <b>Premium Purchase</b>\n\n"
+            f"🛍 Plan: <b>{plan_label}</b>\n"
+            f"💰 Amount: ₹{int(amount)}\n"
+            f"🆔 Order ID: <code>#{rid}</code>\n\n"
+            "Tap button below → browser mein payment karo.\n"
+            "⏳ 5 minutes mein pay karo.\n"
+            "<i>Payment hote hi plan automatically activate ho jaayega.</i>"
+        )
+        kb = InlineKeyboardMarkup([
+            [InlineKeyboardButton(f"💳 Pay ₹{int(amount)} — Tap Here", url=payment_link)],
+        ])
+        payment_msg = await update.effective_chat.send_message(
+            text,
+            parse_mode="HTML",
+            reply_markup=kb,
         )
         await db.set_payment_ui_messages(
             int(rid),
@@ -2324,19 +2418,42 @@ async def _handle_xwallet_payment(update: Update, context: ContextTypes.DEFAULT_
             int(payment_msg.message_id),
             None,
         )
-        
+
+        # Step 5: Start background polling task.
         asyncio.create_task(_poll_and_complete(context, rid, qr_code_id))
-        
+
     except Exception as e:
-        import logging
-        logging.getLogger(__name__).warning("Error in XWallet payment flow: %s", e)
-        await _send_emoji_text(update.effective_chat.id, "⚠️ Payment gateway error. Please try again.", context)
+        logger.warning("Error in _handle_xwallet_payment: %s", e)
+        # Clean up loading message if still visible.
+        if loading and hasattr(loading, "delete"):
+            try:
+                await loading.delete()
+            except Exception:
+                pass
+        await _send_emoji_text(
+            update.effective_chat.id,
+            "⚠️ Payment gateway error.\n\nPlease thodi der baad try karo ya admin se contact karo.",
+            context,
+        )
 
 async def pay(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     await _send_emoji_text(
         update.effective_chat.id,
-        "🛒 Choose Your Plan\n\nSelect one plan to continue payment:",
+        "⭐ [b]Premium Membership[/b]\n\n"
+        "🔓 [b]Free Users[/b]\n"
+        "• Sirf Normal links access kar sakte hain\n"
+        "• Premium links [b]block[/b] rahenge\n\n"
+        "💎 [b]Premium Users Ko Milta Hai[/b]\n"
+        "• ✅ Premium (VIP) links instantly open honge\n"
+        "• ✅ No Ads — seedha file/content deliver\n"
+        "• ✅ Instant Delivery — koi rukawat nahi\n"
+        "• ✅ All exclusive content unlocked\n\n"
+        "📦 [b]Plans Choose Karo[/b]\n"
+        "• [b]1 Day[/b]  — ₹10\n"
+        "• [b]7 Days[/b] — ₹35\n"
+        "• [b]1 Month[/b] — ₹115\n\n"
+        "👇 Neeche apna plan select karo:",
         context,
         reply_markup=_pay_plan_keyboard(),
     )
@@ -2352,18 +2469,24 @@ async def pay_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
     if data.startswith("payplan:"):
         existing = await db.get_latest_open_payment_request(update.effective_user.id)
+        cfg = context.application.bot_data["cfg"]
+        is_xwallet = getattr(cfg, "payment_gateway", "manual") == "xwallet" and getattr(cfg, "xwallet_api_key", "")
         if existing:
             now_ts = int(time.time())
-            if existing.get("status") == "submitted":
+            # Block only manual flow if UTR already submitted — XWallet flow is auto.
+            if existing.get("status") == "submitted" and not is_xwallet:
                 await q.answer("Payment already submitted. Admin verification pending.", show_alert=True)
                 return
-            if existing.get("status") == "pending" and int(existing.get("expires_at") or 0) > now_ts:
-                await q.answer("Active payment request already exists. Use Send UTR.", show_alert=True)
-                return
+            # If there's an active pending request, clean it up before creating a new one.
             if existing.get("status") == "pending":
                 changed = await db.expire_payment_request_if_pending(int(existing["id"]))
                 if changed:
+                    await _cleanup_payment_user_ui(existing, context)
                     await db.delete_payment_request(int(existing["id"]))
+            elif existing.get("status") == "submitted":
+                # For XWallet: expire the old submitted one and allow fresh order.
+                await db.expire_payment_request_if_pending(int(existing["id"]))
+                await _cleanup_payment_user_ui(existing, context)
 
         key = data.split(":", 1)[1]
         plan = PAY_PLANS.get(key)
@@ -2371,11 +2494,38 @@ async def pay_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             await _edit_emoji_text(update.effective_chat.id, q.message.message_id, "❌ Invalid plan.", context)
             return
         rid = await db.create_payment_request(update.effective_user.id, key, int(plan["days"]), int(plan["amount"]))
-        cfg = context.application.bot_data["cfg"]
-        if getattr(cfg, "payment_gateway", "manual") == "xwallet" and getattr(cfg, "xwallet_api_key", ""):
+        if is_xwallet:
             await _handle_xwallet_payment(update, context, q, rid, plan, cfg)
         else:
             await _handle_manual_payment(update, context, q, rid, plan)
+        return
+
+    if data.startswith("paycancel:"):
+        rid_raw = data.split(":", 1)[1]
+        try:
+            rid = int(rid_raw)
+        except ValueError:
+            await q.answer("Invalid order id", show_alert=True)
+            return
+        req = await db.get_payment_request(rid)
+        if not req or int(req.get("user_id", 0)) != int(update.effective_user.id):
+            await q.answer("Order not found.", show_alert=True)
+            return
+        if req.get("status") != "pending":
+            await q.answer("Order already processed or expired.", show_alert=True)
+            return
+        await db.expire_payment_request_if_pending(rid)
+        await _cleanup_payment_user_ui(req, context)
+        await db.delete_payment_request(rid)
+        try:
+            await q.message.delete()
+        except Exception:
+            pass
+        await _send_emoji_text(
+            update.effective_chat.id,
+            "❌ Order cancel kar diya gaya.\n\nNaya plan lene ke liye /pay use karo.",
+            context,
+        )
         return
 
     if data.startswith("payutr:"):
@@ -2548,11 +2698,18 @@ async def pay_admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         admin_name = f"@{update.effective_user.username}" if update.effective_user.username else str(update.effective_user.id)
         # Notify user
         try:
+            ch_text = await _get_premium_channels_text(db)
+            ch_section = (
+                "\n\n📢 [b]Premium Content Channels:[/b]\n"
+                + ch_text +
+                "\n\n✨ In sabhi channels ki posts mein ab aap [b]direct link[/b] le sakte ho — [b]bina ads ke![/b]"
+            ) if ch_text else ""
             await _send_emoji_text(
                 int(req["user_id"]),
-                "✅ Payment Verified\n\n"
+                "🎉 [b]Congratulations! Payment Verified![/b]\n\n"
                 f"💎 Plan activated: {req['plan_key']} ({req['plan_days']} days)\n"
-                f"🕒 Expires: {expiry_utc}",
+                f"🕒 Expires: {expiry_utc}"
+                + ch_section,
                 context,
             )
         except Exception:
@@ -3786,6 +3943,123 @@ async def premiumdb(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 pass
 
 
+async def setpremiumch(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Admin command to manage premium content channels shown in approval messages.
+
+    Usage:
+      /setpremiumch add <name> <link>   -- channel add karo
+      /setpremiumch remove <name>       -- channel remove karo
+      /setpremiumch list                -- list dekho
+      /setpremiumch clear               -- sab clear
+    """
+    await _upsert_user(update, context)
+    if not await _is_admin_or_owner(update, context):
+        await _send_emoji_text(update.effective_chat.id, "🚫 Access denied.", context)
+        return
+    if not update.effective_chat:
+        return
+    db: Database = context.application.bot_data["db"]
+    args = context.args or []
+    if not args:
+        await _send_emoji_text(
+            update.effective_chat.id,
+            "ℹ️ [b]Premium Channels Manager[/b]\n\n"
+            "Usage:\n"
+            "• [c]/setpremiumch add <name> <link>[/c]\n"
+            "• [c]/setpremiumch remove <name>[/c]\n"
+            "• [c]/setpremiumch list[/c]\n"
+            "• [c]/setpremiumch clear[/c]\n\n"
+            "Example:\n"
+            "[c]/setpremiumch add MyChannel https://t.me/mychannel[/c]",
+            context,
+        )
+        return
+
+    raw = await db.get_setting(SETTINGS_PREMIUM_CHANNELS)
+    try:
+        channels: list[dict] = json.loads(raw) if raw else []
+    except Exception:
+        channels = []
+
+    action = args[0].lower()
+
+    if action == "list":
+        if not channels:
+            await _send_emoji_text(update.effective_chat.id, "📋 Koi premium channel set nahi hai.", context)
+            return
+        lines = [f"{i+1}. {ch['name']} — {ch.get('link', '-')}" for i, ch in enumerate(channels)]
+        await _send_emoji_text(
+            update.effective_chat.id,
+            "📋 [b]Premium Channels:[/b]\n\n" + "\n".join(lines),
+            context,
+        )
+        return
+
+    if action == "clear":
+        await db.set_setting(SETTINGS_PREMIUM_CHANNELS, json.dumps([]))
+        await _send_emoji_text(update.effective_chat.id, "✅ Sab premium channels clear ho gaye.", context)
+        return
+
+    if action == "add":
+        if len(args) < 3:
+            await _send_emoji_text(
+                update.effective_chat.id,
+                "❌ Format: [c]/setpremiumch add <name> <link>[/c]",
+                context,
+            )
+            return
+        name = args[1]
+        link = args[2]
+        # Avoid duplicates by name
+        if any(ch["name"].lower() == name.lower() for ch in channels):
+            await _send_emoji_text(
+                update.effective_chat.id,
+                f"⚠️ '[b]{name}[/b]' pehle se exist karta hai. Pehle remove karo.",
+                context,
+            )
+            return
+        channels.append({"name": name, "link": link})
+        await db.set_setting(SETTINGS_PREMIUM_CHANNELS, json.dumps(channels))
+        await _send_emoji_text(
+            update.effective_chat.id,
+            f"✅ Channel add ho gaya: [b]{name}[/b]\n{link}",
+            context,
+        )
+        return
+
+    if action == "remove":
+        if len(args) < 2:
+            await _send_emoji_text(
+                update.effective_chat.id,
+                "❌ Format: [c]/setpremiumch remove <name>[/c]",
+                context,
+            )
+            return
+        name = args[1]
+        before = len(channels)
+        channels = [ch for ch in channels if ch["name"].lower() != name.lower()]
+        if len(channels) == before:
+            await _send_emoji_text(
+                update.effective_chat.id,
+                f"❌ '[b]{name}[/b]' nahi mila.",
+                context,
+            )
+            return
+        await db.set_setting(SETTINGS_PREMIUM_CHANNELS, json.dumps(channels))
+        await _send_emoji_text(
+            update.effective_chat.id,
+            f"✅ Channel remove ho gaya: [b]{name}[/b]",
+            context,
+        )
+        return
+
+    await _send_emoji_text(
+        update.effective_chat.id,
+        "❌ Unknown action. Use: add / remove / list / clear",
+        context,
+    )
+
+
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     if not await _is_admin_or_owner(update, context):
@@ -3833,7 +4107,7 @@ def build_handlers(app: Application) -> None:
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("cancel", cancel))
     app.add_handler(CallbackQueryHandler(recheck_callback, pattern=r"^(recheck:|noop)"))
-    app.add_handler(CallbackQueryHandler(pay_callback, pattern=r"^pay(plan|utr):"))
+    app.add_handler(CallbackQueryHandler(pay_callback, pattern=r"^pay(plan|utr|cancel):"))
     app.add_handler(CallbackQueryHandler(pay_admin_callback, pattern=r"^payadm:(approve|reject):"))
     app.add_handler(CallbackQueryHandler(bsettings_callback, pattern=r"^bset:"))
 
@@ -3878,6 +4152,7 @@ def build_handlers(app: Application) -> None:
     app.add_handler(CommandHandler("plan", plan))
     app.add_handler(CommandHandler("pay", pay))
     app.add_handler(CommandHandler("setpay", setpay))
+    app.add_handler(CommandHandler("setpremiumch", setpremiumch))
     app.add_handler(CommandHandler("bsettings", bsettings))
 
     # PTB v20+ uses uppercase filter shortcuts (VIDEO/AUDIO/PHOTO). Document is namespaced.
