@@ -2130,8 +2130,8 @@ def _payment_plan_label(plan_key: str, plan_days: int) -> str:
 
 
 def _manual_payment_note(user_id: int, request_id: int, plan_days: int, projected_until: int) -> str:
-    short_expiry = datetime.datetime.utcfromtimestamp(int(projected_until)).strftime("%y%m%d") if int(projected_until) > 0 else "na"
-    return f"afsp u{int(user_id)} r{int(request_id)} d{int(plan_days)} e{short_expiry}"
+    expiry_tag = datetime.datetime.utcfromtimestamp(int(projected_until)).strftime("%Y%m%d") if int(projected_until) > 0 else "NA"
+    return f"AFSP UID{int(user_id)} ORD{int(request_id)} P{int(plan_days)}D EXP{expiry_tag}"
 
 
 async def _update_payment_user_status(
@@ -2375,29 +2375,34 @@ async def _handle_manual_payment_recovery(
     projected_expiry_utc = html.escape(_format_utc(projected_until))
     note_html = html.escape(note)
     caption = (
-        "<b>Premium Purchase</b>\n\n"
-        f"Plan: <b>{plan_label}</b>\n"
-        f"Amount: Rs{int(plan['amount'])}\n"
-        f"Order ID: <code>#{rid}</code>\n"
-        f"User ID: <code>{int(update.effective_user.id)}</code>\n"
-        f"Projected Expiry: <code>{projected_expiry_utc}</code>\n"
-        f"Payment Note: <code>{note_html}</code>\n\n"
-        "Pay via UPI\n"
-        "Scan the QR above or send payment to:\n\n"
-        f"<code>{upi_html}</code>\n\n"
-        "How to activate:\n"
+        "⚡ <b>PREMIUM PURCHASE</b> ⚡\n\n"
+        f"<b>Plan:</b> {plan_label}\n"
+        f"<b>Amount:</b> \u20b9{int(plan['amount'])} Only\n\n"
+        f"<b>Order ID:</b> <code>#{rid}</code>\n"
+        f"<b>User ID:</b> <code>{int(update.effective_user.id)}</code>\n"
+        f"<b>Projected Expiry:</b> <code>{projected_expiry_utc}</code>\n\n"
+        "--------------------\n\n"
+        "💎 <b>Pay via UPI</b>\n"
+        f"<b>Send to:</b> <code>{upi_html}</code>\n\n"
+        "<b>Payment Note:</b>\n"
+        f"<code>{note_html}</code>\n\n"
+        "--------------------\n\n"
+        "<b>How to Activate:</b>\n"
         "1. Complete payment\n"
         "2. Tap Submit UTR\n"
         "3. Send transaction ID or screenshot\n"
-        "4. Premium activates after verification\n"
-        "5. If screenshot is missed, admin can trace payment from this note in bank history\n\n"
-        "Request expires in 5 minutes."
+        "4. Premium activates after verification\n\n"
+        "<b>Request expires in 5 minutes.</b>\n\n"
+        "💳 <b>Premium Payment Details</b>\n"
+        "Scan the QR code with your preferred UPI app to pay.\n\n"
+        "<b>Premium • Private • Unfiltered</b>\n"
+        "- @az_hawas_adda"
     )
     pay_text_clean = (pay_text or "").strip()
     if pay_text_clean:
-        caption = f"{caption}\n\n<b>Note</b>\n{html.escape(pay_text_clean)}"
+        caption = f"{caption}\n\n<b>Admin Note:</b>\n{html.escape(pay_text_clean)}"
 
-    kb = InlineKeyboardMarkup([[InlineKeyboardButton("Submit UTR", callback_data=f"payutr:{rid}")]])
+    kb = InlineKeyboardMarkup([[InlineKeyboardButton("📩 Submit UTR", callback_data=f"payutr:{rid}")]])
 
     try:
         if q.message:
@@ -3079,21 +3084,21 @@ async def pay_admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
 async def paylookup(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     if not await _is_admin_or_owner(update, context):
-        await _send_emoji_text(update.effective_chat.id, "ðŸš« Access denied. (Admin/Owner only)", context)
+        await _send_emoji_text(update.effective_chat.id, "\U0001f6ab Access denied. (Admin/Owner only)", context)
         return
     if not context.args:
-        await _send_emoji_text(update.effective_chat.id, "â„¹ï¸ Usage: /paylookup <order_id>", context)
+        await _send_emoji_text(update.effective_chat.id, "\u2139\ufe0f Usage: /paylookup <order_id>", context)
         return
     try:
         rid = int(context.args[0])
     except ValueError:
-        await _send_emoji_text(update.effective_chat.id, "âŒ Invalid order id.", context)
+        await _send_emoji_text(update.effective_chat.id, "\u274c Invalid order id.", context)
         return
 
     db: Database = context.application.bot_data["db"]
     req = await db.get_payment_request(rid)
     if not req:
-        await _send_emoji_text(update.effective_chat.id, "âŒ Order not found.", context)
+        await _send_emoji_text(update.effective_chat.id, "\u274c Order not found.", context)
         return
 
     plan_label = _payment_plan_label(str(req.get("plan_key") or ""), int(req.get("plan_days") or 0))
@@ -3107,47 +3112,46 @@ async def paylookup(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     proof_value = str(req.get("utr_text") or "").strip() or "-"
     await _send_emoji_text(
         update.effective_chat.id,
-        "ðŸ§¾ [b]Payment Lookup[/b]\n\n"
-        f"ðŸ†” Order ID: [c]#{req['id']}[/c]\n"
-        f"ðŸ‘¤ User ID: [c]{req['user_id']}[/c]\n"
-        f"ðŸ’Ž Plan: [b]{plan_label}[/b]\n"
-        f"ðŸ’° Amount: [c]â‚¹{req['amount_rs']}[/c]\n"
-        f"ðŸ”“ Status: [b]{req['status']}[/b]\n"
-        f"ðŸ•’ Projected Expiry: [c]{_format_utc(projected_until)}[/c]\n"
-        f"ðŸ“Œ Created: [c]{_format_utc(int(req.get('created_at') or 0))}[/c]\n"
-        f"ðŸ”„ Updated: [c]{_format_utc(int(req.get('updated_at') or 0))}[/c]\n"
-        f"ðŸ§¾ Recovery Note: [c]{trace_note}[/c]\n"
-        f"ðŸ“© Proof/UTR: [c]{proof_value}[/c]",
+        "\U0001f50d [b]Payment Lookup[/b]\n\n"
+        f"\U0001f522 Order ID: [c]#{req['id']}[/c]\n"
+        f"\U0001f464 User ID: [c]{req['user_id']}[/c]\n"
+        f"\U0001f4cb Plan: [b]{plan_label}[/b]\n"
+        f"\U0001f4b0 Amount: [c]\u20b9{req['amount_rs']}[/c]\n"
+        f"\U0001f4cc Status: [b]{req['status']}[/b]\n"
+        f"\U0001f4c5 Projected Expiry: [c]{_format_utc(projected_until)}[/c]\n"
+        f"\U0001f4e5 Created: [c]{_format_utc(int(req.get('created_at') or 0))}[/c]\n"
+        f"\U0001f504 Updated: [c]{_format_utc(int(req.get('updated_at') or 0))}[/c]\n"
+        f"\U0001f9fe Recovery Note: [c]{trace_note}[/c]\n"
+        f"\U0001f4dd Proof/UTR: [c]{proof_value}[/c]",
         context,
     )
-
 
 async def manualapprove(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     if not await _is_admin_or_owner(update, context):
-        await _send_emoji_text(update.effective_chat.id, "ðŸš« Access denied. (Admin/Owner only)", context)
+        await _send_emoji_text(update.effective_chat.id, "\U0001f6ab Access denied. (Admin/Owner only)", context)
         return
     if not context.args:
-        await _send_emoji_text(update.effective_chat.id, "â„¹ï¸ Usage: /manualapprove <order_id>", context)
+        await _send_emoji_text(update.effective_chat.id, "\u2139\ufe0f Usage: /manualapprove <order_id>", context)
         return
     try:
         rid = int(context.args[0])
     except ValueError:
-        await _send_emoji_text(update.effective_chat.id, "âŒ Invalid order id.", context)
+        await _send_emoji_text(update.effective_chat.id, "\u274c Invalid order id.", context)
         return
 
     db: Database = context.application.bot_data["db"]
     req = await db.get_payment_request(rid)
     if not req:
-        await _send_emoji_text(update.effective_chat.id, "âŒ Order not found.", context)
+        await _send_emoji_text(update.effective_chat.id, "\u274c Order not found.", context)
         return
     if str(req.get("status") or "") == "processed":
-        await _send_emoji_text(update.effective_chat.id, f"â„¹ï¸ Order #{rid} is already approved.", context)
+        await _send_emoji_text(update.effective_chat.id, f"\u2139\ufe0f Order #{rid} is already approved.", context)
         return
 
     ok = await db.force_approve_payment_request(rid, update.effective_user.id)
     if not ok:
-        await _send_emoji_text(update.effective_chat.id, "âŒ Unable to approve this order.", context)
+        await _send_emoji_text(update.effective_chat.id, "\u274c Unable to approve this order.", context)
         return
 
     until = await db.add_premium_seconds(int(req["user_id"]), int(req["plan_days"]) * DAY_SECONDS)
@@ -3158,16 +3162,16 @@ async def manualapprove(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     try:
         ch_text = await _get_premium_channels_text(db)
         ch_section = (
-            "\n\nðŸ“¢ [b]Premium Content Channels:[/b]\n"
+            "\n\n\U0001f4e2 [b]Premium Content Channels:[/b]\n"
             + ch_text +
-            "\n\nâœ¨ In sabhi channels ki posts mein ab aap [b]direct link[/b] le sakte ho â€” [b]bina ads ke![/b]"
+            "\n\n\u2728 In sabhi channels ki posts mein ab aap [b]direct link[/b] le sakte ho - [b]bina ads ke![/b]"
         ) if ch_text else ""
         await _send_emoji_text(
             int(req["user_id"]),
-            "ðŸŽ‰ [b]Payment Verified Manually![/b]\n\n"
-            f"ðŸ’Ž Plan activated: {req['plan_key']} ({req['plan_days']} days)\n"
-            f"ðŸ•’ Expires: {expiry_utc}\n"
-            "ðŸ§¾ Payment was matched from transaction history."
+            "\U0001f389 [b]Payment Verified Manually![/b]\n\n"
+            f"\U0001f4cb Plan activated: {req['plan_key']} ({req['plan_days']} days)\n"
+            f"\U0001f4c5 Expires: {expiry_utc}\n"
+            "\U0001f9fe Payment was matched from transaction history."
             + ch_section,
             context,
         )
@@ -3176,11 +3180,11 @@ async def manualapprove(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         pass
 
     approved_text = (
-        "âœ… Payment Approved Manually\n\n"
+        "\u2705 Payment Approved Manually\n\n"
         f"Request ID: {req['id']}\n"
         f"User ID: {req['user_id']}\n"
         f"Plan: {req['plan_key']} ({req['plan_days']} days)\n"
-        f"Amount: â‚¹{req['amount_rs']}\n"
+        f"Amount: \u20b9{req['amount_rs']}\n"
         f"By Admin: {admin_name}\n"
         f"Reviewed At: {reviewed_at}\n"
         f"Premium Until: {expiry_utc}"
@@ -3200,13 +3204,12 @@ async def manualapprove(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     await db.clear_payment_ui_messages(int(req["id"]))
     await _send_emoji_text(
         update.effective_chat.id,
-        "âœ… Manual payment recovery completed.\n\n"
-        f"ðŸ†” Order ID: [c]#{req['id']}[/c]\n"
-        f"ðŸ‘¤ User ID: [c]{req['user_id']}[/c]\n"
-        f"ðŸ•’ Premium Until: [c]{expiry_utc}[/c]",
+        "\u2705 Manual payment recovery completed.\n\n"
+        f"\U0001f522 Order ID: [c]#{req['id']}[/c]\n"
+        f"\U0001f464 User ID: [c]{req['user_id']}[/c]\n"
+        f"\U0001f4c5 Premium Until: [c]{expiry_utc}[/c]",
         context,
     )
-
 
 async def setpay(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
@@ -4611,6 +4614,4 @@ def build_handlers(app: Application) -> None:
     media_filter = filters.Document.ALL | filters.VIDEO | filters.AUDIO | filters.PHOTO
     app.add_handler(MessageHandler(filters.ALL & media_filter, admin_media_ingest))
     app.add_error_handler(on_error)
-
-
 
