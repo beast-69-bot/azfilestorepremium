@@ -2333,13 +2333,6 @@ async def _payment_timeout_job(context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def _handle_manual_payment(update: Update, context: ContextTypes.DEFAULT_TYPE, q: Any, rid: int, plan: dict) -> None:
     db: Database = context.application.bot_data["db"]
-    pay_text = await db.get_setting(SETTINGS_PAY_TEXT)
-    if not pay_text:
-        pay_text = (
-            "Pay to buy premium.\n"
-            "After payment, tap *Send UTR* and share UTR/screenshot.\n"
-            "Admin will verify and activate plan manually."
-        )
     upi_id = await db.get_setting(SETTINGS_PAY_UPI)
     pay_name = await db.get_setting(SETTINGS_PAY_NAME) or "Premium Store"
     if not upi_id:
@@ -2374,11 +2367,6 @@ async def _handle_manual_payment(update: Update, context: ContextTypes.DEFAULT_T
         "4️⃣ Premium activates after verification\n\n"
         "⏳ Request expires in 5 minutes."
     )
-    # Keep optional admin-configured payment note, without clutter.
-    pay_text_clean = (pay_text or "").strip()
-    if pay_text_clean:
-        caption = f"{caption}\n\n🧾 <b>Note</b>\n{html.escape(pay_text_clean)}"
-
     kb = InlineKeyboardMarkup([[InlineKeyboardButton("📩 Submit UTR", callback_data=f"payutr:{rid}")]])
 
     # Remove plan picker message to keep payment UI clean.
@@ -2428,13 +2416,6 @@ async def _handle_manual_payment_recovery(
     plan: dict,
 ) -> None:
     db: Database = context.application.bot_data["db"]
-    pay_text = await db.get_setting(SETTINGS_PAY_TEXT)
-    if not pay_text:
-        pay_text = (
-            "Pay to buy premium.\n"
-            "After payment, tap *Send UTR* and share UTR/screenshot.\n"
-            "Admin will verify and activate plan manually."
-        )
     upi_id = await db.get_setting(SETTINGS_PAY_UPI)
     pay_name = await db.get_setting(SETTINGS_PAY_NAME) or "Premium Store"
     if not upi_id:
@@ -2460,23 +2441,25 @@ async def _handle_manual_payment_recovery(
     projected_expiry_utc = html.escape(_format_utc(projected_until))
     note_html = html.escape(note)
     caption = (
-        "⚡ <b>Premium Payment</b>\n\n"
-        f"💎 Plan: <b>{plan_label}</b>\n"
-        f"💰 Amount: <b>₹{int(plan['amount'])}</b>\n"
-        f"🆔 Order ID: <code>#{rid}</code>\n\n"
-        f"💳 UPI ID: <code>{upi_html}</code>\n"
-        f"🧾 Note: <code>{note_html}</code>\n\n"
-        f"👤 User ID: <code>{int(update.effective_user.id)}</code>\n"
-        f"📅 Projected Expiry: <code>{projected_expiry_utc}</code>\n\n"
-        "QR scan karke payment karo.\n"
-        "Payment ke baad <b>Submit UTR</b> par tap karke UTR ya screenshot bhejo.\n\n"
-        "⏳ Valid for 5 minutes\n"
-        "- @az_hawas_adda"
+        "⚡ <b>PREMIUM PAYMENT</b> ⚡\n\n"
+        f"💎 <b>Plan:</b> {plan_label}\n"
+        f"💰 <b>Amount:</b> ₹{int(plan['amount'])}\n"
+        f"🆔 <b>Order ID:</b> <code>#{rid}</code>\n"
+        f"👤 <b>User ID:</b> <code>{int(update.effective_user.id)}</code>\n"
+        f"📅 <b>Projected Expiry:</b> <code>{projected_expiry_utc}</code>\n\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "💳 <b>UPI ID</b>\n"
+        f"<code>{upi_html}</code>\n\n"
+        "🧾 <b>Payment Note</b>\n"
+        f"<code>{note_html}</code>\n\n"
+        "━━━━━━━━━━━━━━━━━━━━\n\n"
+        "🔹 QR Scan karke payment karo\n"
+        "🔹 Payment ke baad <b>Submit UTR</b> par tap karke\n"
+        "   UTR ya screenshot bhejo\n\n"
+        "⏳ <b>Valid for 5 minutes only</b>\n\n"
+        "<b>Premium • Private • Unfiltered</b>\n"
+        "— @az_hawas_adda"
     )
-    pay_text_clean = (pay_text or "").strip()
-    if pay_text_clean:
-        caption = f"{caption}\n\n<b>Admin Note:</b>\n{html.escape(pay_text_clean)}"
-
     kb = InlineKeyboardMarkup([[InlineKeyboardButton("📩 Submit UTR", callback_data=f"payutr:{rid}")]])
     status_text = (
         "<b>Payment Request Created</b>\n\n"
