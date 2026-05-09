@@ -1454,6 +1454,7 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                     "If payment was already completed, admin can still recover it from bank history.",
                 ],
             )
+            await _delete_payment_qr_message(open_req, context)
         except Exception:
             pass
         cancelled.append(f"payment#{int(open_req['id'])}")
@@ -2140,11 +2141,6 @@ async def _update_payment_user_status(
     title: str,
     detail_html_lines: list[str],
 ) -> None:
-    chat_id = req.get("user_chat_id")
-    message_id = req.get("details_msg_id")
-    if not chat_id or not message_id:
-        return
-
     plan_label = html.escape(_payment_plan_label(str(req.get("plan_key") or ""), int(req.get("plan_days") or 0)))
     status_html = [
         f"<b>{html.escape(title)}</b>",
@@ -2161,6 +2157,11 @@ async def _update_payment_user_status(
         status_html.append("")
         status_html.extend(detail_html_lines)
     text = "\n".join(status_html)
+
+    chat_id = req.get("user_chat_id")
+    message_id = req.get("details_msg_id")
+    if not chat_id or not message_id:
+        return
 
     try:
         await context.bot.edit_message_caption(
@@ -2185,6 +2186,89 @@ async def _update_payment_user_status(
         )
     except Exception:
         pass
+
+
+async def _delete_payment_qr_message(req: dict[str, Any], context: ContextTypes.DEFAULT_TYPE) -> None:
+    chat_id = req.get("user_chat_id")
+    qr_id = req.get("qr_msg_id")
+    details_id = req.get("details_msg_id")
+    if not chat_id or not qr_id:
+        return
+
+    try:
+        await context.bot.delete_message(chat_id=int(chat_id), message_id=int(qr_id))
+    except Exception:
+        pass
+
+    if details_id:
+        db: Database = context.application.bot_data["db"]
+        try:
+            await db.set_payment_ui_messages(int(req["id"]), int(chat_id), int(details_id), None)
+            req["qr_msg_id"] = None
+        except Exception:
+            pass
+
+
+async def _update_manual_payment_user_final_status(
+    req: dict[str, Any],
+    context: ContextTypes.DEFAULT_TYPE,
+    title: str,
+    detail_html_lines: list[str],
+) -> None:
+    chat_id = req.get("user_chat_id")
+    message_id = req.get("details_msg_id")
+    qr_id = req.get("qr_msg_id")
+    if not chat_id or not message_id:
+        return
+
+    if qr_id:
+        await _update_payment_user_status(req, context, title, detail_html_lines)
+        await _delete_payment_qr_message(req, context)
+        return
+
+    plan_label = html.escape(_payment_plan_label(str(req.get("plan_key") or ""), int(req.get("plan_days") or 0)))
+    status_html = [
+        f"<b>{html.escape(title)}</b>",
+        "",
+        f"Order ID: <code>#{int(req['id'])}</code>",
+        f"User ID: <code>{int(req['user_id'])}</code>",
+        f"Plan: <b>{plan_label}</b>",
+        f"Amount: Rs{int(req.get('amount_rs') or 0)}",
+    ]
+    projected_until = int(req.get("projected_premium_until") or 0)
+    if projected_until > 0:
+        status_html.append(f"Projected Expiry: <code>{html.escape(_format_utc(projected_until))}</code>")
+    if detail_html_lines:
+        status_html.append("")
+        status_html.extend(detail_html_lines)
+    text = "\n".join(status_html)
+
+    sent = None
+    try:
+        sent = await context.bot.send_message(
+            chat_id=int(chat_id),
+            text=text,
+            parse_mode="HTML",
+            disable_web_page_preview=True,
+        )
+    except Exception:
+        sent = None
+
+    if sent and getattr(sent, "message_id", None):
+        try:
+            await context.bot.delete_message(chat_id=int(chat_id), message_id=int(message_id))
+        except Exception:
+            pass
+        db: Database = context.application.bot_data["db"]
+        try:
+            await db.set_payment_ui_messages(int(req["id"]), int(chat_id), int(sent.message_id), None)
+            req["details_msg_id"] = int(sent.message_id)
+            req["qr_msg_id"] = None
+        except Exception:
+            pass
+        return
+
+    await _update_payment_user_status(req, context, title, detail_html_lines)
 
 
 async def _cleanup_payment_user_ui(req: dict[str, Any], context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -2234,6 +2318,7 @@ async def _payment_timeout_job(context: ContextTypes.DEFAULT_TYPE) -> None:
             "If payment was already completed, ask admin to verify it from transaction history.",
         ],
     )
+    await _delete_payment_qr_message(req, context)
     try:
         await _send_emoji_text(
             int(req["user_id"]),
@@ -2375,27 +2460,17 @@ async def _handle_manual_payment_recovery(
     projected_expiry_utc = html.escape(_format_utc(projected_until))
     note_html = html.escape(note)
     caption = (
-        "⚡ <b>PREMIUM PURCHASE</b> ⚡\n\n"
-        f"<b>Plan:</b> {plan_label}\n"
-        f"<b>Amount:</b> \u20b9{int(plan['amount'])} Only\n\n"
-        f"<b>Order ID:</b> <code>#{rid}</code>\n"
-        f"<b>User ID:</b> <code>{int(update.effective_user.id)}</code>\n"
-        f"<b>Projected Expiry:</b> <code>{projected_expiry_utc}</code>\n\n"
-        "--------------------\n\n"
-        "💎 <b>Pay via UPI</b>\n"
-        f"<b>Send to:</b> <code>{upi_html}</code>\n\n"
-        "<b>Payment Note:</b>\n"
-        f"<code>{note_html}</code>\n\n"
-        "--------------------\n\n"
-        "<b>How to Activate:</b>\n"
-        "1. Complete payment\n"
-        "2. Tap Submit UTR\n"
-        "3. Send transaction ID or screenshot\n"
-        "4. Premium activates after verification\n\n"
-        "<b>Request expires in 5 minutes.</b>\n\n"
-        "💳 <b>Premium Payment Details</b>\n"
-        "Scan the QR code with your preferred UPI app to pay.\n\n"
-        "<b>Premium • Private • Unfiltered</b>\n"
+        "⚡ <b>Premium Payment</b>\n\n"
+        f"💎 Plan: <b>{plan_label}</b>\n"
+        f"💰 Amount: <b>₹{int(plan['amount'])}</b>\n"
+        f"🆔 Order ID: <code>#{rid}</code>\n\n"
+        f"💳 UPI ID: <code>{upi_html}</code>\n"
+        f"🧾 Note: <code>{note_html}</code>\n\n"
+        f"👤 User ID: <code>{int(update.effective_user.id)}</code>\n"
+        f"📅 Projected Expiry: <code>{projected_expiry_utc}</code>\n\n"
+        "QR scan karke payment karo.\n"
+        "Payment ke baad <b>Submit UTR</b> par tap karke UTR ya screenshot bhejo.\n\n"
+        "⏳ Valid for 5 minutes\n"
         "- @az_hawas_adda"
     )
     pay_text_clean = (pay_text or "").strip()
@@ -2403,6 +2478,18 @@ async def _handle_manual_payment_recovery(
         caption = f"{caption}\n\n<b>Admin Note:</b>\n{html.escape(pay_text_clean)}"
 
     kb = InlineKeyboardMarkup([[InlineKeyboardButton("📩 Submit UTR", callback_data=f"payutr:{rid}")]])
+    status_text = (
+        "<b>Payment Request Created</b>\n\n"
+        f"Order ID: <code>#{rid}</code>\n"
+        f"User ID: <code>{int(update.effective_user.id)}</code>\n"
+        f"Plan: <b>{plan_label}</b>\n"
+        f"Amount: Rs{int(plan['amount'])}\n"
+        f"Projected Expiry: <code>{projected_expiry_utc}</code>\n\n"
+        "Status: <b>Pending</b>\n"
+        "Complete payment using the QR above.\n"
+        "Then tap Submit UTR and send transaction ID or screenshot.\n"
+        "Request expires in 5 minutes."
+    )
 
     try:
         if q.message:
@@ -2411,12 +2498,12 @@ async def _handle_manual_payment_recovery(
         pass
 
     payment_msg_id: Optional[int] = None
+    status_msg_id: Optional[int] = None
     try:
         payment_msg = await update.effective_chat.send_photo(
             photo=qr_url,
             caption=caption,
             parse_mode="HTML",
-            reply_markup=kb,
         )
         payment_msg_id = payment_msg.message_id
     except Exception:
@@ -2425,12 +2512,23 @@ async def _handle_manual_payment_recovery(
             f"QR load failed. Pay via UPI ID shown above.\nUPI URI:\n{upi_uri}",
             context,
         )
+    try:
+        status_msg = await context.bot.send_message(
+            chat_id=int(update.effective_chat.id),
+            text=status_text,
+            parse_mode="HTML",
+            reply_markup=kb,
+            disable_web_page_preview=True,
+        )
+        status_msg_id = status_msg.message_id
+    except Exception:
+        status_msg_id = None
 
     await db.set_payment_ui_messages(
         int(rid),
         int(update.effective_chat.id),
-        int(payment_msg_id) if payment_msg_id is not None else int(q.message.message_id),
-        None,
+        int(status_msg_id) if status_msg_id is not None else int(payment_msg_id) if payment_msg_id is not None else int(q.message.message_id),
+        int(payment_msg_id) if payment_msg_id is not None and status_msg_id is not None else None,
     )
     if context.application.job_queue:
         context.application.job_queue.run_once(
@@ -2767,6 +2865,7 @@ async def pay_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                             "If payment was already completed for this old order, admin can still verify it from bank history.",
                         ],
                     )
+                    await _delete_payment_qr_message(existing, context)
             elif existing.get("status") == "submitted":
                 # For XWallet: expire the old submitted one and allow fresh order.
                 await db.expire_payment_request_if_pending(int(existing["id"]))
@@ -2779,6 +2878,7 @@ async def pay_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                         "A newer order was started for this user.",
                     ],
                 )
+                await _delete_payment_qr_message(existing, context)
 
         key = data.split(":", 1)[1]
         plan = PAY_PLANS.get(key)
@@ -2816,6 +2916,7 @@ async def pay_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                 "This order was cancelled by the user.",
             ],
         )
+        await _delete_payment_qr_message(req, context)
         await _send_emoji_text(
             update.effective_chat.id,
             "❌ Order cancel kar diya gaya.\n\nNaya plan lene ke liye /pay use karo.",
@@ -2910,6 +3011,7 @@ async def pay_utr_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
                 "If payment was completed, admin can still recover it from bank history using the payment note.",
             ],
         )
+        await _delete_payment_qr_message(req, context)
         ud.pop("pay_utr_request_id", None)
         await _send_emoji_text(update.effective_chat.id, "⏳ Payment request expired. Please run /pay again.", context)
         return
@@ -3029,7 +3131,7 @@ async def pay_admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
             f"Premium Until: {expiry_utc}"
         )
         await _sync_pay_admin_status(context, int(req["id"]), approved_text)
-        await _update_payment_user_status(
+        await _update_manual_payment_user_final_status(
             req,
             context,
             "Payment Approved",
@@ -3069,7 +3171,7 @@ async def pay_admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         f"Reviewed At: {reviewed_at}"
     )
     await _sync_pay_admin_status(context, int(req["id"]), rejected_text)
-    await _update_payment_user_status(
+    await _update_manual_payment_user_final_status(
         req,
         context,
         "Payment Rejected",
@@ -3190,7 +3292,7 @@ async def manualapprove(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         f"Premium Until: {expiry_utc}"
     )
     await _sync_pay_admin_status(context, int(req["id"]), approved_text)
-    await _update_payment_user_status(
+    await _update_manual_payment_user_final_status(
         req,
         context,
         "Payment Approved Manually",
@@ -4614,4 +4716,3 @@ def build_handlers(app: Application) -> None:
     media_filter = filters.Document.ALL | filters.VIDEO | filters.AUDIO | filters.PHOTO
     app.add_handler(MessageHandler(filters.ALL & media_filter, admin_media_ingest))
     app.add_error_handler(on_error)
-
