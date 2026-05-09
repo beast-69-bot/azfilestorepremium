@@ -37,6 +37,8 @@ async def _post_init(app: Application) -> None:
         BotCommand("custombatch", "Custom file batch (Admin/Owner)"),
         BotCommand("bsettings", "Admin command guide panel (Admin/Owner)"),
         BotCommand("extendlast24h", "Extend +1 day for last 24h buyers (Admin/Owner)"),
+        BotCommand("paylookup", "Lookup payment order details (Admin/Owner)"),
+        BotCommand("manualapprove", "Approve manual order by id (Admin/Owner)"),
     ]
     try:
         await app.bot.set_my_commands(commands)

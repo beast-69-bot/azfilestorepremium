@@ -512,6 +512,8 @@ class MongoDatabase:
     async def create_payment_request(self, user_id: int, plan_key: str, plan_days: int, amount_rs: int) -> int:
         now = _now()
         expires_at = now + 300
+        current_until = await self.get_premium_until(int(user_id))
+        projected_until = max(int(current_until), now) + (int(plan_days) * 24 * 60 * 60)
         new_id = await self._next_id("payment_requests")
         await self.db.payment_requests.insert_one(
             {
@@ -520,6 +522,7 @@ class MongoDatabase:
                 "plan_key": plan_key,
                 "plan_days": int(plan_days),
                 "amount_rs": int(amount_rs),
+                "projected_premium_until": int(projected_until),
                 "status": "pending",
                 "utr_text": None,
                 "user_chat_id": None,
@@ -552,6 +555,7 @@ class MongoDatabase:
             "plan_key": row["plan_key"],
             "plan_days": int(row["plan_days"]),
             "amount_rs": int(row["amount_rs"]),
+            "projected_premium_until": int(row.get("projected_premium_until") or 0),
             "status": row["status"],
             "utr_text": row.get("utr_text"),
             "user_chat_id": int(row["user_chat_id"]) if row.get("user_chat_id") is not None else None,
@@ -578,6 +582,7 @@ class MongoDatabase:
             "plan_key": row["plan_key"],
             "plan_days": int(row["plan_days"]),
             "amount_rs": int(row["amount_rs"]),
+            "projected_premium_until": int(row.get("projected_premium_until") or 0),
             "status": row["status"],
             "utr_text": row.get("utr_text"),
             "user_chat_id": int(row["user_chat_id"]) if row.get("user_chat_id") is not None else None,
@@ -627,6 +632,14 @@ class MongoDatabase:
         now = _now()
         res = await self.db.payment_requests.update_one(
             {"id": int(request_id), "status": {"$in": ["submitted", "pending"]}},
+            {"$set": {"status": "processed", "processed_by": int(admin_id), "processed_at": now, "updated_at": now}},
+        )
+        return bool(res.modified_count > 0)
+
+    async def force_approve_payment_request(self, request_id: int, admin_id: int) -> bool:
+        now = _now()
+        res = await self.db.payment_requests.update_one(
+            {"id": int(request_id), "status": {"$ne": "processed"}},
             {"$set": {"status": "processed", "processed_by": int(admin_id), "processed_at": now, "updated_at": now}},
         )
         return bool(res.modified_count > 0)
