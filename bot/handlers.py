@@ -4832,6 +4832,71 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
+async def resume_pending_payments_polling(application: Application) -> None:
+    """Startup recovery: fetches all active pending payment requests and resumes polling tasks."""
+    db = application.bot_data.get("db")
+    cfg = application.bot_data.get("cfg")
+    if not db or not cfg:
+        return
+
+    if not hasattr(db, "list_pending_payment_requests"):
+        return
+
+    try:
+        pending_requests = await db.list_pending_payment_requests()
+    except Exception as e:
+        logger.error("Failed to list pending payment requests for recovery: %s", e)
+        return
+
+    now = int(time.time())
+    gateway = getattr(cfg, "payment_gateway", "manual")
+
+    for req in pending_requests:
+        rid = int(req["id"])
+        expires_at = int(req.get("expires_at") or 0)
+
+        # If order has expired while the bot was offline, expire it now.
+        if expires_at > 0 and expires_at <= now:
+            logger.info("Expiring pending payment request %d at startup (expires_at=%d, now=%d)", rid, expires_at, now)
+            changed = await db.expire_payment_request_if_pending(rid)
+            if changed:
+                await db.clear_payment_ui_messages(rid)
+            continue
+
+        # If order is still valid, resume polling if appropriate gateway is active.
+        if gateway == "razorpay" and req.get("plan_key"):
+            key_id = getattr(cfg, "razorpay_key_id", "")
+            key_secret = getattr(cfg, "razorpay_key_secret", "")
+            if not key_id or not key_secret:
+                continue
+
+            gateway_extra_raw = req.get("gateway_extra")
+            if not gateway_extra_raw:
+                continue
+
+            try:
+                gateway_data = json.loads(gateway_extra_raw)
+                qr_code_id = gateway_data.get("qr_code_id")
+            except Exception:
+                qr_code_id = None
+
+            if qr_code_id:
+                logger.info("Resuming polling for Razorpay pending request %d (QR: %s)", rid, qr_code_id)
+                class SimpleContext:
+                    def __init__(self, app: Application):
+                        self.application = app
+                        self.bot = app.bot
+
+                dummy_context = SimpleContext(application)
+                asyncio.create_task(_poll_razorpay_and_complete(
+                    context=dummy_context,
+                    rid=rid,
+                    qr_code_id=qr_code_id,
+                    key_id=key_id,
+                    key_secret=key_secret,
+                ))
+
+
 def build_handlers(app: Application) -> None:
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("cancel", cancel))

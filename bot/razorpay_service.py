@@ -87,8 +87,7 @@ async def check_payment_status(
       "TXN_SUCCESS" -> if a payment is captured/authorized
       "pending"     -> if no captured payment is found yet
     """
-    url = f"{BASE_URL}/payments"
-    params = {"qr_code_id": qr_code_id}
+    url = f"{BASE_URL}/payments/qr_codes/{qr_code_id}/payments"
 
     auth = BasicAuth(key_id, key_secret)
 
@@ -96,7 +95,6 @@ async def check_payment_status(
         async with aiohttp.ClientSession() as session:
             async with session.get(
                 url,
-                params=params,
                 auth=auth,
                 timeout=aiohttp.ClientTimeout(total=10)
             ) as response:

@@ -855,3 +855,36 @@ class Database:
                 }
             )
         return out
+
+    async def list_pending_payment_requests(self) -> list[dict[str, Any]]:
+        cur = await self.conn.execute(
+            """
+            SELECT id, user_id, plan_key, plan_days, amount_rs, projected_premium_until, status, utr_text, user_chat_id, details_msg_id, qr_msg_id, expires_at, created_at, updated_at, processed_by, processed_at, gateway_extra
+            FROM payment_requests
+            WHERE status='pending'
+            """
+        )
+        rows = await cur.fetchall()
+        await cur.close()
+        out: list[dict[str, Any]] = []
+        for row in rows:
+            out.append({
+                "id": int(row[0]),
+                "user_id": int(row[1]),
+                "plan_key": row[2],
+                "plan_days": int(row[3]),
+                "amount_rs": int(row[4]),
+                "projected_premium_until": int(row[5]) if row[5] is not None else 0,
+                "status": row[6],
+                "utr_text": row[7],
+                "user_chat_id": int(row[8]) if row[8] is not None else None,
+                "details_msg_id": int(row[9]) if row[9] is not None else None,
+                "qr_msg_id": int(row[10]) if row[10] is not None else None,
+                "expires_at": int(row[11]) if row[11] is not None else 0,
+                "created_at": int(row[12]),
+                "updated_at": int(row[13]),
+                "processed_by": row[14],
+                "processed_at": row[15],
+                "gateway_extra": row[16] if len(row) > 16 else None,
+            })
+        return out
