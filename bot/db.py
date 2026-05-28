@@ -182,6 +182,8 @@ class Database:
             await self.conn.execute("ALTER TABLE payment_requests ADD COLUMN expires_at INTEGER")
         if "projected_premium_until" not in pcol_names:
             await self.conn.execute("ALTER TABLE payment_requests ADD COLUMN projected_premium_until INTEGER")
+        if "gateway_extra" not in pcol_names:
+            await self.conn.execute("ALTER TABLE payment_requests ADD COLUMN gateway_extra TEXT")
         await self.conn.commit()
 
     # Users
@@ -686,7 +688,7 @@ class Database:
     async def get_payment_request(self, request_id: int) -> Optional[dict[str, Any]]:
         cur = await self.conn.execute(
             """
-            SELECT id, user_id, plan_key, plan_days, amount_rs, projected_premium_until, status, utr_text, user_chat_id, details_msg_id, qr_msg_id, expires_at, created_at, updated_at, processed_by, processed_at
+            SELECT id, user_id, plan_key, plan_days, amount_rs, projected_premium_until, status, utr_text, user_chat_id, details_msg_id, qr_msg_id, expires_at, created_at, updated_at, processed_by, processed_at, gateway_extra
             FROM payment_requests
             WHERE id=?
             """,
@@ -713,6 +715,7 @@ class Database:
             "updated_at": int(row[13]),
             "processed_by": row[14],
             "processed_at": row[15],
+            "gateway_extra": row[16] if len(row) > 16 else None,
         }
 
     async def get_latest_open_payment_request(self, user_id: int) -> Optional[dict[str, Any]]:
@@ -753,6 +756,18 @@ class Database:
             WHERE id=?
             """,
             (now, int(request_id)),
+        )
+        await self.conn.commit()
+
+    async def set_payment_gateway_extra(self, request_id: int, gateway_extra: str) -> None:
+        now = _now()
+        await self.conn.execute(
+            """
+            UPDATE payment_requests
+            SET gateway_extra=?, updated_at=?
+            WHERE id=?
+            """,
+            (gateway_extra, now, int(request_id)),
         )
         await self.conn.commit()
 

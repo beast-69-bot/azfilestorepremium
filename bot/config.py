@@ -15,6 +15,8 @@ class Config:
     mongo_db_name: str = "azfilestorepremium"
     xwallet_api_key: str = ""
     payment_gateway: str = "manual"
+    razorpay_key_id: str = ""
+    razorpay_key_secret: str = ""
 
     @staticmethod
     def from_env() -> "Config":
@@ -26,7 +28,9 @@ class Config:
         mongo_uri = os.getenv("MONGO_URI", "").strip()
         mongo_db_name = os.getenv("MONGO_DB_NAME", "azfilestorepremium").strip()
         xwallet_api_key = os.getenv("XWALLET_API_KEY", "").strip()
-        payment_gateway = os.getenv("PAYMENT_GATEWAY", "manual").strip()
+        payment_gateway = os.getenv("PAYMENT_GATEWAY", "manual").strip().lower()
+        razorpay_key_id = os.getenv("RAZORPAY_KEY_ID", "").strip()
+        razorpay_key_secret = os.getenv("RAZORPAY_KEY_SECRET", "").strip()
 
         if not bot_token:
             raise RuntimeError("BOT_TOKEN is required")
@@ -55,4 +59,6 @@ class Config:
             mongo_db_name=mongo_db_name,
             xwallet_api_key=xwallet_api_key,
             payment_gateway=payment_gateway,
+            razorpay_key_id=razorpay_key_id,
+            razorpay_key_secret=razorpay_key_secret,
         )

@@ -533,6 +533,7 @@ class MongoDatabase:
                 "updated_at": now,
                 "processed_by": None,
                 "processed_at": None,
+                "gateway_extra": None,
             }
         )
         return int(new_id)
@@ -566,6 +567,7 @@ class MongoDatabase:
             "updated_at": int(row["updated_at"]),
             "processed_by": row.get("processed_by"),
             "processed_at": row.get("processed_at"),
+            "gateway_extra": row.get("gateway_extra"),
         }
 
     async def get_latest_open_payment_request(self, user_id: int) -> Optional[dict[str, Any]]:
@@ -593,6 +595,7 @@ class MongoDatabase:
             "updated_at": int(row["updated_at"]),
             "processed_by": row.get("processed_by"),
             "processed_at": row.get("processed_at"),
+            "gateway_extra": row.get("gateway_extra"),
         }
 
     async def set_payment_ui_messages(self, request_id: int, user_chat_id: int, details_msg_id: int, qr_msg_id: int | None) -> None:
@@ -614,6 +617,13 @@ class MongoDatabase:
         await self.db.payment_requests.update_one(
             {"id": int(request_id)},
             {"$set": {"user_chat_id": None, "details_msg_id": None, "qr_msg_id": None, "updated_at": now}},
+        )
+
+    async def set_payment_gateway_extra(self, request_id: int, gateway_extra: str) -> None:
+        now = _now()
+        await self.db.payment_requests.update_one(
+            {"id": int(request_id)},
+            {"$set": {"gateway_extra": gateway_extra, "updated_at": now}},
         )
 
     async def expire_payment_request_if_pending(self, request_id: int) -> bool:

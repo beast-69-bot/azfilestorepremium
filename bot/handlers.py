@@ -29,6 +29,7 @@ from telegram.ext import (
 from bot.db import Database
 from bot.security import new_code, new_token
 from bot import xwallet_service
+from bot import razorpay_service
 
 
 DAY_SECONDS = 24 * 60 * 60
@@ -2140,6 +2141,7 @@ async def _update_payment_user_status(
     context: ContextTypes.DEFAULT_TYPE,
     title: str,
     detail_html_lines: list[str],
+    reply_markup: Optional[InlineKeyboardMarkup] = None,
 ) -> None:
     plan_label = html.escape(_payment_plan_label(str(req.get("plan_key") or ""), int(req.get("plan_days") or 0)))
     status_html = [
@@ -2169,7 +2171,7 @@ async def _update_payment_user_status(
             message_id=int(message_id),
             caption=text,
             parse_mode="HTML",
-            reply_markup=None,
+            reply_markup=reply_markup,
         )
         return
     except Exception:
@@ -2181,11 +2183,33 @@ async def _update_payment_user_status(
             message_id=int(message_id),
             text=text,
             parse_mode="HTML",
-            reply_markup=None,
+            reply_markup=reply_markup,
             disable_web_page_preview=True,
         )
     except Exception:
         pass
+
+
+def _admin_contact_keyboard(context: ContextTypes.DEFAULT_TYPE) -> InlineKeyboardMarkup:
+    cfg = context.application.bot_data.get("cfg")
+    owner_id = int(getattr(cfg, "owner_id", 0) or 0)
+    url = f"tg://user?id={owner_id}" if owner_id else "https://t.me/"
+    return InlineKeyboardMarkup([[InlineKeyboardButton("Contact Admin", url=url)]])
+
+
+async def _show_payment_timeout_ui(req: dict[str, Any], context: ContextTypes.DEFAULT_TYPE) -> None:
+    await _update_payment_user_status(
+        req,
+        context,
+        "Payment Timeout",
+        [
+            "Status: <b>Expired</b>",
+            "Payment expired because no UTR or screenshot proof was submitted within 5 minutes.",
+            "If you completed the payment but forgot to submit proof, contact admin with your payment screenshot/UTR.",
+        ],
+        reply_markup=_admin_contact_keyboard(context),
+    )
+    await _delete_payment_qr_message(req, context)
 
 
 async def _delete_payment_qr_message(req: dict[str, Any], context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -2308,23 +2332,13 @@ async def _payment_timeout_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     changed = await db.expire_payment_request_if_pending(int(rid))
     if not changed:
         return
-    await _update_payment_user_status(
-        req,
-        context,
-        "Payment Request Expired",
-        [
-            "Status: <b>Expired</b>",
-            "No UTR or screenshot was received within 5 minutes.",
-            "If payment was already completed, ask admin to verify it from transaction history.",
-        ],
-    )
-    await _delete_payment_qr_message(req, context)
+    await _show_payment_timeout_ui(req, context)
     try:
         await _send_emoji_text(
             int(req["user_id"]),
             "⏳ Payment request expired.\n\n"
-            "No UTR received within 5 minutes.\n"
-            "Please run /pay again.",
+            "No proof was submitted within 5 minutes.\n"
+            "If payment was completed but proof was not submitted, use the Contact Admin button on the expired order.",
             context,
         )
     except Exception:
@@ -2624,24 +2638,18 @@ async def _poll_and_complete(context: ContextTypes.DEFAULT_TYPE, rid: int, qr_co
         await _notify_autoverify_success(context, req)
         expiry_utc = datetime.datetime.utcfromtimestamp(until).strftime("%Y-%m-%d %H:%M:%S UTC")
         # 1. Edit the old payment message to remove the Pay button and show Success status with custom emoji
-        user_chat_id = req.get("user_chat_id")
-        details_msg_id = req.get("details_msg_id")
-        if user_chat_id and details_msg_id:
-            try:
-                await _edit_emoji_text(
-                    chat_id=int(user_chat_id),
-                    message_id=int(details_msg_id),
-                    text="✅ [b]Payment Status: SUCCESS[/b]\n\nIs order ki payment verify ho chuki hai.",
-                    context=context,
-                )
-            except Exception:
-                pass
+        await _update_payment_user_status(
+            req,
+            context,
+            "Payment Status: SUCCESS",
+            ["Is order ki payment verify ho chuki hai."],
+        )
 
         # 2. Send a BRAND NEW detailed message with premium custom emojis
         try:
             plan_info = PAY_PLANS.get(req['plan_key'], {"label": req['plan_key']})
             plan_name = plan_info.get("label", req['plan_key'])
-            
+
             success_text = (
                 "⭐ [b]Premium Activated Successfully![/b] ⭐\n\n"
                 "⭐ [b]Congratulations![/b] Aapka payment verify ho gaya hai aur aapka account premium mein upgrade ho chuka hai.\n\n"
@@ -2654,7 +2662,7 @@ async def _poll_and_complete(context: ContextTypes.DEFAULT_TYPE, rid: int, qr_co
                 "✅ Aap ab bina kisi ads ke sabhi files access aur download kar sakte hain.\n"
                 "🚀 [b]Enjoy Premium Experience![/b]"
             )
-            
+
             await _send_emoji_text(
                 int(req["user_id"]),
                 success_text,
@@ -2697,6 +2705,77 @@ async def _poll_and_complete(context: ContextTypes.DEFAULT_TYPE, rid: int, qr_co
                 except Exception:
                     pass
             # Clear UI references in DB
+            await db.clear_payment_ui_messages(int(req["id"]))
+
+
+async def _poll_razorpay_and_complete(context: ContextTypes.DEFAULT_TYPE, rid: int, qr_code_id: str, key_id: str, key_secret: str) -> None:
+    """Background task: polls Razorpay until payment succeeds or times out."""
+    success = await razorpay_service.wait_for_payment(
+        qr_code_id=qr_code_id,
+        key_id=key_id,
+        key_secret=key_secret,
+        timeout_minutes=5,
+        poll_interval=6,
+    )
+    db: Database = context.application.bot_data["db"]
+    req = await db.get_payment_request(rid)
+    if not req or req.get("status") != "pending":
+        return
+
+    if success:
+        ok = await db.approve_payment_request(rid, admin_id=0)
+        if not ok:
+            return
+        until = await db.add_premium_seconds(int(req["user_id"]), int(req["plan_days"]) * DAY_SECONDS)
+
+        await _notify_autoverify_success(context, req)
+        expiry_utc = datetime.datetime.utcfromtimestamp(until).strftime("%Y-%m-%d %H:%M:%S UTC")
+
+        await _update_payment_user_status(
+            req,
+            context,
+            "Payment Status: SUCCESS",
+            ["Is order ki payment verify ho chuki hai."],
+        )
+
+        try:
+            plan_info = PAY_PLANS.get(req['plan_key'], {"label": req['plan_key']})
+            plan_name = plan_info.get("label", req['plan_key'])
+
+            success_text = (
+                "⭐ [b]Premium Activated Successfully![/b] ⭐\n\n"
+                "⭐ [b]Congratulations![/b] Aapka payment verify ho gaya hai aur aapka account premium mein upgrade ho chuka hai.\n\n"
+                "━━━━━━━━━━━━━━━━━━━━\n"
+                f"🎟 [b]Plan:[/b] [c]{plan_name}[/c]\n"
+                f"📅 [b]Duration:[/b] [c]{req['plan_days']} Days[/c]\n"
+                f"🆔 [b]Order ID:[/b] [c]#{req['id']}[/c]\n"
+                f"🕒 [b]Expiry Date:[/b] [c]{expiry_utc}[/c]\n"
+                "━━━━━━━━━━━━━━━━━━━━\n\n"
+                "✅ Aap ab bina kisi ads ke sabhi files access aur download kar sakte hain.\n"
+                "🚀 [b]Enjoy Premium Experience![/b]"
+            )
+
+            await _send_emoji_text(
+                int(req["user_id"]),
+                success_text,
+                context,
+            )
+            await _send_premium_direct_access_message(int(req["user_id"]), context)
+        except Exception:
+            pass
+        await db.clear_payment_ui_messages(int(req["id"]))
+    else:
+        changed = await db.expire_payment_request_if_pending(rid)
+        if changed:
+            await _show_payment_timeout_ui(req, context)
+            try:
+                await _send_emoji_text(
+                    int(req["user_id"]),
+                    "⏰ Payment time expired.\n\nOrder expire ho gaya. Please /pay se naya order banao.",
+                    context,
+                )
+            except Exception:
+                pass
             await db.clear_payment_ui_messages(int(req["id"]))
 
 
@@ -2794,6 +2873,108 @@ async def _handle_xwallet_payment(update: Update, context: ContextTypes.DEFAULT_
             context,
         )
 
+
+async def _handle_razorpay_payment(update: Update, context: ContextTypes.DEFAULT_TYPE, q: Any, rid: int, plan: dict, cfg: Any) -> None:
+    """Handle Razorpay dynamic QR payment flow: create order → send UPI QR code photo → poll."""
+    db: Database = context.application.bot_data["db"]
+    loading = None
+    try:
+        loading = await _send_emoji_text(update.effective_chat.id, "⏳ Razorpay UPI QR Code generate ho raha hai...", context)
+        amount = int(plan["amount"])
+
+        key_id = getattr(cfg, "razorpay_key_id", "")
+        key_secret = getattr(cfg, "razorpay_key_secret", "")
+
+        if not key_id or not key_secret:
+            raise ValueError("Razorpay credentials are not configured by admin.")
+
+        username = update.effective_user.username or f"id_{update.effective_user.id}"
+        # Step 1: Create dynamic QR code on Razorpay.
+        create_res = await razorpay_service.create_qr_code(
+            amount_rs=amount,
+            order_id=rid,
+            key_id=key_id,
+            key_secret=key_secret,
+            user_id=update.effective_user.id,
+            username=username,
+            plan_label=plan["label"]
+        )
+
+        qr_code_id = create_res.get("id")
+        image_url = create_res.get("image_url")
+
+        if not qr_code_id or not image_url:
+            raise ValueError(f"No qr_code_id or image_url in Razorpay response: {create_res}")
+
+        # Save to gateway_extra column
+        import json
+        gateway_data = {"qr_code_id": qr_code_id, "image_url": image_url}
+        await db.set_payment_gateway_extra(rid, json.dumps(gateway_data))
+
+        # Step 2: Delete loading message and plan picker.
+        if loading and hasattr(loading, "delete"):
+            try:
+                await loading.delete()
+            except Exception:
+                pass
+            loading = None
+        if q.message:
+            try:
+                await q.message.delete()
+            except Exception:
+                pass
+
+        # Step 3: Send payment QR photo with process instructions.
+        plan_label = html.escape(str(plan["label"]))
+        caption = (
+            "⚡ <b>RAZORPAY DYNAMIC QR PAYMENT</b> ⚡\n\n"
+            f"💎 <b>Plan:</b> {plan_label}\n"
+            f"💰 <b>Amount:</b> ₹{amount}\n"
+            f"🆔 <b>Order ID:</b> <code>#{rid}</code>\n\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            "📲 <b>How to pay:</b>\n"
+            "1️⃣ Upar diye gaye QR Code ko scan karein.\n"
+            "2️⃣ Mobile users: QR code ka screenshot lekar apne GPay/PhonePe scanner (Upload from Gallery) se pay karein.\n"
+            "3️⃣ Payment complete karte hi automatically activate ho jayega!\n"
+            "━━━━━━━━━━━━━━━━━━━━\n\n"
+            "⏳ <b>5 minutes</b> mein pay karo.\n"
+            "🚀 <b>Automatic activation</b> payment ke baad ho jaayega."
+        )
+        kb = InlineKeyboardMarkup([
+            [InlineKeyboardButton("❌ Cancel Order", callback_data=f"paycancel:{rid}")],
+        ])
+
+        payment_msg = await update.effective_chat.send_photo(
+            photo=image_url,
+            caption=caption,
+            parse_mode="HTML",
+            reply_markup=kb,
+        )
+
+        await db.set_payment_ui_messages(
+            int(rid),
+            int(update.effective_chat.id),
+            int(payment_msg.message_id),
+            None,
+        )
+
+        # Step 4: Start background polling task.
+        asyncio.create_task(_poll_razorpay_and_complete(context, rid, qr_code_id, key_id, key_secret))
+
+    except Exception as e:
+        logger.warning("Error in _handle_razorpay_payment: %s", e)
+        # Clean up loading message if still visible.
+        if loading and hasattr(loading, "delete"):
+            try:
+                await loading.delete()
+            except Exception:
+                pass
+        await _send_emoji_text(
+            update.effective_chat.id,
+            "⚠️ Payment gateway error.\n\nPlease manual option use karein ya admin se contact karo.",
+            context,
+        )
+
 async def pay(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     await _send_emoji_text(
@@ -2828,10 +3009,14 @@ async def pay_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     if data.startswith("payplan:"):
         existing = await db.get_latest_open_payment_request(update.effective_user.id)
         cfg = context.application.bot_data["cfg"]
-        is_xwallet = getattr(cfg, "payment_gateway", "manual") == "xwallet" and getattr(cfg, "xwallet_api_key", "")
+        gateway = getattr(cfg, "payment_gateway", "manual")
+        is_xwallet = gateway == "xwallet" and bool(getattr(cfg, "xwallet_api_key", ""))
+        is_razorpay = gateway == "razorpay" and bool(getattr(cfg, "razorpay_key_id", "")) and bool(getattr(cfg, "razorpay_key_secret", ""))
+        is_auto = is_xwallet or is_razorpay
+
         if existing:
-            # Block only manual flow if UTR already submitted — XWallet flow is auto.
-            if existing.get("status") == "submitted" and not is_xwallet:
+            # Block only manual flow if UTR already submitted — auto flows are verified dynamically.
+            if existing.get("status") == "submitted" and not is_auto:
                 await q.answer("Payment already submitted. Admin verification pending.", show_alert=True)
                 return
             # If there's an active pending request, clean it up before creating a new one.
@@ -2850,7 +3035,7 @@ async def pay_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                     )
                     await _delete_payment_qr_message(existing, context)
             elif existing.get("status") == "submitted":
-                # For XWallet: expire the old submitted one and allow fresh order.
+                # For XWallet/Razorpay: expire the old submitted one and allow fresh order.
                 await db.expire_payment_request_if_pending(int(existing["id"]))
                 await _update_payment_user_status(
                     existing,
@@ -2869,7 +3054,9 @@ async def pay_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             await _edit_emoji_text(update.effective_chat.id, q.message.message_id, "❌ Invalid plan.", context)
             return
         rid = await db.create_payment_request(update.effective_user.id, key, int(plan["days"]), int(plan["amount"]))
-        if is_xwallet:
+        if is_razorpay:
+            await _handle_razorpay_payment(update, context, q, rid, plan, cfg)
+        elif is_xwallet:
             await _handle_xwallet_payment(update, context, q, rid, plan, cfg)
         else:
             await _handle_manual_payment_recovery(update, context, q, rid, plan)
@@ -2913,6 +3100,20 @@ async def pay_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             rid = int(rid_raw)
         except ValueError:
             await q.answer("Invalid request id", show_alert=True)
+            return
+        req = await db.get_payment_request(rid)
+        if not req or int(req.get("user_id", 0)) != int(update.effective_user.id):
+            await q.answer("Order not found.", show_alert=True)
+            return
+        if req.get("status") != "pending":
+            await q.answer("Order already processed or expired.", show_alert=True)
+            return
+        now = int(time.time())
+        if int(req.get("expires_at") or 0) > 0 and int(req.get("expires_at") or 0) <= now:
+            changed = await db.expire_payment_request_if_pending(rid)
+            if changed:
+                await _show_payment_timeout_ui(req, context)
+            await q.answer("Payment expired. No proof was submitted within 5 minutes.", show_alert=True)
             return
         context.user_data["pay_utr_request_id"] = rid
         # This button is on a photo message; editing text there fails.
@@ -2984,17 +3185,7 @@ async def pay_utr_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     now = int(time.time())
     if req["status"] == "pending" and int(req.get("expires_at") or 0) > 0 and int(req.get("expires_at") or 0) <= now:
         await db.expire_payment_request_if_pending(int(rid))
-        await _update_payment_user_status(
-            req,
-            context,
-            "Payment Request Expired",
-            [
-                "Status: <b>Expired</b>",
-                "No proof was submitted before the request timed out.",
-                "If payment was completed, admin can still recover it from bank history using the payment note.",
-            ],
-        )
-        await _delete_payment_qr_message(req, context)
+        await _show_payment_timeout_ui(req, context)
         ud.pop("pay_utr_request_id", None)
         await _send_emoji_text(update.effective_chat.id, "⏳ Payment request expired. Please run /pay again.", context)
         return
