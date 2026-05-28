@@ -23,8 +23,9 @@ async def _post_init(app: Application) -> None:
     me = await app.bot.get_me()
     app.bot_data["bot_username"] = me.username
 
-    # Recover any pending payments that are not yet expired.
-    await resume_pending_payments_polling(app)
+    # Recover any pending payments that are not yet expired in the background.
+    import asyncio
+    asyncio.create_task(resume_pending_payments_polling(app))
 
     # Set command menu (visible in Telegram UI).
     # Note: Telegram bot commands are not access-controlled by Telegram itself; handlers still enforce permissions.

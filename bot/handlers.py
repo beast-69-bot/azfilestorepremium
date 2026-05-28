@@ -2731,12 +2731,7 @@ async def _poll_razorpay_and_complete(context: ContextTypes.DEFAULT_TYPE, rid: i
         await _notify_autoverify_success(context, req)
         expiry_utc = datetime.datetime.utcfromtimestamp(until).strftime("%Y-%m-%d %H:%M:%S UTC")
 
-        await _update_payment_user_status(
-            req,
-            context,
-            "Payment Status: SUCCESS",
-            ["Is order ki payment verify ho chuki hai."],
-        )
+        await _cleanup_payment_user_ui(req, context)
 
         try:
             plan_info = PAY_PLANS.get(req['plan_key'], {"label": req['plan_key']})
@@ -4839,6 +4834,15 @@ async def resume_pending_payments_polling(application: Application) -> None:
     if not db or not cfg:
         return
 
+    # 1. Bulk expire any pending orders that expired while the bot was offline.
+    if hasattr(db, "bulk_expire_expired_payment_requests"):
+        try:
+            expired_count = await db.bulk_expire_expired_payment_requests()
+            if expired_count > 0:
+                logger.info("Successfully bulk expired %d old pending payment requests at startup.", expired_count)
+        except Exception as e:
+            logger.error("Failed to bulk expire old pending payment requests: %s", e)
+
     if not hasattr(db, "list_pending_payment_requests"):
         return
 
@@ -4855,12 +4859,8 @@ async def resume_pending_payments_polling(application: Application) -> None:
         rid = int(req["id"])
         expires_at = int(req.get("expires_at") or 0)
 
-        # If order has expired while the bot was offline, expire it now.
+        # If order has expired, skip it (already handled by bulk update).
         if expires_at > 0 and expires_at <= now:
-            logger.info("Expiring pending payment request %d at startup (expires_at=%d, now=%d)", rid, expires_at, now)
-            changed = await db.expire_payment_request_if_pending(rid)
-            if changed:
-                await db.clear_payment_ui_messages(rid)
             continue
 
         # If order is still valid, resume polling if appropriate gateway is active.
@@ -4895,7 +4895,6 @@ async def resume_pending_payments_polling(application: Application) -> None:
                     key_id=key_id,
                     key_secret=key_secret,
                 ))
-
 
 def build_handlers(app: Application) -> None:
     app.add_handler(CommandHandler("start", start))

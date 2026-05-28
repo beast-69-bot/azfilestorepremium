@@ -714,3 +714,23 @@ class MongoDatabase:
                 "gateway_extra": row.get("gateway_extra"),
             })
         return out
+
+    async def bulk_expire_expired_payment_requests(self) -> int:
+        now = _now()
+        res = await self.db.payment_requests.update_many(
+            {
+                "status": "pending",
+                "expires_at": {"$lte": now},
+                "$or": [{"utr_text": None}, {"utr_text": ""}],
+            },
+            {
+                "$set": {
+                    "status": "expired",
+                    "user_chat_id": None,
+                    "details_msg_id": None,
+                    "qr_msg_id": None,
+                    "updated_at": now,
+                }
+            },
+        )
+        return int(res.modified_count)

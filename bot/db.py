@@ -888,3 +888,16 @@ class Database:
                 "gateway_extra": row[16] if len(row) > 16 else None,
             })
         return out
+
+    async def bulk_expire_expired_payment_requests(self) -> int:
+        now = _now()
+        cur = await self.conn.execute(
+            """
+            UPDATE payment_requests
+            SET status='expired', user_chat_id=NULL, details_msg_id=NULL, qr_msg_id=NULL, updated_at=?
+            WHERE status='pending' AND (utr_text IS NULL OR TRIM(utr_text)='') AND expires_at <= ?
+            """,
+            (now, now),
+        )
+        await self.conn.commit()
+        return int(cur.rowcount or 0)
