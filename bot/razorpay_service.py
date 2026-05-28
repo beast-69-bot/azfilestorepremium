@@ -37,7 +37,7 @@ async def create_qr_code(
         "name": f"Premium Store User {user_id}",
         "usage": "single_use",
         "fixed_amount": True,
-        "amount": amount_rs * 100,  # Razorpay requires amount in Paise
+        "payment_amount": amount_rs * 100,  # Razorpay requires amount in paise.
         "description": f"Order #{order_id} for Plan: {plan_label}"[:250],
         "notes": {
             "order_id": str(order_id),
@@ -57,8 +57,14 @@ async def create_qr_code(
                 auth=auth,
                 timeout=aiohttp.ClientTimeout(total=15)
             ) as response:
-                response.raise_for_status()
                 data = await response.json()
+                if response.status >= 400:
+                    logger.error(
+                        "Razorpay create_qr_code failed: status=%s response=%s",
+                        response.status,
+                        data,
+                    )
+                    response.raise_for_status()
                 logger.info("Razorpay create_qr_code success: %s", data.get("id"))
                 return data
     except aiohttp.ClientError as e:
