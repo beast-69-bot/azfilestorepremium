@@ -103,9 +103,12 @@ UNICODE_TO_UI_NAME = {
 }
 
 PAY_PLANS: dict[str, dict[str, Any]] = {
-    "1d": {"label": "1 Day", "days": 1, "amount": 10},
-    "7d": {"label": "7 Days", "days": 7, "amount": 35},
-    "30d": {"label": "1 Month", "days": 30, "amount": 115},
+    "1d": {"label": "1 Day - 7 Links/Day", "days": 1, "amount": 10, "daily_limit": 7},
+    "7d": {"label": "7 Days - 7 Links/Day", "days": 7, "amount": 35, "daily_limit": 7},
+    "30d": {"label": "1 Month - 7 Links/Day", "days": 30, "amount": 115, "daily_limit": 7},
+    "20l_1d": {"label": "1 Day - 20 Links/Day", "days": 1, "amount": 15, "daily_limit": 20},
+    "20l_7d": {"label": "7 Days - 20 Links/Day", "days": 7, "amount": 50, "daily_limit": 20},
+    "20l_30d": {"label": "1 Month - 20 Links/Day", "days": 30, "amount": 169, "daily_limit": 20},
 }
 
 BSETTINGS_DOCS: dict[str, dict[str, str]] = {
@@ -1113,6 +1116,30 @@ async def recheck_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     await _deliver_by_code(update, context, code)
 
 
+async def _consume_premium_quota(
+    link: dict[str, Any],
+    user_id: int,
+    chat_id: int,
+    context: ContextTypes.DEFAULT_TYPE,
+    db: Database,
+) -> bool:
+    if link["access"] != "premium":
+        return True
+    quota = await db.consume_premium_link(user_id)
+    if quota["allowed"]:
+        return True
+    reset_ist = datetime.datetime.utcfromtimestamp(int(quota["reset_at"]) + 19800).strftime("%Y-%m-%d %H:%M IST")
+    await _send_emoji_text(
+        chat_id,
+        "[b]Daily Direct Link Limit Reached[/b]\n\n"
+        f"Aapne aaj ke {quota['limit']} premium direct links use kar liye hain.\n"
+        f"Limit reset: [c]{reset_ist}[/c]\n\n"
+        "20 links/day plan ke liye [c]/pay[/c] use karo.",
+        context,
+    )
+    return False
+
+
 async def _deliver_by_code(update: Update, context: ContextTypes.DEFAULT_TYPE, code: str) -> None:
     db: Database = context.application.bot_data["db"]
     user = update.effective_user
@@ -1155,6 +1182,8 @@ async def _deliver_by_code(update: Update, context: ContextTypes.DEFAULT_TYPE, c
         if not file_row:
             await chat.send_message("❌ File not found (may have been removed).")
             return
+        if not await _consume_premium_quota(link, user.id, chat.id, context, db):
+            return
         await _send_file(chat.id, file_row, caption, context)
         await db.mark_link_used(code)
         return
@@ -1167,6 +1196,8 @@ async def _deliver_by_code(update: Update, context: ContextTypes.DEFAULT_TYPE, c
         if len(file_ids) > 100:
             await chat.send_message("⚠️ Batch too large to deliver.")
             return
+        if not await _consume_premium_quota(link, user.id, chat.id, context, db):
+            return
         for fid in file_ids:
             file_row = await db.get_file(fid)
             if file_row:
@@ -1178,6 +1209,8 @@ async def _deliver_by_code(update: Update, context: ContextTypes.DEFAULT_TYPE, c
         msg_row = await db.get_message(link["target_id"])
         if not msg_row:
             await chat.send_message("❌ Message not found (may have been removed).")
+            return
+        if not await _consume_premium_quota(link, user.id, chat.id, context, db):
             return
         try:
             m = await context.bot.copy_message(
@@ -1205,6 +1238,8 @@ async def _deliver_by_code(update: Update, context: ContextTypes.DEFAULT_TYPE, c
         total = end_id - start_id + 1
         if total <= 0 or total > MAX_CHANNEL_BATCH_POSTS:
             await chat.send_message("⚠️ Batch range invalid or too large.")
+            return
+        if not await _consume_premium_quota(link, user.id, chat.id, context, db):
             return
         for mid in range(start_id, end_id + 1):
             try:
@@ -2080,9 +2115,8 @@ async def plan(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _send_emoji_text(
         update.effective_chat.id,
         "💎 [b]Premium Plans[/b]\n\n"
-        "• [b]1 Day[/b]: ₹10\n"
-        "• [b]7 Days[/b]: ₹35\n"
-        "• [b]1 Month[/b]: ₹115\n\n"
+        "• [b]7 links/day[/b]: 1 Day ₹10 | 7 Days ₹35 | 1 Month ₹115\n"
+        "• [b]20 links/day[/b]: 1 Day ₹15 | 7 Days ₹50 | 1 Month ₹169\n\n"
         "🔓 [b]Normal User Benefit[/b]\n"
         "• Final link access ke liye ads dekhne honge\n\n"
         "⭐ [b]Premium User Benefit[/b]\n"
@@ -2101,9 +2135,12 @@ async def plan(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 def _pay_plan_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [
-            [InlineKeyboardButton("💎 1 Day - ₹10", callback_data="payplan:1d")],
-            [InlineKeyboardButton("💎 7 Days - ₹35", callback_data="payplan:7d")],
-            [InlineKeyboardButton("💎 1 Month - ₹115", callback_data="payplan:30d")],
+            [InlineKeyboardButton("💎 7/day: 1 Day - ₹10", callback_data="payplan:1d")],
+            [InlineKeyboardButton("💎 7/day: 7 Days - ₹35", callback_data="payplan:7d")],
+            [InlineKeyboardButton("💎 7/day: 1 Month - ₹115", callback_data="payplan:30d")],
+            [InlineKeyboardButton("🚀 20/day: 1 Day - ₹15", callback_data="payplan:20l_1d")],
+            [InlineKeyboardButton("🚀 20/day: 7 Days - ₹50", callback_data="payplan:20l_7d")],
+            [InlineKeyboardButton("🚀 20/day: 1 Month - ₹169", callback_data="payplan:20l_30d")],
         ]
     )
 
@@ -2129,6 +2166,13 @@ def _payment_plan_label(plan_key: str, plan_days: int) -> str:
     if plan:
         return str(plan.get("label") or plan_key)
     return f"{int(plan_days)} Days"
+
+async def _activate_payment_plan(db: Database, req: dict[str, Any]) -> int:
+    plan = PAY_PLANS.get(str(req.get("plan_key") or ""), {})
+    daily_limit = int(plan.get("daily_limit") or 7)
+    until = await db.add_premium_seconds(int(req["user_id"]), int(req["plan_days"]) * DAY_SECONDS)
+    await db.set_premium_daily_limit(int(req["user_id"]), daily_limit)
+    return until
 
 
 def _manual_payment_note(user_id: int, request_id: int, plan_days: int, projected_until: int) -> str:
@@ -2632,7 +2676,7 @@ async def _poll_and_complete(context: ContextTypes.DEFAULT_TYPE, rid: int, qr_co
         ok = await db.approve_payment_request(rid, admin_id=0)
         if not ok:
             return  # Race condition — already handled elsewhere.
-        until = await db.add_premium_seconds(int(req["user_id"]), int(req["plan_days"]) * DAY_SECONDS)
+        until = await _activate_payment_plan(db, req)
 
         # Notify owner and admins about autoverify success
         await _notify_autoverify_success(context, req)
@@ -2726,7 +2770,7 @@ async def _poll_razorpay_and_complete(context: ContextTypes.DEFAULT_TYPE, rid: i
         ok = await db.approve_payment_request(rid, admin_id=0)
         if not ok:
             return
-        until = await db.add_premium_seconds(int(req["user_id"]), int(req["plan_days"]) * DAY_SECONDS)
+        until = await _activate_payment_plan(db, req)
 
         await _notify_autoverify_success(context, req)
         expiry_utc = datetime.datetime.utcfromtimestamp(until).strftime("%Y-%m-%d %H:%M:%S UTC")
@@ -2984,9 +3028,8 @@ async def pay(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "• ✅ Instant Delivery — koi rukawat nahi\n"
         "• ✅ All exclusive content unlocked\n\n"
         "📦 [b]Plans Choose Karo[/b]\n"
-        "• [b]1 Day[/b]  — ₹10\n"
-        "• [b]7 Days[/b] — ₹35\n"
-        "• [b]1 Month[/b] — ₹115\n\n"
+        "• [b]7 links/day[/b]: 1 Day ₹10 | 7 Days ₹35 | 1 Month ₹115\n"
+        "• [b]20 links/day[/b]: 1 Day ₹15 | 7 Days ₹50 | 1 Month ₹169\n\n"
         "👇 Neeche apna plan select karo:",
         context,
         reply_markup=_pay_plan_keyboard(),
@@ -3266,7 +3309,7 @@ async def pay_admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         if not ok:
             await q.answer("Already handled", show_alert=True)
             return
-        until = await db.add_premium_seconds(int(req["user_id"]), int(req["plan_days"]) * DAY_SECONDS)
+        until = await _activate_payment_plan(db, req)
         expiry_utc = datetime.datetime.utcfromtimestamp(until).strftime("%Y-%m-%d %H:%M:%S UTC")
         reviewed_at = datetime.datetime.utcfromtimestamp(int(time.time())).strftime("%Y-%m-%d %H:%M:%S UTC")
         admin_name = f"@{update.effective_user.username}" if update.effective_user.username else str(update.effective_user.id)
@@ -3425,7 +3468,7 @@ async def manualapprove(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         await _send_emoji_text(update.effective_chat.id, "\u274c Unable to approve this order.", context)
         return
 
-    until = await db.add_premium_seconds(int(req["user_id"]), int(req["plan_days"]) * DAY_SECONDS)
+    until = await _activate_payment_plan(db, req)
     expiry_utc = _format_utc(until)
     reviewed_at = _format_utc(int(time.time()))
     admin_name = f"@{update.effective_user.username}" if update.effective_user.username else str(update.effective_user.id)

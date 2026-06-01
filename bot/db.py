@@ -41,6 +41,9 @@ class Database:
               first_name    TEXT,
               username      TEXT,
               premium_until INTEGER NOT NULL DEFAULT 0,
+              premium_daily_limit INTEGER NOT NULL DEFAULT 7,
+              premium_usage_day INTEGER NOT NULL DEFAULT 0,
+              premium_usage_count INTEGER NOT NULL DEFAULT 0,
               created_at    INTEGER NOT NULL,
               last_seen     INTEGER NOT NULL
             );
@@ -168,6 +171,17 @@ class Database:
         if "mode" not in col_names:
             await self.conn.execute("ALTER TABLE force_channels ADD COLUMN mode TEXT NOT NULL DEFAULT 'direct'")
 
+        cur = await self.conn.execute("PRAGMA table_info(users)")
+        ucols = await cur.fetchall()
+        await cur.close()
+        ucol_names = {str(r[1]) for r in ucols}
+        if "premium_daily_limit" not in ucol_names:
+            await self.conn.execute("ALTER TABLE users ADD COLUMN premium_daily_limit INTEGER NOT NULL DEFAULT 7")
+        if "premium_usage_day" not in ucol_names:
+            await self.conn.execute("ALTER TABLE users ADD COLUMN premium_usage_day INTEGER NOT NULL DEFAULT 0")
+        if "premium_usage_count" not in ucol_names:
+            await self.conn.execute("ALTER TABLE users ADD COLUMN premium_usage_count INTEGER NOT NULL DEFAULT 0")
+
         cur = await self.conn.execute("PRAGMA table_info(payment_requests)")
         pcols = await cur.fetchall()
         await cur.close()
@@ -262,6 +276,49 @@ class Database:
             (int(user_id), int(premium_until), now, now),
         )
         await self.conn.commit()
+
+    async def set_premium_daily_limit(self, user_id: int, daily_limit: int) -> None:
+        now = _now()
+        await self.conn.execute(
+            """
+            INSERT INTO users(user_id, premium_until, premium_daily_limit, created_at, last_seen)
+            VALUES(?, 0, ?, ?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET premium_daily_limit=excluded.premium_daily_limit, last_seen=excluded.last_seen
+            """,
+            (int(user_id), int(daily_limit), now, now),
+        )
+        await self.conn.commit()
+
+    async def consume_premium_link(self, user_id: int) -> dict[str, int | bool]:
+        now = _now()
+        # Daily quotas reset at midnight IST.
+        day = (now + 19800) // (24 * 60 * 60)
+        reset_at = ((day + 1) * 24 * 60 * 60) - 19800
+        cur = await self.conn.execute(
+            """
+            UPDATE users
+            SET premium_usage_day=?,
+                premium_usage_count=CASE WHEN premium_usage_day=? THEN premium_usage_count + 1 ELSE 1 END
+            WHERE user_id=?
+              AND (premium_usage_day!=? OR premium_usage_count<premium_daily_limit)
+            """,
+            (int(day), int(day), int(user_id), int(day)),
+        )
+        allowed = bool(cur.rowcount and cur.rowcount > 0)
+        await cur.close()
+        await self.conn.commit()
+        cur = await self.conn.execute(
+            "SELECT premium_daily_limit, premium_usage_count FROM users WHERE user_id=?",
+            (int(user_id),),
+        )
+        row = await cur.fetchone()
+        await cur.close()
+        return {
+            "allowed": allowed,
+            "limit": int(row[0]) if row and row[0] is not None else 7,
+            "used": int(row[1]) if row and row[1] is not None else 0,
+            "reset_at": reset_at,
+        }
 
     async def list_user_ids(self) -> list[int]:
         cur = await self.conn.execute("SELECT user_id FROM users")

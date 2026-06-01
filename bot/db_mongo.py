@@ -79,7 +79,13 @@ class MongoDatabase:
             {"user_id": int(user_id)},
             {
                 "$set": {"first_name": first_name, "username": username, "last_seen": now},
-                "$setOnInsert": {"premium_until": 0, "created_at": now},
+                "$setOnInsert": {
+                    "premium_until": 0,
+                    "premium_daily_limit": 7,
+                    "premium_usage_day": 0,
+                    "premium_usage_count": 0,
+                    "created_at": now,
+                },
             },
             upsert=True,
         )
@@ -124,6 +130,79 @@ class MongoDatabase:
             {"$set": {"premium_until": int(premium_until), "last_seen": now}, "$setOnInsert": {"created_at": now}},
             upsert=True,
         )
+
+    async def set_premium_daily_limit(self, user_id: int, daily_limit: int) -> None:
+        now = _now()
+        await self.db.users.update_one(
+            {"user_id": int(user_id)},
+            {
+                "$set": {"premium_daily_limit": int(daily_limit), "last_seen": now},
+                "$setOnInsert": {
+                    "premium_until": 0,
+                    "premium_usage_day": 0,
+                    "premium_usage_count": 0,
+                    "created_at": now,
+                },
+            },
+            upsert=True,
+        )
+
+    async def consume_premium_link(self, user_id: int) -> dict[str, int | bool]:
+        now = _now()
+        # Daily quotas reset at midnight IST.
+        day = (now + 19800) // (24 * 60 * 60)
+        reset_at = ((day + 1) * 24 * 60 * 60) - 19800
+        row = await self.db.users.find_one_and_update(
+            {
+                "user_id": int(user_id),
+                "$expr": {
+                    "$or": [
+                        {"$ne": [{"$ifNull": ["$premium_usage_day", 0]}, int(day)]},
+                        {
+                            "$lt": [
+                                {"$ifNull": ["$premium_usage_count", 0]},
+                                {"$ifNull": ["$premium_daily_limit", 7]},
+                            ]
+                        },
+                    ]
+                },
+            },
+            [
+                {
+                    "$set": {
+                        "premium_daily_limit": {"$ifNull": ["$premium_daily_limit", 7]},
+                        "premium_usage_count": {
+                            "$add": [
+                                {
+                                    "$cond": [
+                                        {"$eq": [{"$ifNull": ["$premium_usage_day", 0]}, int(day)]},
+                                        {"$ifNull": ["$premium_usage_count", 0]},
+                                        0,
+                                    ]
+                                },
+                                1,
+                            ]
+                        },
+                        "premium_usage_day": int(day),
+                    }
+                }
+            ],
+            return_document=ReturnDocument.AFTER,
+        )
+        if row:
+            return {
+                "allowed": True,
+                "limit": int(row.get("premium_daily_limit") or 7),
+                "used": int(row.get("premium_usage_count") or 0),
+                "reset_at": reset_at,
+            }
+        row = await self.db.users.find_one({"user_id": int(user_id)}, {"_id": 0, "premium_daily_limit": 1, "premium_usage_count": 1})
+        return {
+            "allowed": False,
+            "limit": int((row or {}).get("premium_daily_limit") or 7),
+            "used": int((row or {}).get("premium_usage_count") or 0),
+            "reset_at": reset_at,
+        }
 
     async def list_user_ids(self) -> list[int]:
         rows = self.db.users.find({}, {"user_id": 1, "_id": 0})
