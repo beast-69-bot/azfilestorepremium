@@ -87,14 +87,15 @@ async def check_payment_status(
       "TXN_SUCCESS" -> if a payment is captured/authorized
       "pending"     -> if no captured payment is found yet
     """
-    url = f"{BASE_URL}/payments/qr_codes/{qr_code_id}/payments"
+    payments_url = f"{BASE_URL}/payments/qr_codes/{qr_code_id}/payments"
+    qr_url = f"{BASE_URL}/payments/qr_codes/{qr_code_id}"
 
     auth = BasicAuth(key_id, key_secret)
 
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(
-                url,
+                payments_url,
                 auth=auth,
                 timeout=aiohttp.ClientTimeout(total=10)
             ) as response:
@@ -108,7 +109,20 @@ async def check_payment_status(
                         logger.info("Razorpay payment detected successfully for QR %s: status=%s", qr_code_id, status)
                         return "TXN_SUCCESS"
 
-                return "pending"
+            # Razorpay can update QR counters before the payments list is populated.
+            # For fixed single-use QRs, any captured payment count confirms success.
+            async with session.get(
+                qr_url,
+                auth=auth,
+                timeout=aiohttp.ClientTimeout(total=10)
+            ) as response:
+                response.raise_for_status()
+                qr_data = await response.json()
+                if int(qr_data.get("payments_count_received") or 0) > 0:
+                    logger.info("Razorpay captured payment counter detected for QR %s", qr_code_id)
+                    return "TXN_SUCCESS"
+
+            return "pending"
     except Exception as e:
         logger.warning("Error checking payment status for Razorpay QR %s: %s", qr_code_id, e)
         return "pending"
@@ -119,7 +133,7 @@ async def wait_for_payment(
     key_id: str,
     key_secret: str,
     timeout_minutes: int = 5,
-    poll_interval: int = 6,
+    poll_interval: int = 2,
 ) -> bool:
     """
     Poll Razorpay status every `poll_interval` seconds until transaction succeeds or times out.

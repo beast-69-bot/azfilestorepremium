@@ -2759,7 +2759,7 @@ async def _poll_razorpay_and_complete(context: ContextTypes.DEFAULT_TYPE, rid: i
         key_id=key_id,
         key_secret=key_secret,
         timeout_minutes=5,
-        poll_interval=6,
+        poll_interval=2,
     )
     db: Database = context.application.bot_data["db"]
     req = await db.get_payment_request(rid)
