@@ -36,6 +36,7 @@ DAY_SECONDS = 24 * 60 * 60
 MAX_CHANNEL_BATCH_POSTS = 200
 BROADCAST_CONCURRENCY = 40
 BROADCAST_RETRY_LIMIT = 2
+FORCE_JOIN_CHECK_CONCURRENCY = 6
 SETTINGS_AUTODELETE_SECONDS = "autodelete_seconds"
 SETTINGS_START_IMG_URL = "start_img_url"
 SETTINGS_UI_EMOJI_PREFIX = "ui_emoji:"
@@ -710,7 +711,17 @@ async def _upsert_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     if not update.effective_user:
         return
     db: Database = context.application.bot_data["db"]
-    await db.upsert_user(update.effective_user.id, update.effective_user.first_name, update.effective_user.username)
+    user_id = int(update.effective_user.id)
+    first_name = update.effective_user.first_name
+    username = update.effective_user.username
+
+    async def _run() -> None:
+        try:
+            await db.upsert_user(user_id, first_name, username)
+        except Exception as e:
+            logger.warning("Failed to upsert user %s: %s", user_id, e)
+
+    asyncio.create_task(_run())
 
 
 async def _joined_all_force_channels(user_id: int, context: ContextTypes.DEFAULT_TYPE) -> tuple[bool, list[dict[str, Any]]]:
@@ -731,59 +742,59 @@ async def _joined_all_force_channels_details(
     if not channels:
         return True, [], []
     bot = context.bot
-    missing: list[dict[str, Any]] = []
-    details: list[dict[str, Any]] = []
-    for ch in channels:
+    semaphore = asyncio.Semaphore(FORCE_JOIN_CHECK_CONCURRENCY)
+
+    async def _check_channel(ch: dict[str, Any]) -> tuple[bool, dict[str, Any], dict[str, Any]]:
         cid = int(ch["channel_id"])
         mode = (ch.get("mode") or "direct").lower()
         has_request = False
         is_joined = False
         member_err = ""
         request_api_err = ""
-        if mode == "request":
-            has_request = await db.has_force_join_request(cid, user_id)
-            if not has_request:
-                has_request, request_api_err = await _has_pending_join_request_via_api(
-                    cid, user_id, context, invite_link=ch.get("invite_link")
-                )
-                if has_request:
-                    # Cache it locally so next checks are fast and resilient.
-                    await db.add_force_join_request(cid, user_id)
-        try:
-            member = await bot.get_chat_member(chat_id=cid, user_id=user_id)
-            is_joined = member.status not in (ChatMemberStatus.LEFT, ChatMemberStatus.KICKED)
-        except Exception as e1:
-            # Retry once for transient network/API issues.
+        async with semaphore:
+            if mode == "request":
+                has_request = await db.has_force_join_request(cid, user_id)
+                if not has_request:
+                    has_request, request_api_err = await _has_pending_join_request_via_api(
+                        cid, user_id, context, invite_link=ch.get("invite_link")
+                    )
+                    if has_request:
+                        # Cache it locally so next checks are fast and resilient.
+                        await db.add_force_join_request(cid, user_id)
             try:
-                await asyncio.sleep(0.25)
                 member = await bot.get_chat_member(chat_id=cid, user_id=user_id)
                 is_joined = member.status not in (ChatMemberStatus.LEFT, ChatMemberStatus.KICKED)
-            except Exception as e2:
-                # If membership check fails, we can still allow request-mode users
-                # if join request was captured via ChatJoinRequest update.
-                is_joined = False
-                member_err = f"member_check_failed:{type(e2).__name__}"
+            except Exception:
+                # Retry once for transient network/API issues.
+                try:
+                    await asyncio.sleep(0.25)
+                    member = await bot.get_chat_member(chat_id=cid, user_id=user_id)
+                    is_joined = member.status not in (ChatMemberStatus.LEFT, ChatMemberStatus.KICKED)
+                except Exception as e2:
+                    # If membership check fails, we can still allow request-mode users
+                    # if join request was captured via ChatJoinRequest update.
+                    is_joined = False
+                    member_err = f"member_check_failed:{type(e2).__name__}"
 
         if mode == "request":
             # OR logic: request sent OR user joined => pass
             passed = bool(has_request or is_joined)
-            if not passed:
-                missing.append(ch)
         else:
             passed = bool(is_joined)
-            if not passed:
-                missing.append(ch)
-        details.append(
-            {
-                "channel_id": cid,
-                "mode": mode,
-                "joined": is_joined,
-                "request": has_request,
-                "passed": passed,
-                "member_error": member_err,
-                "request_api_error": request_api_err,
-            }
-        )
+        detail = {
+            "channel_id": cid,
+            "mode": mode,
+            "joined": is_joined,
+            "request": has_request,
+            "passed": passed,
+            "member_error": member_err,
+            "request_api_error": request_api_err,
+        }
+        return passed, ch, detail
+
+    results = await asyncio.gather(*(_check_channel(ch) for ch in channels))
+    missing = [ch for passed, ch, _ in results if not passed]
+    details = [detail for _, _, detail in results]
     return (len(missing) == 0), missing, details
 
 

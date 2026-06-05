@@ -77,6 +77,7 @@ def main() -> None:
         .get_updates_read_timeout(30)
         .get_updates_write_timeout(30)
         .get_updates_pool_timeout(10)
+        .concurrent_updates(64)
         .defaults(defaults)
         .post_init(_post_init)
         .post_shutdown(_post_shutdown)
