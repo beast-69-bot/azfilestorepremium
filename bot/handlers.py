@@ -34,6 +34,8 @@ from bot import razorpay_service
 
 DAY_SECONDS = 24 * 60 * 60
 MAX_CHANNEL_BATCH_POSTS = 200
+BROADCAST_CONCURRENCY = 40
+BROADCAST_RETRY_LIMIT = 2
 SETTINGS_AUTODELETE_SECONDS = "autodelete_seconds"
 SETTINGS_START_IMG_URL = "start_img_url"
 SETTINGS_UI_EMOJI_PREFIX = "ui_emoji:"
@@ -4837,35 +4839,63 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
     db: Database = context.application.bot_data["db"]
     user_ids = await db.list_user_ids()
+    if not user_ids:
+        await _send_emoji_text(update.effective_chat.id, "ℹ️ Broadcast ke liye koi user nahi mila.", context)
+        return
     src = update.effective_message.reply_to_message
     src_chat_id = int(src.chat.id) if getattr(src, "chat", None) else int(src.chat_id)
-    ok = 0
-    fail = 0
-    retried = 0
-    for uid in user_ids:
-        try:
-            await context.bot.copy_message(chat_id=uid, from_chat_id=src_chat_id, message_id=src.message_id)
-            ok += 1
-        except RetryAfter as e:
-            # Handle Telegram flood control and retry once.
-            retried += 1
-            wait_s = max(1.0, float(getattr(e, "retry_after", 1.0)))
-            await asyncio.sleep(wait_s)
-            try:
-                await context.bot.copy_message(chat_id=uid, from_chat_id=src_chat_id, message_id=src.message_id)
-                ok += 1
-            except Exception:
-                fail += 1
-        except Forbidden:
-            fail += 1
-        except Exception:
-            fail += 1
-    await _send_emoji_text(
+    started_at = time.monotonic()
+    start_msg = await _send_emoji_text(
         update.effective_chat.id,
+        "📣 Broadcast started\n\n"
+        f"👥 Users: {len(user_ids)}\n"
+        f"⚙️ Parallel workers: {BROADCAST_CONCURRENCY}",
+        context,
+    )
+
+    semaphore = asyncio.Semaphore(BROADCAST_CONCURRENCY)
+
+    async def send_one(uid: int) -> tuple[bool, int]:
+        retries = 0
+        async with semaphore:
+            for attempt in range(BROADCAST_RETRY_LIMIT + 1):
+                try:
+                    await context.bot.copy_message(chat_id=uid, from_chat_id=src_chat_id, message_id=src.message_id)
+                    return True, retries
+                except RetryAfter as e:
+                    retries += 1
+                    if attempt >= BROADCAST_RETRY_LIMIT:
+                        return False, retries
+                    wait_s = max(1.0, float(getattr(e, "retry_after", 1.0)))
+                    await asyncio.sleep(wait_s)
+                except Forbidden:
+                    return False, retries
+                except Exception:
+                    return False, retries
+            return False, retries
+
+    results = await asyncio.gather(*(send_one(int(uid)) for uid in user_ids))
+    ok = sum(1 for sent, _ in results if sent)
+    fail = len(results) - ok
+    retried = sum(retries for _, retries in results)
+    elapsed = max(0.1, time.monotonic() - started_at)
+    final_text = (
         "📣 Broadcast Completed\n\n"
+        f"👥 Total: {len(user_ids)}\n"
         f"✅ Sent: {ok}\n"
         f"⚠️ Failed: {fail}\n"
-        f"⏱️ Retried (floodwait): {retried}",
+        f"⏱️ Retried (floodwait): {retried}\n"
+        f"🕒 Time: {elapsed:.1f}s"
+    )
+    if start_msg:
+        try:
+            await _edit_emoji_text(update.effective_chat.id, start_msg.message_id, final_text, context)
+            return
+        except Exception:
+            pass
+    await _send_emoji_text(
+        update.effective_chat.id,
+        final_text,
         context,
     )
 
