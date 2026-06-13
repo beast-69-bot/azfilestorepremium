@@ -13,7 +13,7 @@ from typing import Any, Optional
 from urllib.parse import parse_qs, quote, urlparse
 
 import httpx
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, MessageEntity, Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, MessageEntity, Update, LabeledPrice
 from telegram.constants import ChatMemberStatus, MessageEntityType
 from telegram.error import Forbidden, RetryAfter
 from telegram.ext import (
@@ -23,6 +23,7 @@ from telegram.ext import (
     CommandHandler,
     ContextTypes,
     MessageHandler,
+    PreCheckoutQueryHandler,
     filters,
 )
 
@@ -106,12 +107,12 @@ UNICODE_TO_UI_NAME = {
 }
 
 PAY_PLANS: dict[str, dict[str, Any]] = {
-    "1d": {"label": "1 Day - 7 Links/Day", "days": 1, "amount": 10, "daily_limit": 7},
-    "7d": {"label": "7 Days - 7 Links/Day", "days": 7, "amount": 35, "daily_limit": 7},
-    "30d": {"label": "1 Month - 7 Links/Day", "days": 30, "amount": 115, "daily_limit": 7},
-    "20l_1d": {"label": "1 Day - 20 Links/Day", "days": 1, "amount": 15, "daily_limit": 20},
-    "20l_7d": {"label": "7 Days - 20 Links/Day", "days": 7, "amount": 50, "daily_limit": 20},
-    "20l_30d": {"label": "1 Month - 20 Links/Day", "days": 30, "amount": 169, "daily_limit": 20},
+    "1d": {"label": "1 Day - 7 Links/Day", "days": 1, "amount": 10, "daily_limit": 7, "stars": 10},
+    "7d": {"label": "7 Days - 7 Links/Day", "days": 7, "amount": 35, "daily_limit": 7, "stars": 35},
+    "30d": {"label": "1 Month - 7 Links/Day", "days": 30, "amount": 115, "daily_limit": 7, "stars": 115},
+    "20l_1d": {"label": "1 Day - 20 Links/Day", "days": 1, "amount": 15, "daily_limit": 20, "stars": 15},
+    "20l_7d": {"label": "7 Days - 20 Links/Day", "days": 7, "amount": 50, "daily_limit": 20, "stars": 50},
+    "20l_30d": {"label": "1 Month - 20 Links/Day", "days": 30, "amount": 169, "daily_limit": 20, "stars": 169},
 }
 
 BSETTINGS_DOCS: dict[str, dict[str, str]] = {
@@ -2036,56 +2037,221 @@ async def gencode(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not await _is_admin_or_owner(update, context):
         await _send_emoji_text(update.effective_chat.id, "🚫 Access denied. (Admin/Owner only)", context)
         return
-    db: Database = context.application.bot_data["db"]
-    count = 1
+
+    # Non-interactive CLI shortcut flow
     if context.args:
-        try:
-            count = int(context.args[0])
-        except ValueError:
-            count = 1
-    # Prevent abuse/spam and huge messages.
-    if count < 1:
+        days = 1
         count = 1
-    if count > 20:
-        count = 20
-    await _generate_tokens_and_send(update.effective_chat.id, update.effective_user.id, count, db, context)
+        try:
+            if len(context.args) == 1:
+                days = int(context.args[0])
+                count = 1
+            elif len(context.args) >= 2:
+                days = int(context.args[0])
+                count = int(context.args[1])
+        except ValueError:
+            await _send_emoji_text(
+                update.effective_chat.id,
+                "❌ Invalid arguments.\n\nUsage: [c]/gencode <days> <count>[/c] or just [c]/gencode[/c]",
+                context,
+            )
+            return
+
+        days = max(1, min(3650, days))
+        count = max(1, min(100, count))
+
+        db = context.application.bot_data["db"]
+        await _generate_tokens_and_send(update.effective_chat.id, update.effective_user.id, count, days, db, context)
+        return
+
+    # Interactive flow
+    context.user_data["gencode_days"] = 1
+    context.user_data["gencode_qty"] = 1
+    await _send_gencode_panel(update, context)
+
+
+def _gencode_keyboard(days: int, qty: int) -> InlineKeyboardMarkup:
+    d1 = "✅ 1 Day" if days == 1 else "1 Day"
+    d7 = "✅ 7 Days" if days == 7 else "7 Days"
+    d30 = "✅ 30 Days" if days == 30 else "30 Days"
+    d_custom = f"✅ Custom ({days}d)" if days not in (1, 7, 30) else "Custom Days"
+
+    q1 = "✅ 1 Qty" if qty == 1 else "1 Qty"
+    q5 = "✅ 5 Qty" if qty == 5 else "5 Qty"
+    q10 = "✅ 10 Qty" if qty == 10 else "10 Qty"
+    q20 = "✅ 20 Qty" if qty == 20 else "20 Qty"
+
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton(d1, callback_data="gencodesel:days:1"),
+                InlineKeyboardButton(d7, callback_data="gencodesel:days:7"),
+                InlineKeyboardButton(d30, callback_data="gencodesel:days:30"),
+            ],
+            [InlineKeyboardButton(d_custom, callback_data="gencodesel:days:custom")],
+            [
+                InlineKeyboardButton(q1, callback_data="gencodesel:qty:1"),
+                InlineKeyboardButton(q5, callback_data="gencodesel:qty:5"),
+                InlineKeyboardButton(q10, callback_data="gencodesel:qty:10"),
+                InlineKeyboardButton(q20, callback_data="gencodesel:qty:20"),
+            ],
+            [
+                InlineKeyboardButton("⚡ Generate Codes", callback_data="gencodesel:generate"),
+                InlineKeyboardButton("❌ Cancel", callback_data="gencodesel:cancel"),
+            ]
+        ]
+    )
+
+
+async def _send_gencode_panel(update: Update, context: ContextTypes.DEFAULT_TYPE, edit_message_id: int = None) -> None:
+    days = context.user_data.get("gencode_days", 1)
+    qty = context.user_data.get("gencode_qty", 1)
+
+    text = (
+        "🎟️ [b]Premium Code Generator[/b]\n\n"
+        "Configure token settings using the buttons below:\n\n"
+        f"📅 [b]Duration Selected:[/b] {days} Day(s) Premium\n"
+        f"🔢 [b]Quantity Selected:[/b] {qty} Token(s)\n\n"
+        "👇 Customize options and click Generate:"
+    )
+
+    kb = _gencode_keyboard(days, qty)
+
+    if edit_message_id:
+        await _edit_emoji_text(update.effective_chat.id, edit_message_id, text, context, reply_markup=kb)
+    else:
+        await _send_emoji_text(update.effective_chat.id, text, context, reply_markup=kb)
+
+
+async def gencode_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    q = update.callback_query
+    if not q or not update.effective_user or not update.effective_chat:
+        return
+
+    if not await _is_admin_or_owner(update, context):
+        await q.answer("🚫 Access denied", show_alert=True)
+        return
+
+    await q.answer()
+    data = q.data or ""
+    parts = data.split(":")
+    action = parts[1]
+
+    if "gencode_days" not in context.user_data:
+        context.user_data["gencode_days"] = 1
+    if "gencode_qty" not in context.user_data:
+        context.user_data["gencode_qty"] = 1
+
+    if action == "days":
+        val = parts[2]
+        if val == "custom":
+            context.user_data["gencode_waiting_for_days"] = True
+            await _edit_emoji_text(
+                update.effective_chat.id,
+                q.message.message_id,
+                "📅 [b]Enter Custom Days[/b]\n\n"
+                "Send the number of premium days as a text message now.\n"
+                "Example: [c]15[/c] (for 15 days) or [c]90[/c] (for 3 months)",
+                context,
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back", callback_data="gencodesel:back")]])
+            )
+            return
+        else:
+            context.user_data["gencode_days"] = int(val)
+            await _send_gencode_panel(update, context, edit_message_id=q.message.message_id)
+
+    elif action == "qty":
+        val = int(parts[2])
+        context.user_data["gencode_qty"] = val
+        await _send_gencode_panel(update, context, edit_message_id=q.message.message_id)
+
+    elif action == "generate":
+        db = context.application.bot_data["db"]
+        days = context.user_data["gencode_days"]
+        qty = context.user_data["gencode_qty"]
+        try:
+            await q.message.delete()
+        except Exception:
+            pass
+        await _generate_tokens_and_send(update.effective_chat.id, update.effective_user.id, qty, days, db, context)
+        context.user_data.pop("gencode_days", None)
+        context.user_data.pop("gencode_qty", None)
+        context.user_data.pop("gencode_waiting_for_days", None)
+
+    elif action == "cancel":
+        try:
+            await q.message.delete()
+        except Exception:
+            pass
+        context.user_data.pop("gencode_days", None)
+        context.user_data.pop("gencode_qty", None)
+        context.user_data.pop("gencode_waiting_for_days", None)
+        await _send_emoji_text(update.effective_chat.id, "❌ Code generation cancelled.", context)
+
+    elif action == "back":
+        context.user_data.pop("gencode_waiting_for_days", None)
+        await _send_gencode_panel(update, context, edit_message_id=q.message.message_id)
+
+
+async def gencode_days_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not update.effective_chat or not update.effective_user or not update.effective_message:
+        return
+    if not context.user_data.get("gencode_waiting_for_days"):
+        return
+    if not await _is_admin_or_owner(update, context):
+        context.user_data.pop("gencode_waiting_for_days", None)
+        return
+
+    raw = (update.effective_message.text or "").strip()
+    try:
+        days = int(raw)
+    except ValueError:
+        await _send_emoji_text(update.effective_chat.id, "❌ Invalid number. Send a valid number of days (e.g. 30).", context)
+        return
+
+    days = max(1, min(3650, days))
+    context.user_data["gencode_days"] = days
+    context.user_data.pop("gencode_waiting_for_days", None)
+    await _send_gencode_panel(update, context)
 
 
 async def _generate_tokens_and_send(
     chat_id: int,
     generated_by: int,
     count: int,
+    days: int,
     db: Database,
     context: ContextTypes.DEFAULT_TYPE,
 ) -> None:
     tokens: list[str] = []
+    grant_seconds = days * DAY_SECONDS
     for _ in range(count):
         t = new_token()
-        await db.create_token(t, generated_by, DAY_SECONDS)
+        await db.create_token(t, generated_by, grant_seconds)
         tokens.append(t)
 
-    if count == 1:
-        await _send_emoji_text(
-            chat_id,
-            "🎟️ Token Generated\n\n"
-            f"{tokens[0]}\n\n"
-            "⭐ Grants: 1 day premium\n"
-            "🔒 One-time use only",
-            context,
-        )
-        return
+    days_label = f"{days} day" if days == 1 else f"{days} days"
 
-    token_lines = "\n".join(tokens)
-    await _send_emoji_text(
-        chat_id,
-        "🎟️ Tokens Generated\n\n"
-        f"🧾 Total: {count}\n\n"
-        f"{token_lines}\n\n"
-        "⭐ Each grants: 1 day premium\n"
-        "🔒 Each is one-time use only\n\n"
-        "ℹ️ Users redeem: /redeem <token>",
-        context,
-    )
+    if count == 1:
+        text = (
+            "🎟️ [b]Token Generated Successfully[/b]\n\n"
+            f"[c]{tokens[0]}[/c]\n\n"
+            f"⭐ [b]Grants:[/b] {days_label} premium\n"
+            "🔒 [b]Usage:[/b] One-time use only\n\n"
+            "👉 Press/click the code above to copy it."
+        )
+    else:
+        token_lines = "\n".join(f"[c]{t}[/c]" for t in tokens)
+        text = (
+            "🎟️ [b]Tokens Generated Successfully[/b]\n\n"
+            f"⏳ [b]Total Codes:[/b] {count}\n"
+            f"⭐ [b]Each Grants:[/b] {days_label} premium\n"
+            "🔒 [b]Usage:[/b] One-time use only\n\n"
+            f"{token_lines}\n\n"
+            "ℹ️ Users can redeem using: [c]/redeem <code>[/c]"
+        )
+
+    await _send_emoji_text(chat_id, text, context)
 
 
 async def redeem(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -2102,10 +2268,20 @@ async def redeem(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await _send_emoji_text(update.effective_chat.id, "❌ Invalid or already-used token.", context)
         return
     until = await db.add_premium_seconds(update.effective_user.id, grant)
+
+    expiry_utc = datetime.datetime.utcfromtimestamp(until).strftime("%Y-%m-%d %H:%M:%S UTC")
+
+    success_text = (
+        "✅ [b]Token Redeemed Successfully![/b] 🎉\n\n"
+        "Aapka account premium mein upgrade ho chuka hai.\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        f"📅 [b]New Expiry Date:[/b] [c]{expiry_utc}[/c]\n"
+        "━━━━━━━━━━━━━━━━━━━━\n\n"
+        "🚀 Enjoy direct premium link access without ads!"
+    )
     await _send_emoji_text(
         update.effective_chat.id,
-        "✅ Token Redeemed Successfully\n\n"
-        f"⭐ Premium active until (unix): {until}",
+        success_text,
         context,
     )
 
@@ -2145,17 +2321,19 @@ async def plan(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
-def _pay_plan_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        [
-            [InlineKeyboardButton("💎 7/day: 1 Day - ₹10", callback_data="payplan:1d")],
-            [InlineKeyboardButton("💎 7/day: 7 Days - ₹35", callback_data="payplan:7d")],
-            [InlineKeyboardButton("💎 7/day: 1 Month - ₹115", callback_data="payplan:30d")],
-            [InlineKeyboardButton("🚀 20/day: 1 Day - ₹15", callback_data="payplan:20l_1d")],
-            [InlineKeyboardButton("🚀 20/day: 7 Days - ₹50", callback_data="payplan:20l_7d")],
-            [InlineKeyboardButton("🚀 20/day: 1 Month - ₹169", callback_data="payplan:20l_30d")],
-        ]
-    )
+def _pay_plan_keyboard(gateway: str = "manual") -> InlineKeyboardMarkup:
+    is_stars = gateway in ("stars", "telegram_stars", "telegramstars")
+    buttons = []
+    for key, plan in PAY_PLANS.items():
+        limit_prefix = "💎 7/day:" if plan["daily_limit"] == 7 else "🚀 20/day:"
+        days_str = f"{plan['days']} Day" if plan["days"] == 1 else (f"{plan['days']} Days" if plan["days"] < 30 else "1 Month")
+        if is_stars:
+            stars_price = plan.get("stars", plan["amount"])
+            text = f"{limit_prefix} {days_str} - {stars_price} Stars ⭐"
+        else:
+            text = f"{limit_prefix} {days_str} - ₹{plan['amount']}"
+        buttons.append([InlineKeyboardButton(text, callback_data=f"payplan:{key}")])
+    return InlineKeyboardMarkup(buttons)
 
 
 def _upi_uri(upi_id: str, amount_rs: int, payee_name: str, note: str) -> str:
@@ -2846,6 +3024,11 @@ async def _handle_xwallet_payment(update: Update, context: ContextTypes.DEFAULT_
         if not qr_code_id:
             raise ValueError(f"No qr_code_id in create_payment response: {create_res}")
 
+        # Save to gateway_extra column
+        import json
+        gateway_data = {"qr_code_id": qr_code_id, "gateway": "xwallet"}
+        await db.set_payment_gateway_extra(rid, json.dumps(gateway_data))
+
         # Step 2: Extract payment_link (browser-based UPI — confirmed working in live testing).
         payment_link = str(create_res.get("payment_link", ""))
         if not payment_link:
@@ -2960,7 +3143,7 @@ async def _handle_razorpay_payment(update: Update, context: ContextTypes.DEFAULT
 
         # Save to gateway_extra column
         import json
-        gateway_data = {"qr_code_id": qr_code_id, "image_url": image_url}
+        gateway_data = {"qr_code_id": qr_code_id, "image_url": image_url, "gateway": "razorpay"}
         await db.set_payment_gateway_extra(rid, json.dumps(gateway_data))
 
         # Step 2: Delete loading message and plan picker.
@@ -3027,8 +3210,162 @@ async def _handle_razorpay_payment(update: Update, context: ContextTypes.DEFAULT
             context,
         )
 
+
+async def _handle_stars_payment(update: Update, context: ContextTypes.DEFAULT_TYPE, q: Any, rid: int, plan: dict) -> None:
+    """Handle Telegram Stars payment flow: send Stars invoice directly."""
+    db = context.application.bot_data["db"]
+    try:
+        stars_amount = plan.get("stars", plan["amount"])
+        prices = [LabeledPrice(label=plan["label"], amount=stars_amount)]
+
+        invoice_msg = await context.bot.send_invoice(
+            chat_id=update.effective_chat.id,
+            title=f"Premium - {plan['label']}",
+            description=f"{plan['days']} Days Premium Subscription Access.",
+            payload=str(rid),
+            provider_token="",
+            currency="XTR",
+            prices=prices,
+        )
+
+        await db.set_payment_ui_messages(
+            int(rid),
+            int(update.effective_chat.id),
+            int(invoice_msg.message_id),
+            None,
+        )
+
+        # Save to gateway_extra column
+        gateway_data = {"invoice_message_id": invoice_msg.message_id, "gateway": "stars"}
+        await db.set_payment_gateway_extra(rid, json.dumps(gateway_data))
+
+        # Delete plan query message
+        if q.message:
+            try:
+                await q.message.delete()
+            except Exception:
+                pass
+
+    except Exception as e:
+        logger.warning("Error in _handle_stars_payment: %s", e)
+        await _send_emoji_text(
+            update.effective_chat.id,
+            "⚠️ Invoice generate karne mein dikkat aayi. Please admin se contact karein.",
+            context,
+        )
+
+
+async def pre_checkout_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Answers pre-checkout query to approve payment."""
+    query = update.pre_checkout_query
+    db = context.application.bot_data["db"]
+    try:
+        payload = query.invoice_payload
+        try:
+            rid = int(payload)
+            req = await db.get_payment_request(rid)
+            if req and req.get("status") == "pending":
+                await query.answer(ok=True)
+                return
+        except ValueError:
+            pass
+
+        await query.answer(ok=False, error_message="Order not found or already processed.")
+    except Exception as e:
+        logger.error("Error answering pre-checkout query: %s", e)
+
+
+async def successful_payment_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handles successful payments (XTR / Telegram Stars)."""
+    message = update.message
+    if not message or not message.successful_payment:
+        return
+
+    payment = message.successful_payment
+    payload = payment.invoice_payload
+    db = context.application.bot_data["db"]
+
+    try:
+        rid = int(payload)
+    except (ValueError, TypeError):
+        logger.error("Invalid invoice payload in successful payment: %s", payload)
+        return
+
+    req = await db.get_payment_request(rid)
+    if not req:
+        logger.error("Payment request not found for request id: %d", rid)
+        return
+
+    if req.get("status") != "pending":
+        # Already processed or expired
+        logger.info("Payment request %d already processed or expired. Status: %s", rid, req.get("status"))
+        return
+
+    # Process and approve payment request
+    ok = await db.approve_payment_request(rid, admin_id=0)
+    if not ok:
+        logger.error("Failed to approve payment request %d in database", rid)
+        return
+
+    until = await db.add_premium_seconds(int(req["user_id"]), int(req["plan_days"]) * DAY_SECONDS)
+    await _notify_autoverify_success(context, req)
+    expiry_utc = datetime.datetime.utcfromtimestamp(until).strftime("%Y-%m-%d %H:%M:%S UTC")
+
+    await _update_payment_user_status(
+        req,
+        context,
+        "Payment Status: SUCCESS",
+        ["Is order ki payment verify ho chuki hai via Telegram Stars."],
+    )
+
+    try:
+        plan_info = PAY_PLANS.get(req['plan_key'], {"label": req['plan_key']})
+        plan_name = plan_info.get("label", req['plan_key'])
+
+        success_text = (
+            "⭐ [b]Premium Activated Successfully![/b] ⭐\n\n"
+            "⭐ [b]Congratulations![/b] Aapka payment verify ho gaya hai aur aapka account premium mein upgrade ho chuka hai.\n\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            f"🎟 [b]Plan:[/b] [c]{plan_name}[/c]\n"
+            f"📅 [b]Duration:[/b] [c]{req['plan_days']} Days[/c]\n"
+            f"🆔 [b]Order ID:[/b] [c]#{req['id']}[/c]\n"
+            f"🕒 [b]Expiry Date:[/b] [c]{expiry_utc}[/c]\n"
+            "━━━━━━━━━━━━━━━━━━━━\n\n"
+            "✅ Aap ab bina kisi ads ke sabhi files access aur download kar sakte hain.\n"
+            "🚀 [b]Enjoy Premium Experience![/b]"
+        )
+
+        await _send_emoji_text(
+            int(req["user_id"]),
+            success_text,
+            context,
+        )
+        await _send_premium_direct_access_message(int(req["user_id"]), context)
+    except Exception as e:
+        logger.error("Error sending success message: %s", e)
+
+    await db.clear_payment_ui_messages(int(req["id"]))
+
+
 async def pay(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
+    cfg = context.application.bot_data["cfg"]
+    gateway = getattr(cfg, "payment_gateway", "manual")
+    is_stars = gateway in ("stars", "telegram_stars", "telegramstars")
+
+    if is_stars:
+        plans_text = (
+            "📦 [b]Plans Choose Karo[/b]\n"
+            "• [b]7 links/day[/b]: 1 Day 10 Stars ⭐ | 7 Days 35 Stars ⭐ | 1 Month 115 Stars ⭐\n"
+            "• [b]20 links/day[/b]: 1 Day 15 Stars ⭐ | 7 Days 50 Stars ⭐ | 1 Month 169 Stars ⭐\n\n"
+        )
+    else:
+        plans_text = (
+            "📦 [b]Plans Choose Karo[/b]\n"
+            "• [b]7 links/day[/b]: 1 Day ₹10 | 7 Days ₹35 | 1 Month ₹115\n"
+            "• [b]20 links/day[/b]: 1 Day ₹15 | 7 Days ₹50 | 1 Month ₹169\n\n"
+        )
+
     await _send_emoji_text(
         update.effective_chat.id,
         "⭐ [b]Premium Membership[/b]\n\n"
@@ -3039,13 +3376,11 @@ async def pay(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "• ✅ Premium (VIP) links instantly open honge\n"
         "• ✅ No Ads — seedha file/content deliver\n"
         "• ✅ Instant Delivery — koi rukawat nahi\n"
-        "• ✅ All exclusive content unlocked\n\n"
-        "📦 [b]Plans Choose Karo[/b]\n"
-        "• [b]7 links/day[/b]: 1 Day ₹10 | 7 Days ₹35 | 1 Month ₹115\n"
-        "• [b]20 links/day[/b]: 1 Day ₹15 | 7 Days ₹50 | 1 Month ₹169\n\n"
+        "• ✅ All exclusive content unlocked\n\n" +
+        plans_text +
         "👇 Neeche apna plan select karo:",
         context,
-        reply_markup=_pay_plan_keyboard(),
+        reply_markup=_pay_plan_keyboard(gateway),
     )
 
 
@@ -3063,7 +3398,8 @@ async def pay_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         gateway = getattr(cfg, "payment_gateway", "manual")
         is_xwallet = gateway == "xwallet" and bool(getattr(cfg, "xwallet_api_key", ""))
         is_razorpay = gateway == "razorpay" and bool(getattr(cfg, "razorpay_key_id", "")) and bool(getattr(cfg, "razorpay_key_secret", ""))
-        is_auto = is_xwallet or is_razorpay
+        is_stars = gateway in ("stars", "telegram_stars", "telegramstars")
+        is_auto = is_xwallet or is_razorpay or is_stars
 
         if existing:
             # Block only manual flow if UTR already submitted — auto flows are verified dynamically.
@@ -3086,7 +3422,7 @@ async def pay_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                     )
                     await _delete_payment_qr_message(existing, context)
             elif existing.get("status") == "submitted":
-                # For XWallet/Razorpay: expire the old submitted one and allow fresh order.
+                # For XWallet/Razorpay/Stars: expire the old submitted one and allow fresh order.
                 await db.expire_payment_request_if_pending(int(existing["id"]))
                 await _update_payment_user_status(
                     existing,
@@ -3105,7 +3441,9 @@ async def pay_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             await _edit_emoji_text(update.effective_chat.id, q.message.message_id, "❌ Invalid plan.", context)
             return
         rid = await db.create_payment_request(update.effective_user.id, key, int(plan["days"]), int(plan["amount"]))
-        if is_razorpay:
+        if is_stars:
+            await _handle_stars_payment(update, context, q, rid, plan)
+        elif is_razorpay:
             await _handle_razorpay_payment(update, context, q, rid, plan, cfg)
         elif is_xwallet:
             await _handle_xwallet_payment(update, context, q, rid, plan, cfg)
@@ -4628,6 +4966,75 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
+async def revenue(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await _upsert_user(update, context)
+    if not await _is_admin_or_owner(update, context):
+        await _send_emoji_text(update.effective_chat.id, "🚫 Access denied. (Admin/Owner only)", context)
+        return
+    db: Database = context.application.bot_data["db"]
+
+    # Calculate the 1st of the current month in IST
+    import datetime
+    tz_ist = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
+    now_ist = datetime.datetime.now(tz_ist)
+    first_ist = datetime.datetime(now_ist.year, now_ist.month, 1, 0, 0, 0, tzinfo=tz_ist)
+
+    start_ts = int(first_ist.timestamp())
+    end_ts = int(now_ist.timestamp())
+
+    stats_detailed = await db.list_processed_payment_requests_detailed(start_ts, end_ts)
+
+    gateway_rev = 0
+    manual_rev = 0
+    star_rev = 0
+
+    import json
+    for req in stats_detailed:
+        amount = int(req.get("amount_rs") or 0)
+        gateway = None
+        gateway_extra_raw = req.get("gateway_extra")
+        if gateway_extra_raw:
+            try:
+                ge = json.loads(gateway_extra_raw)
+                gateway = ge.get("gateway")
+                if not gateway:
+                    if "qr_code_id" in ge or "image_url" in ge:
+                        gateway = "razorpay"
+            except Exception:
+                pass
+
+        if not gateway:
+            if req.get("utr_text"):
+                gateway = "manual"
+            elif req.get("processed_by") == 0:
+                gateway = "xwallet"
+            else:
+                gateway = "manual"
+
+        if gateway == "stars":
+            plan_key = req.get("plan_key")
+            plan = PAY_PLANS.get(plan_key, {})
+            stars = int(plan.get("stars", amount))
+            star_rev += stars
+        elif gateway in ("razorpay", "xwallet"):
+            gateway_rev += amount
+        else:
+            manual_rev += amount
+
+    date_from_str = first_ist.strftime("%d %B %Y")
+    date_to_str = now_ist.strftime("%d %B %Y")
+
+    message = (
+        "📊 [b]Revenue Report[/b]\n\n"
+        f"gateway revenue: {gateway_rev}rs\n"
+        f"manual revenue: {manual_rev}\n"
+        f"star revenue: {star_rev}\n"
+        f"Date: {date_from_str} to {date_to_str}"
+    )
+
+    await _send_emoji_text(update.effective_chat.id, message, context)
+
+
 async def premiumdb(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     if not await _is_admin_or_owner(update, context):
@@ -4911,6 +5318,121 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
+async def run_revenue_report_scheduler(application: Application) -> None:
+    """Periodically checks if 15 days have passed since the last revenue report, and sends it to owner and admins."""
+    # Check every hour (3600 seconds)
+    while True:
+        try:
+            db = application.bot_data.get("db")
+            cfg = application.bot_data.get("cfg")
+            if not db or not cfg:
+                await asyncio.sleep(60)
+                continue
+
+            # Retrieve last sent timestamp
+            last_sent_str = await db.get_setting("last_revenue_report_sent")
+            now = int(time.time())
+
+            # 15 days = 15 * 24 * 60 * 60 seconds
+            interval = 15 * 24 * 60 * 60
+
+            should_send = False
+            if last_sent_str is None:
+                # First run: set to now so it sends in 15 days.
+                await db.set_setting("last_revenue_report_sent", str(now))
+            else:
+                try:
+                    last_sent = int(last_sent_str)
+                    if now - last_sent >= interval:
+                        should_send = True
+                except ValueError:
+                    await db.set_setting("last_revenue_report_sent", str(now))
+
+            if should_send:
+                # Update the timestamp first to prevent any race condition
+                await db.set_setting("last_revenue_report_sent", str(now))
+
+                # Calculate the 1st of the current month in IST
+                import datetime
+                tz_ist = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
+                now_ist = datetime.datetime.now(tz_ist)
+                first_ist = datetime.datetime(now_ist.year, now_ist.month, 1, 0, 0, 0, tzinfo=tz_ist)
+
+                start_ts = int(first_ist.timestamp())
+                end_ts = int(now_ist.timestamp())
+
+                stats_detailed = await db.list_processed_payment_requests_detailed(start_ts, end_ts)
+
+                gateway_rev = 0
+                manual_rev = 0
+                star_rev = 0
+
+                import json
+                for req in stats_detailed:
+                    amount = int(req.get("amount_rs") or 0)
+                    gateway = None
+                    gateway_extra_raw = req.get("gateway_extra")
+                    if gateway_extra_raw:
+                        try:
+                            ge = json.loads(gateway_extra_raw)
+                            gateway = ge.get("gateway")
+                            if not gateway:
+                                if "qr_code_id" in ge or "image_url" in ge:
+                                    gateway = "razorpay"
+                        except Exception:
+                            pass
+
+                    if not gateway:
+                        if req.get("utr_text"):
+                            gateway = "manual"
+                        elif req.get("processed_by") == 0:
+                            gateway = "xwallet"
+                        else:
+                            gateway = "manual"
+
+                    if gateway == "stars":
+                        plan_key = req.get("plan_key")
+                        plan = PAY_PLANS.get(plan_key, {})
+                        stars = int(plan.get("stars", amount))
+                        star_rev += stars
+                    elif gateway in ("razorpay", "xwallet"):
+                        gateway_rev += amount
+                    else:
+                        manual_rev += amount
+
+                date_from_str = first_ist.strftime("%d %B %Y")
+                date_to_str = now_ist.strftime("%d %B %Y")
+
+                message = (
+                    "📊 [b]Auto Revenue Overview[/b]\n\n"
+                    f"gateway revenue: {gateway_rev}rs\n"
+                    f"manual revenue: {manual_rev}\n"
+                    f"star revenue: {star_rev}\n"
+                    f"Date: {date_from_str} to {date_to_str}"
+                )
+
+                admin_ids = await db.list_admin_ids()
+                targets = {int(cfg.owner_id), *[int(x) for x in admin_ids]}
+
+                class SimpleContext:
+                    def __init__(self, app: Application):
+                        self.application = app
+                        self.bot = app.bot
+
+                dummy_context = SimpleContext(application)
+
+                for tid in targets:
+                    try:
+                        await _send_emoji_text(tid, message, dummy_context)
+                    except Exception as e:
+                        logger.warning("Failed to send auto-revenue report to %d: %s", tid, e)
+
+        except Exception as e:
+            logger.error("Error in run_revenue_report_scheduler: %s", e)
+
+        await asyncio.sleep(3600)
+
+
 async def resume_pending_payments_polling(application: Application) -> None:
     """Startup recovery: fetches all active pending payment requests and resumes polling tasks."""
     db = application.bot_data.get("db")
@@ -4980,22 +5502,74 @@ async def resume_pending_payments_polling(application: Application) -> None:
                     key_secret=key_secret,
                 ))
 
+    # Start the 15-day revenue report scheduler in the background.
+    asyncio.create_task(run_revenue_report_scheduler(application))
+
+
+async def unified_text_input_router(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Unified routing for non-command text inputs to solve group-0 shadowing issues."""
+    ud = context.user_data or {}
+
+    # 1. Premium code generator custom days input
+    if ud.get("gencode_waiting_for_days"):
+        await gencode_days_input(update, context)
+        return
+
+    # 2. Pay UTR input
+    if ud.get("pay_utr_request_id"):
+        await pay_utr_input(update, context)
+        return
+
+    # 3. Add admin
+    if ud.get("bset_addadmin_wait"):
+        await bsettings_owner_addadmin_input(update, context)
+        return
+
+    # 4. Remove admin
+    if ud.get("bset_removeadmin_wait"):
+        await bsettings_owner_removeadmin_input(update, context)
+        return
+
+    # 5. Generate codes quantity (from bsettings panel)
+    if ud.get("bset_gencode_wait"):
+        await bsettings_gencode_input(update, context)
+        return
+
+    # 6. Remove force channel
+    if ud.get("bset_forcech_remove_wait"):
+        await bsettings_forcech_remove_input(update, context)
+        return
+
+    # 7. Misc inputs
+    if ud.get("bset_misc_wait"):
+        await bsettings_misc_input(update, context)
+        return
+
+    # 8. Force channel inputs
+    if ud.get("forcech_wait"):
+        await forcech_input(update, context)
+        return
+
+
 def build_handlers(app: Application) -> None:
+    app.add_handler(PreCheckoutQueryHandler(pre_checkout_callback))
+    app.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment_callback))
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("cancel", cancel))
     app.add_handler(CallbackQueryHandler(recheck_callback, pattern=r"^(recheck:|noop)"))
     app.add_handler(CallbackQueryHandler(pay_callback, pattern=r"^pay(plan|utr|cancel):"))
     app.add_handler(CallbackQueryHandler(pay_admin_callback, pattern=r"^payadm:(approve|reject):"))
     app.add_handler(CallbackQueryHandler(bsettings_callback, pattern=r"^bset:"))
+    app.add_handler(CallbackQueryHandler(gencode_callback, pattern=r"^gencodesel:"))
 
-    # /forcech uses guided text input + mode callback.
-    app.add_handler(MessageHandler((filters.TEXT | filters.PHOTO | filters.Document.ALL) & ~filters.COMMAND, pay_utr_input), group=0)
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, bsettings_owner_addadmin_input), group=0)
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, bsettings_owner_removeadmin_input), group=0)
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, bsettings_gencode_input), group=0)
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, bsettings_forcech_remove_input), group=0)
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, bsettings_misc_input), group=0)
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, forcech_input), group=0)
+    # Unified input router for guided text/media inputs
+    app.add_handler(
+        MessageHandler(
+            (filters.TEXT | filters.PHOTO | filters.Document.ALL) & ~filters.COMMAND,
+            unified_text_input_router
+        ),
+        group=0
+    )
     app.add_handler(CallbackQueryHandler(forcech_mode_callback, pattern=r"^forcech_mode:(direct|request)$"))
     app.add_handler(ChatJoinRequestHandler(on_chat_join_request))
 
@@ -5018,6 +5592,7 @@ def build_handlers(app: Application) -> None:
     app.add_handler(CommandHandler("forcechdebug", forcechdebug))
     app.add_handler(CommandHandler("broadcast", broadcast))
     app.add_handler(CommandHandler("stats", stats))
+    app.add_handler(CommandHandler("revenue", revenue))
     app.add_handler(CommandHandler("premiumdb", premiumdb))
     app.add_handler(CommandHandler("setcaption", setcaption))
     app.add_handler(CommandHandler("removecaption", removecaption))

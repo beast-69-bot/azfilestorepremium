@@ -769,6 +769,41 @@ class MongoDatabase:
             )
         return out
 
+    async def list_processed_payment_requests_detailed(self, since_ts: int, until_ts: int) -> list[dict[str, Any]]:
+        rows = self.db.payment_requests.find(
+            {
+                "status": "processed",
+                "processed_at": {
+                    "$gte": int(since_ts),
+                    "$lte": int(until_ts),
+                },
+            },
+            {"_id": 0},
+        ).sort([("processed_at", 1), ("id", 1)])
+        out: list[dict[str, Any]] = []
+        async for row in rows:
+            out.append({
+                "id": int(row["id"]),
+                "user_id": int(row["user_id"]),
+                "plan_key": row["plan_key"],
+                "plan_days": int(row["plan_days"]),
+                "amount_rs": int(row["amount_rs"]),
+                "projected_premium_until": int(row.get("projected_premium_until") or 0),
+                "status": row["status"],
+                "utr_text": row.get("utr_text"),
+                "user_chat_id": int(row["user_chat_id"]) if row.get("user_chat_id") is not None else None,
+                "details_msg_id": int(row["details_msg_id"]) if row.get("details_msg_id") is not None else None,
+                "qr_msg_id": int(row["qr_msg_id"]) if row.get("qr_msg_id") is not None else None,
+                "expires_at": int(row.get("expires_at") or 0),
+                "created_at": int(row["created_at"]),
+                "updated_at": int(row["updated_at"]),
+                "processed_by": row.get("processed_by"),
+                "processed_at": row.get("processed_at"),
+                "gateway_extra": row.get("gateway_extra"),
+            })
+        return out
+
+
     async def list_pending_payment_requests(self) -> list[dict[str, Any]]:
         rows = self.db.payment_requests.find({"status": "pending"}, {"_id": 0})
         out: list[dict[str, Any]] = []

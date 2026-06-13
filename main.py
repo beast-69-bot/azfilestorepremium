@@ -43,6 +43,7 @@ async def _post_init(app: Application) -> None:
         BotCommand("extendlast24h", "Extend +1 day for last 24h buyers (Admin/Owner)"),
         BotCommand("paylookup", "Lookup payment order details (Admin/Owner)"),
         BotCommand("manualapprove", "Approve manual order by id (Admin/Owner)"),
+        BotCommand("revenue", "View monthly revenue stats (Admin/Owner)"),
     ]
     try:
         await app.bot.set_my_commands(commands)

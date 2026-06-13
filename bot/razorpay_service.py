@@ -40,10 +40,8 @@ async def create_qr_code(
         "payment_amount": amount_rs * 100,  # Razorpay requires amount in paise.
         "description": f"Order #{order_id} for Plan: {plan_label}"[:250],
         "notes": {
-            "order_id": str(order_id),
-            "user_id": str(user_id),
             "username": username,
-            "plan_label": plan_label,
+            "planLabel": plan_label,
         }
     }
 

@@ -913,6 +913,47 @@ class Database:
             )
         return out
 
+    async def list_processed_payment_requests_detailed(self, since_ts: int, until_ts: int) -> list[dict[str, Any]]:
+        cur = await self.conn.execute(
+            """
+            SELECT id, user_id, plan_key, plan_days, amount_rs, projected_premium_until, status, utr_text, user_chat_id, details_msg_id, qr_msg_id, expires_at, created_at, updated_at, processed_by, processed_at, gateway_extra
+            FROM payment_requests
+            WHERE status='processed'
+              AND processed_at IS NOT NULL
+              AND processed_at>=?
+              AND processed_at<=?
+            ORDER BY processed_at ASC, id ASC
+            """,
+            (int(since_ts), int(until_ts)),
+        )
+        rows = await cur.fetchall()
+        await cur.close()
+        out: list[dict[str, Any]] = []
+        for r in rows:
+            out.append(
+                {
+                    "id": int(r[0]),
+                    "user_id": int(r[1]),
+                    "plan_key": str(r[2] or ""),
+                    "plan_days": int(r[3]) if r[3] is not None else 0,
+                    "amount_rs": int(r[4]) if r[4] is not None else 0,
+                    "projected_premium_until": int(r[5]) if r[5] is not None else 0,
+                    "status": str(r[6] or ""),
+                    "utr_text": r[7] if r[7] is not None else None,
+                    "user_chat_id": int(r[8]) if r[8] is not None else None,
+                    "details_msg_id": int(r[9]) if r[9] is not None else None,
+                    "qr_msg_id": int(r[10]) if r[10] is not None else None,
+                    "expires_at": int(r[11]) if r[11] is not None else 0,
+                    "created_at": int(r[12]) if r[12] is not None else 0,
+                    "updated_at": int(r[13]) if r[13] is not None else 0,
+                    "processed_by": int(r[14]) if r[14] is not None else 0,
+                    "processed_at": int(r[15]) if r[15] is not None else 0,
+                    "gateway_extra": r[16] if len(r) > 16 else None,
+                }
+            )
+        return out
+
+
     async def list_pending_payment_requests(self) -> list[dict[str, Any]]:
         cur = await self.conn.execute(
             """
