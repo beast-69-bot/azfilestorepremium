@@ -848,3 +848,16 @@ class MongoDatabase:
             },
         )
         return int(res.modified_count)
+
+    async def has_purchased_link(self, user_id: int, link_code: str) -> bool:
+        doc = await self.db.link_purchases.find_one({"user_id": int(user_id), "link_code": str(link_code)})
+        return bool(doc)
+
+    async def record_link_purchase(self, user_id: int, link_code: str) -> None:
+        now = _now()
+        await self.db.link_purchases.update_one(
+            {"user_id": int(user_id), "link_code": str(link_code)},
+            {"$set": {"purchased_at": now}},
+            upsert=True
+        )
+

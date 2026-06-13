@@ -161,6 +161,13 @@ class Database:
               processed_at  INTEGER
             );
             CREATE INDEX IF NOT EXISTS idx_payment_requests_user ON payment_requests(user_id, status);
+
+            CREATE TABLE IF NOT EXISTS link_purchases (
+               user_id      INTEGER NOT NULL,
+               link_code    TEXT NOT NULL,
+               purchased_at INTEGER NOT NULL,
+               PRIMARY KEY (user_id, link_code)
+            );
             """
         )
         # Lightweight migrations for existing databases.
@@ -999,3 +1006,21 @@ class Database:
         )
         await self.conn.commit()
         return int(cur.rowcount or 0)
+
+    async def has_purchased_link(self, user_id: int, link_code: str) -> bool:
+        cur = await self.conn.execute(
+            "SELECT 1 FROM link_purchases WHERE user_id=? AND link_code=?",
+            (int(user_id), str(link_code)),
+        )
+        row = await cur.fetchone()
+        await cur.close()
+        return bool(row)
+
+    async def record_link_purchase(self, user_id: int, link_code: str) -> None:
+        now = _now()
+        await self.conn.execute(
+            "INSERT OR IGNORE INTO link_purchases(user_id, link_code, purchased_at) VALUES(?, ?, ?)",
+            (int(user_id), str(link_code), now),
+        )
+        await self.conn.commit()
+

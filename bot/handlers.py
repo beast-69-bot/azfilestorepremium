@@ -113,6 +113,7 @@ PAY_PLANS: dict[str, dict[str, Any]] = {
     "20l_1d": {"label": "1 Day - 20 Links/Day", "days": 1, "amount": 15, "daily_limit": 20, "stars": 15},
     "20l_7d": {"label": "7 Days - 20 Links/Day", "days": 7, "amount": 50, "daily_limit": 20, "stars": 50},
     "20l_30d": {"label": "1 Month - 20 Links/Day", "days": 30, "amount": 169, "daily_limit": 20, "stars": 169},
+    "unl_30d": {"label": "1 Month - Unlimited Links/Day", "days": 30, "amount": 199, "daily_limit": 999999, "stars": 199},
 }
 
 BSETTINGS_DOCS: dict[str, dict[str, str]] = {
@@ -936,8 +937,8 @@ def _join_keyboard(channels: list[dict[str, Any]], recheck_code: str) -> InlineK
 def _access_link_keyboard(normal_url: str, premium_url: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [
-            [InlineKeyboardButton(text="🔓 Open Normal Link", url=normal_url)],
-            [InlineKeyboardButton(text="⭐ Open Premium Link", url=premium_url)],
+            [InlineKeyboardButton(text="🔓 Normal Link (With Ads)", url=normal_url)],
+            [InlineKeyboardButton(text="⚡ Premium Link (Instant / No Ads)", url=premium_url)],
         ]
     )
 
@@ -1136,8 +1137,11 @@ async def _consume_premium_quota(
     chat_id: int,
     context: ContextTypes.DEFAULT_TYPE,
     db: Database,
+    code: str = "",
 ) -> bool:
     if link["access"] != "premium":
+        return True
+    if code and await db.has_purchased_link(user_id, code):
         return True
     quota = await db.consume_premium_link(user_id)
     if quota["allowed"]:
@@ -1179,15 +1183,22 @@ async def _deliver_by_code(update: Update, context: ContextTypes.DEFAULT_TYPE, c
         return
 
     if link["access"] == "premium" and not await db.is_premium_active(user.id):
-        await _send_emoji_text(
-            chat.id,
-            "⭐ [b]Premium Required[/b]\n\n"
-            "This link is for premium users only.\n"
-            "• Redeem token: [c]/redeem <token>[/c]\n"
-            "• Plan buy karo: [c]/pay[/c]",
-            context,
-        )
-        return
+        if not await db.has_purchased_link(user.id, code):
+            kb = InlineKeyboardMarkup([
+                [InlineKeyboardButton("⭐ Access in 1 TG Star", callback_data=f"paylinkstar:{code}")],
+                [InlineKeyboardButton("💳 Buy Premium Plan", callback_data="payplans_show")]
+            ])
+            await _send_emoji_text(
+                chat.id,
+                "⭐ [b]Premium Required[/b]\n\n"
+                "This link is for premium users only.\n"
+                "• Redeem token: [c]/redeem <token>[/c]\n"
+                "• Plan buy karo: [c]/pay[/c]\n"
+                "• Access this link in 1 TG Star ⭐",
+                context,
+                reply_markup=kb,
+            )
+            return
 
     caption = await db.get_setting("caption")
 
@@ -1196,7 +1207,7 @@ async def _deliver_by_code(update: Update, context: ContextTypes.DEFAULT_TYPE, c
         if not file_row:
             await chat.send_message("❌ File not found (may have been removed).")
             return
-        if not await _consume_premium_quota(link, user.id, chat.id, context, db):
+        if not await _consume_premium_quota(link, user.id, chat.id, context, db, code):
             return
         await _send_file(chat.id, file_row, caption, context)
         await db.mark_link_used(code)
@@ -1210,7 +1221,7 @@ async def _deliver_by_code(update: Update, context: ContextTypes.DEFAULT_TYPE, c
         if len(file_ids) > 100:
             await chat.send_message("⚠️ Batch too large to deliver.")
             return
-        if not await _consume_premium_quota(link, user.id, chat.id, context, db):
+        if not await _consume_premium_quota(link, user.id, chat.id, context, db, code):
             return
         for fid in file_ids:
             file_row = await db.get_file(fid)
@@ -1224,7 +1235,7 @@ async def _deliver_by_code(update: Update, context: ContextTypes.DEFAULT_TYPE, c
         if not msg_row:
             await chat.send_message("❌ Message not found (may have been removed).")
             return
-        if not await _consume_premium_quota(link, user.id, chat.id, context, db):
+        if not await _consume_premium_quota(link, user.id, chat.id, context, db, code):
             return
         try:
             m = await context.bot.copy_message(
@@ -1253,7 +1264,7 @@ async def _deliver_by_code(update: Update, context: ContextTypes.DEFAULT_TYPE, c
         if total <= 0 or total > MAX_CHANNEL_BATCH_POSTS:
             await chat.send_message("⚠️ Batch range invalid or too large.")
             return
-        if not await _consume_premium_quota(link, user.id, chat.id, context, db):
+        if not await _consume_premium_quota(link, user.id, chat.id, context, db, code):
             return
         for mid in range(start_id, end_id + 1):
             try:
@@ -2324,17 +2335,32 @@ async def plan(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 def _pay_plan_keyboard(gateway: str = "manual") -> InlineKeyboardMarkup:
     buttons = []
     for key, plan in PAY_PLANS.items():
-        limit_prefix = "💎 7/day:" if plan["daily_limit"] == 7 else "🚀 20/day:"
-        days_str = f"{plan['days']} Day" if plan["days"] == 1 else (f"{plan['days']} Days" if plan["days"] < 30 else "1 Month")
-        
+        limit = plan["daily_limit"]
+        if limit == 999999:
+            limit_prefix = "👑 Unlimited Links"
+        elif limit == 20:
+            limit_prefix = "🚀 20 Links/Day"
+        else:
+            limit_prefix = "💎 7 Links/Day"
+
+        days = plan["days"]
+        if days == 1:
+            duration = "1 Day"
+        elif days == 7:
+            duration = "7 Days"
+        elif days == 30:
+            duration = "1 Month"
+        else:
+            duration = f"{days} Days"
+
         # Label row (informational and non-clickable)
-        label_text = f"🔹 {limit_prefix} {days_str}"
+        label_text = f"🔹 {limit_prefix} ({duration}) 🔹"
         buttons.append([InlineKeyboardButton(label_text, callback_data="paynoop")])
         
         # Payment options row (UPI vs Telegram Stars)
         stars_price = plan.get("stars", plan["amount"])
-        pay_upi_btn = InlineKeyboardButton(f"💳 Pay ₹{plan['amount']}", callback_data=f"payplan:upi:{key}")
-        pay_stars_btn = InlineKeyboardButton(f"⭐ Pay {stars_price} Stars", callback_data=f"payplan:stars:{key}")
+        pay_upi_btn = InlineKeyboardButton(f"💳 UPI (₹{plan['amount']})", callback_data=f"payplan:upi:{key}")
+        pay_stars_btn = InlineKeyboardButton(f"⭐ Stars ({stars_price})", callback_data=f"payplan:stars:{key}")
         buttons.append([pay_upi_btn, pay_stars_btn])
         
     return InlineKeyboardMarkup(buttons)
@@ -3289,6 +3315,27 @@ async def successful_payment_callback(update: Update, context: ContextTypes.DEFA
     payload = payment.invoice_payload
     db = context.application.bot_data["db"]
 
+    if payload.startswith("unlock:"):
+        code = payload.split(":", 1)[1]
+        user_id = int(message.from_user.id) if message.from_user else 0
+        if not user_id:
+            logger.error("No user found in successful payment message for link unlock")
+            return
+
+        await db.record_link_purchase(user_id, code)
+        logger.info("User %d successfully unlocked premium link %s with 1 Telegram Star", user_id, code)
+
+        success_text = (
+            "🎉 [b]Link Unlocked Successfully![/b] 🎉\n\n"
+            "Aapne 1 Telegram Star pay karke is specific premium link ka access unlock kar liya hai.\n\n"
+            "👇 Niche diye gaye button par tap karke link access karein:"
+        )
+        kb = InlineKeyboardMarkup([
+            [InlineKeyboardButton("✅ Access Unlocked Link", callback_data=f"recheck:{code}")]
+        ])
+        await _send_emoji_text(message.chat.id, success_text, context, reply_markup=kb)
+        return
+
     try:
         rid = int(payload)
     except (ValueError, TypeError):
@@ -3359,7 +3406,8 @@ async def pay(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     plans_text = (
         "📦 [b]Plans Choose Karo[/b]\n"
         "• [b]7 links/day[/b]: 1 Day (₹10 / 10 Stars ⭐) | 7 Days (₹35 / 35 Stars ⭐) | 1 Month (₹115 / 115 Stars ⭐)\n"
-        "• [b]20 links/day[/b]: 1 Day (₹15 / 15 Stars ⭐) | 7 Days (₹50 / 50 Stars ⭐) | 1 Month (₹169 / 169 Stars ⭐)\n\n"
+        "• [b]20 links/day[/b]: 1 Day (₹15 / 15 Stars ⭐) | 7 Days (₹50 / 50 Stars ⭐) | 1 Month (₹169 / 169 Stars ⭐)\n"
+        "• [b]Unlimited links/day[/b]: 1 Month (₹199 / 199 Stars ⭐)\n\n"
     )
 
     await _send_emoji_text(
@@ -3389,6 +3437,37 @@ async def pay_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     db: Database = context.application.bot_data["db"]
 
     if data == "paynoop":
+        return
+
+    if data == "payplans_show":
+        await pay(update, context)
+        return
+
+    if data.startswith("paylinkstar:"):
+        code = data.split(":", 1)[1]
+        try:
+            prices = [LabeledPrice(label="Unlock Premium Link", amount=1)]
+            await context.bot.send_invoice(
+                chat_id=update.effective_chat.id,
+                title="Unlock Premium Link",
+                description="Get instant access to this specific premium link/file.",
+                payload=f"unlock:{code}",
+                provider_token="",
+                currency="XTR",
+                prices=prices,
+            )
+            # Delete warning message
+            try:
+                await q.message.delete()
+            except Exception:
+                pass
+        except Exception as e:
+            logger.warning("Error in stars link unlock invoice creation: %s", e)
+            await _send_emoji_text(
+                update.effective_chat.id,
+                "⚠️ Invoice generate karne mein dhikkat aayi. Please admin se contact karein.",
+                context,
+            )
         return
 
     if data.startswith("payplan:"):
@@ -5572,7 +5651,7 @@ def build_handlers(app: Application) -> None:
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("cancel", cancel))
     app.add_handler(CallbackQueryHandler(recheck_callback, pattern=r"^(recheck:|noop)"))
-    app.add_handler(CallbackQueryHandler(pay_callback, pattern=r"^pay(plan|utr|cancel):"))
+    app.add_handler(CallbackQueryHandler(pay_callback, pattern=r"^pay(plan|utr|cancel|linkstar|plans_show):"))
     app.add_handler(CallbackQueryHandler(pay_admin_callback, pattern=r"^payadm:(approve|reject):"))
     app.add_handler(CallbackQueryHandler(bsettings_callback, pattern=r"^bset:"))
     app.add_handler(CallbackQueryHandler(gencode_callback, pattern=r"^gencodesel:"))
