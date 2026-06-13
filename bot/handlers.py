@@ -2322,17 +2322,21 @@ async def plan(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 def _pay_plan_keyboard(gateway: str = "manual") -> InlineKeyboardMarkup:
-    is_stars = gateway in ("stars", "telegram_stars", "telegramstars")
     buttons = []
     for key, plan in PAY_PLANS.items():
         limit_prefix = "💎 7/day:" if plan["daily_limit"] == 7 else "🚀 20/day:"
         days_str = f"{plan['days']} Day" if plan["days"] == 1 else (f"{plan['days']} Days" if plan["days"] < 30 else "1 Month")
-        if is_stars:
-            stars_price = plan.get("stars", plan["amount"])
-            text = f"{limit_prefix} {days_str} - {stars_price} Stars ⭐"
-        else:
-            text = f"{limit_prefix} {days_str} - ₹{plan['amount']}"
-        buttons.append([InlineKeyboardButton(text, callback_data=f"payplan:{key}")])
+        
+        # Label row (informational and non-clickable)
+        label_text = f"🔹 {limit_prefix} {days_str}"
+        buttons.append([InlineKeyboardButton(label_text, callback_data="paynoop")])
+        
+        # Payment options row (UPI vs Telegram Stars)
+        stars_price = plan.get("stars", plan["amount"])
+        pay_upi_btn = InlineKeyboardButton(f"💳 Pay ₹{plan['amount']}", callback_data=f"payplan:upi:{key}")
+        pay_stars_btn = InlineKeyboardButton(f"⭐ Pay {stars_price} Stars", callback_data=f"payplan:stars:{key}")
+        buttons.append([pay_upi_btn, pay_stars_btn])
+        
     return InlineKeyboardMarkup(buttons)
 
 
@@ -3351,20 +3355,12 @@ async def pay(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     cfg = context.application.bot_data["cfg"]
     gateway = getattr(cfg, "payment_gateway", "manual")
-    is_stars = gateway in ("stars", "telegram_stars", "telegramstars")
 
-    if is_stars:
-        plans_text = (
-            "📦 [b]Plans Choose Karo[/b]\n"
-            "• [b]7 links/day[/b]: 1 Day 10 Stars ⭐ | 7 Days 35 Stars ⭐ | 1 Month 115 Stars ⭐\n"
-            "• [b]20 links/day[/b]: 1 Day 15 Stars ⭐ | 7 Days 50 Stars ⭐ | 1 Month 169 Stars ⭐\n\n"
-        )
-    else:
-        plans_text = (
-            "📦 [b]Plans Choose Karo[/b]\n"
-            "• [b]7 links/day[/b]: 1 Day ₹10 | 7 Days ₹35 | 1 Month ₹115\n"
-            "• [b]20 links/day[/b]: 1 Day ₹15 | 7 Days ₹50 | 1 Month ₹169\n\n"
-        )
+    plans_text = (
+        "📦 [b]Plans Choose Karo[/b]\n"
+        "• [b]7 links/day[/b]: 1 Day (₹10 / 10 Stars ⭐) | 7 Days (₹35 / 35 Stars ⭐) | 1 Month (₹115 / 115 Stars ⭐)\n"
+        "• [b]20 links/day[/b]: 1 Day (₹15 / 15 Stars ⭐) | 7 Days (₹50 / 50 Stars ⭐) | 1 Month (₹169 / 169 Stars ⭐)\n\n"
+    )
 
     await _send_emoji_text(
         update.effective_chat.id,
@@ -3392,14 +3388,34 @@ async def pay_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     data = q.data or ""
     db: Database = context.application.bot_data["db"]
 
+    if data == "paynoop":
+        return
+
     if data.startswith("payplan:"):
-        existing = await db.get_latest_open_payment_request(update.effective_user.id)
+        # Parse callback: payplan:upi:<plan_key> or payplan:stars:<plan_key> (supporting old formats as well)
+        parts = data.split(":")
         cfg = context.application.bot_data["cfg"]
-        gateway = getattr(cfg, "payment_gateway", "manual")
-        is_xwallet = gateway == "xwallet" and bool(getattr(cfg, "xwallet_api_key", ""))
-        is_razorpay = gateway == "razorpay" and bool(getattr(cfg, "razorpay_key_id", "")) and bool(getattr(cfg, "razorpay_key_secret", ""))
-        is_stars = gateway in ("stars", "telegram_stars", "telegramstars")
+        if len(parts) == 3:
+            selected_gate = parts[1]
+            key = parts[2]
+        else:
+            gateway = getattr(cfg, "payment_gateway", "manual")
+            selected_gate = "stars" if gateway in ("stars", "telegram_stars", "telegramstars") else "upi"
+            key = parts[1]
+
+        if selected_gate == "stars":
+            is_stars = True
+            is_xwallet = False
+            is_razorpay = False
+            gateway = "stars"
+        else:
+            is_stars = False
+            gateway = getattr(cfg, "payment_gateway", "manual")
+            is_xwallet = gateway == "xwallet" and bool(getattr(cfg, "xwallet_api_key", ""))
+            is_razorpay = gateway == "razorpay" and bool(getattr(cfg, "razorpay_key_id", "")) and bool(getattr(cfg, "razorpay_key_secret", ""))
+
         is_auto = is_xwallet or is_razorpay or is_stars
+        existing = await db.get_latest_open_payment_request(update.effective_user.id)
 
         if existing:
             # Block only manual flow if UTR already submitted — auto flows are verified dynamically.
@@ -3435,7 +3451,6 @@ async def pay_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                 )
                 await _delete_payment_qr_message(existing, context)
 
-        key = data.split(":", 1)[1]
         plan = PAY_PLANS.get(key)
         if not plan:
             await _edit_emoji_text(update.effective_chat.id, q.message.message_id, "❌ Invalid plan.", context)
