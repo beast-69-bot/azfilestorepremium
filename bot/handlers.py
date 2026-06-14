@@ -3291,6 +3291,16 @@ async def pre_checkout_callback(update: Update, context: ContextTypes.DEFAULT_TY
     db = context.application.bot_data["db"]
     try:
         payload = query.invoice_payload
+        if payload.startswith("unlock:"):
+            code = payload.split(":", 1)[1]
+            link = await db.get_link(code)
+            if link:
+                await query.answer(ok=True)
+                return
+            else:
+                await query.answer(ok=False, error_message="Link not found or expired.")
+                return
+
         try:
             rid = int(payload)
             req = await db.get_payment_request(rid)
