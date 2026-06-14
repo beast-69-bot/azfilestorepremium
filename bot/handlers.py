@@ -2332,7 +2332,7 @@ async def plan(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
-def _pay_plan_keyboard(gateway: str = "manual") -> InlineKeyboardMarkup:
+def _pay_plan_keyboard(gateway: str = "manual", context: Optional[ContextTypes.DEFAULT_TYPE] = None) -> InlineKeyboardMarkup:
     buttons = []
     for key, plan in PAY_PLANS.items():
         limit = plan["daily_limit"]
@@ -2363,7 +2363,14 @@ def _pay_plan_keyboard(gateway: str = "manual") -> InlineKeyboardMarkup:
         pay_stars_btn = InlineKeyboardButton(f"⭐ Stars ({stars_price})", callback_data=f"payplan:stars:{key}")
         buttons.append([pay_upi_btn, pay_stars_btn])
         
-    buttons.append([InlineKeyboardButton("💟 Donate 1 Star (Test Flow)", callback_data="paydonation:1")])
+    donation_url = None
+    if context and context.application:
+        donation_url = context.application.bot_data.get("donation_invoice_link")
+
+    if donation_url:
+        buttons.append([InlineKeyboardButton("💟 Donate 1 Star (Test Flow)", url=donation_url)])
+    else:
+        buttons.append([InlineKeyboardButton("💟 Donate 1 Star (Test Flow)", callback_data="paydonation:1")])
     return InlineKeyboardMarkup(buttons)
 
 
@@ -3436,8 +3443,7 @@ async def pay(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "• [b]Unlimited links/day[/b]: 1 Month (₹199 / 199 Stars ⭐)\n\n"
     )
 
-    await _send_emoji_text(
-        update.effective_chat.id,
+    text_to_send = (
         "⭐ [b]Premium Membership[/b]\n\n"
         "🔓 [b]Free Users[/b]\n"
         "• Sirf Normal links access kar sakte hain\n"
@@ -3448,10 +3454,25 @@ async def pay(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "• ✅ Instant Delivery — koi rukawat nahi\n"
         "• ✅ All exclusive content unlocked\n\n" +
         plans_text +
-        "👇 Neeche apna plan select karo:",
-        context,
-        reply_markup=_pay_plan_keyboard(gateway),
+        "👇 Neeche apna plan select karo:"
     )
+
+    q = update.callback_query
+    if q and q.message:
+        await _edit_emoji_text(
+            update.effective_chat.id,
+            q.message.message_id,
+            text_to_send,
+            context,
+            reply_markup=_pay_plan_keyboard(gateway, context),
+        )
+    else:
+        await _send_emoji_text(
+            update.effective_chat.id,
+            text_to_send,
+            context,
+            reply_markup=_pay_plan_keyboard(gateway, context),
+        )
 
 
 async def pay_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -3473,14 +3494,26 @@ async def pay_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         stars = data.split(":", 1)[1]
         try:
             prices = [LabeledPrice(label="Donation", amount=int(stars))]
-            await context.bot.send_invoice(
-                chat_id=update.effective_chat.id,
+            invoice_link = await context.bot.create_invoice_link(
                 title="Support Bot / Test Stars",
                 description="Donate 1 Star to support development or test the payment flow.",
                 payload=f"donation:{stars}",
                 provider_token="",
                 currency="XTR",
                 prices=prices,
+            )
+            
+            kb = InlineKeyboardMarkup([
+                [InlineKeyboardButton("⭐ Pay 1 Star ⭐", url=invoice_link)],
+                [InlineKeyboardButton("🔙 Back to Plans", callback_data="payplans_show")]
+            ])
+            
+            await _edit_emoji_text(
+                update.effective_chat.id,
+                q.message.message_id,
+                "💟 [b]Donate 1 Star[/b]\n\nSupport development or test the Telegram Stars payment flow.",
+                context,
+                reply_markup=kb,
             )
         except Exception as e:
             logger.warning("Error in donation invoice creation: %s", e)

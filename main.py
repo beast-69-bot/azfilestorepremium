@@ -1,7 +1,7 @@
 import logging
 
 from dotenv import load_dotenv
-from telegram import BotCommand, LinkPreviewOptions, Update
+from telegram import BotCommand, LabeledPrice, LinkPreviewOptions, Update
 from telegram.ext import Application, Defaults
 
 from bot.config import Config
@@ -22,6 +22,22 @@ async def _post_init(app: Application) -> None:
 
     me = await app.bot.get_me()
     app.bot_data["bot_username"] = me.username
+
+    # Generate cached donation invoice link for Telegram Stars
+    try:
+        prices = [LabeledPrice(label="Donation", amount=1)]
+        donation_link = await app.bot.create_invoice_link(
+            title="Support Bot / Test Stars",
+            description="Donate 1 Star to support development or test the payment flow.",
+            payload="donation:1",
+            provider_token="",
+            currency="XTR",
+            prices=prices,
+        )
+        app.bot_data["donation_invoice_link"] = donation_link
+        logging.getLogger(__name__).info("Cached donation invoice link successfully generated.")
+    except Exception as e:
+        logging.getLogger(__name__).warning("Failed to generate cached donation invoice link: %r", e)
 
     # Recover any pending payments that are not yet expired in the background.
     import asyncio
