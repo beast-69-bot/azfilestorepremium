@@ -2363,6 +2363,7 @@ def _pay_plan_keyboard(gateway: str = "manual") -> InlineKeyboardMarkup:
         pay_stars_btn = InlineKeyboardButton(f"⭐ Stars ({stars_price})", callback_data=f"payplan:stars:{key}")
         buttons.append([pay_upi_btn, pay_stars_btn])
         
+    buttons.append([InlineKeyboardButton("💟 Donate 1 Star (Test Flow)", callback_data="paydonation:1")])
     return InlineKeyboardMarkup(buttons)
 
 
@@ -3291,6 +3292,10 @@ async def pre_checkout_callback(update: Update, context: ContextTypes.DEFAULT_TY
     db = context.application.bot_data["db"]
     try:
         payload = query.invoice_payload
+        if payload.startswith("donation:"):
+            await query.answer(ok=True)
+            return
+
         if payload.startswith("unlock:"):
             code = payload.split(":", 1)[1]
             link = await db.get_link(code)
@@ -3324,6 +3329,17 @@ async def successful_payment_callback(update: Update, context: ContextTypes.DEFA
     payment = message.successful_payment
     payload = payment.invoice_payload
     db = context.application.bot_data["db"]
+
+    if payload.startswith("donation:"):
+        stars = payload.split(":", 1)[1]
+        user_id = int(message.from_user.id) if message.from_user else 0
+        logger.info("User %d successfully donated %s Stars", user_id, stars)
+        await _send_emoji_text(
+            message.chat.id,
+            f"❤️ [b]Thank you for your support![/b]\n\nAapka {stars} Telegram Star(s) ka donation successfully receive ho gaya hai. Test complete!",
+            context,
+        )
+        return
 
     if payload.startswith("unlock:"):
         code = payload.split(":", 1)[1]
@@ -3451,6 +3467,28 @@ async def pay_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
     if data == "payplans_show":
         await pay(update, context)
+        return
+
+    if data.startswith("paydonation:"):
+        stars = data.split(":", 1)[1]
+        try:
+            prices = [LabeledPrice(label="Donation", amount=int(stars))]
+            await context.bot.send_invoice(
+                chat_id=update.effective_chat.id,
+                title="Support Bot / Test Stars",
+                description="Donate 1 Star to support development or test the payment flow.",
+                payload=f"donation:{stars}",
+                provider_token="",
+                currency="XTR",
+                prices=prices,
+            )
+        except Exception as e:
+            logger.warning("Error in donation invoice creation: %s", e)
+            await _send_emoji_text(
+                update.effective_chat.id,
+                "⚠️ Invoice generate karne mein dikkat aayi. Please contact admin.",
+                context,
+            )
         return
 
     if data.startswith("paylinkstar:"):
