@@ -3250,14 +3250,14 @@ async def _handle_razorpay_payment(update: Update, context: ContextTypes.DEFAULT
 
 
 async def _handle_stars_payment(update: Update, context: ContextTypes.DEFAULT_TYPE, q: Any, rid: int, plan: dict) -> None:
-    """Handle Telegram Stars payment flow: send Stars invoice directly."""
+    """Handle Telegram Stars payment flow: generate invoice link and edit message."""
     db = context.application.bot_data["db"]
     try:
         stars_amount = plan.get("stars", plan["amount"])
         prices = [LabeledPrice(label=plan["label"], amount=stars_amount)]
 
-        invoice_msg = await context.bot.send_invoice(
-            chat_id=update.effective_chat.id,
+        # Generate invoice link dynamically
+        invoice_link = await context.bot.create_invoice_link(
             title=f"Premium - {plan['label']}",
             description=f"{plan['days']} Days Premium Subscription Access.",
             payload=str(rid),
@@ -3266,23 +3266,35 @@ async def _handle_stars_payment(update: Update, context: ContextTypes.DEFAULT_TY
             prices=prices,
         )
 
+        # Store plans page message_id as details_msg_id so success edits it
         await db.set_payment_ui_messages(
             int(rid),
             int(update.effective_chat.id),
-            int(invoice_msg.message_id),
+            int(q.message.message_id),
             None,
         )
 
         # Save to gateway_extra column
-        gateway_data = {"invoice_message_id": invoice_msg.message_id, "gateway": "stars"}
+        gateway_data = {"invoice_message_id": q.message.message_id, "gateway": "stars"}
         await db.set_payment_gateway_extra(rid, json.dumps(gateway_data))
 
-        # Delete plan query message
-        if q.message:
-            try:
-                await q.message.delete()
-            except Exception:
-                pass
+        kb = InlineKeyboardMarkup([
+            [InlineKeyboardButton(f"⭐ Pay {stars_amount} Stars ⭐", url=invoice_link)],
+            [InlineKeyboardButton("🔙 Back to Plans", callback_data="payplans_show")]
+        ])
+
+        await _edit_emoji_text(
+            update.effective_chat.id,
+            q.message.message_id,
+            f"💎 [b]Premium Purchase[/b]\n\n"
+            f"🛍 Plan: [b]{plan['label']}[/b]\n"
+            f"💰 Price: {stars_amount} Stars ⭐\n"
+            f"⏳ Duration: {plan['days']} Days\n\n"
+            f"━━━━━━━━━━━━━━\n\n"
+            f"Neeche diye button par click karke payment instantly complete karein.",
+            context,
+            reply_markup=kb,
+        )
 
     except Exception as e:
         logger.warning("Error in _handle_stars_payment: %s", e)
