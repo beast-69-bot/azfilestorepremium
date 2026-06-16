@@ -962,7 +962,24 @@ def _parse_channel_ref(s: str) -> Optional[str | int]:
     return None
 
 
-async def _send_file(chat_id: int, file_row: dict[str, Any], caption: Optional[str], context: ContextTypes.DEFAULT_TYPE) -> None:
+def _format_duration(seconds: int) -> str:
+    if seconds >= 86400 and seconds % 86400 == 0:
+        return f"{seconds // 86400} day(s)"
+    elif seconds >= 3600 and seconds % 3600 == 0:
+        return f"{seconds // 3600} hour(s)"
+    elif seconds >= 60 and seconds % 60 == 0:
+        return f"{seconds // 60} minute(s)"
+    else:
+        return f"{seconds} second(s)"
+
+
+async def _send_file(
+    chat_id: int,
+    file_row: dict[str, Any],
+    caption: Optional[str],
+    context: ContextTypes.DEFAULT_TYPE,
+    send_warning: bool = True,
+) -> None:
     t = file_row["file_type"]
     fid = file_row["tg_file_id"]
     if caption and len(caption) > 1024:
@@ -980,10 +997,15 @@ async def _send_file(chat_id: int, file_row: dict[str, Any], caption: Optional[s
         msg = await context.bot.send_document(chat_id=chat_id, document=fid, caption=caption, parse_mode="HTML")
 
     if msg:
-        await _maybe_schedule_autodelete(msg.chat_id, msg.message_id, context)
+        await _maybe_schedule_autodelete(msg.chat_id, msg.message_id, context, send_warning=send_warning)
 
 
-async def _maybe_schedule_autodelete(chat_id: int, message_id: int, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def _maybe_schedule_autodelete(
+    chat_id: int,
+    message_id: int,
+    context: ContextTypes.DEFAULT_TYPE,
+    send_warning: bool = True,
+) -> None:
     db: Database = context.application.bot_data["db"]
     raw = await db.get_setting(SETTINGS_AUTODELETE_SECONDS)
     try:
@@ -993,12 +1015,38 @@ async def _maybe_schedule_autodelete(chat_id: int, message_id: int, context: Con
     if seconds <= 0:
         return
 
+    warning_msg = None
+    if send_warning:
+        try:
+            warning_text = (
+                f"⏳ [b]Auto-Delete Warning[/b]\n\n"
+                f"This message will be automatically deleted in {_format_duration(seconds)}."
+            )
+            warning_msg = await _send_emoji_text(chat_id, warning_text, context)
+        except Exception as e:
+            logger.warning("Failed to send auto-delete warning: %s", e)
+
     async def _job() -> None:
         try:
             await asyncio.sleep(seconds)
             await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
         except Exception:
             pass
+
+        if warning_msg:
+            try:
+                deleted_text = (
+                    f"🗑️ [b]Message Deleted[/b]\n\n"
+                    f"Your message has been automatically deleted after {_format_duration(seconds)}."
+                )
+                await _edit_emoji_text(
+                    chat_id=chat_id,
+                    message_id=warning_msg.message_id,
+                    text=deleted_text,
+                    context=context,
+                )
+            except Exception:
+                pass
 
     context.application.create_task(_job())
 
@@ -1226,7 +1274,38 @@ async def _deliver_by_code(update: Update, context: ContextTypes.DEFAULT_TYPE, c
         for fid in file_ids:
             file_row = await db.get_file(fid)
             if file_row:
-                await _send_file(chat.id, file_row, caption, context)
+                await _send_file(chat.id, file_row, caption, context, send_warning=False)
+        
+        # Send a single auto-delete warning for the batch
+        raw_auto = await db.get_setting(SETTINGS_AUTODELETE_SECONDS)
+        try:
+            sec = int(raw_auto) if raw_auto is not None else 0
+        except ValueError:
+            sec = 0
+        if sec > 0:
+            warning_text = (
+                f"⏳ [b]Auto-Delete Warning[/b]\n\n"
+                f"All batch files above will be automatically deleted in {_format_duration(sec)}."
+            )
+            warning_msg = await _send_emoji_text(chat.id, warning_text, context)
+            if warning_msg:
+                async def _warning_job() -> None:
+                    await asyncio.sleep(sec)
+                    try:
+                        deleted_text = (
+                            f"🗑️ [b]Batch Files Deleted[/b]\n\n"
+                            f"Your batch files have been automatically deleted after {_format_duration(sec)}."
+                        )
+                        await _edit_emoji_text(
+                            chat_id=chat.id,
+                            message_id=warning_msg.message_id,
+                            text=deleted_text,
+                            context=context,
+                        )
+                    except Exception:
+                        pass
+                context.application.create_task(_warning_job())
+
         await db.mark_link_used(code)
         return
 
@@ -1270,17 +1349,48 @@ async def _deliver_by_code(update: Update, context: ContextTypes.DEFAULT_TYPE, c
         for mid in range(start_id, end_id + 1):
             try:
                 m = await context.bot.copy_message(chat_id=chat.id, from_chat_id=chb["channel_id"], message_id=mid)
-                await _maybe_schedule_autodelete(chat.id, m.message_id, context)
+                await _maybe_schedule_autodelete(chat.id, m.message_id, context, send_warning=False)
             except RetryAfter as e:
                 await asyncio.sleep(float(getattr(e, "retry_after", 1.0)))
                 try:
                     m = await context.bot.copy_message(chat_id=chat.id, from_chat_id=chb["channel_id"], message_id=mid)
-                    await _maybe_schedule_autodelete(chat.id, m.message_id, context)
+                    await _maybe_schedule_autodelete(chat.id, m.message_id, context, send_warning=False)
                 except Exception:
                     pass
             except Exception:
                 # Skip missing/deleted/inaccessible posts silently to keep batches usable.
                 pass
+
+        # Send a single auto-delete warning for the batch
+        raw_auto = await db.get_setting(SETTINGS_AUTODELETE_SECONDS)
+        try:
+            sec = int(raw_auto) if raw_auto is not None else 0
+        except ValueError:
+            sec = 0
+        if sec > 0:
+            warning_text = (
+                f"⏳ [b]Auto-Delete Warning[/b]\n\n"
+                f"All batch messages above will be automatically deleted in {_format_duration(sec)}."
+            )
+            warning_msg = await _send_emoji_text(chat.id, warning_text, context)
+            if warning_msg:
+                async def _warning_job() -> None:
+                    await asyncio.sleep(sec)
+                    try:
+                        deleted_text = (
+                            f"🗑️ [b]Batch Messages Deleted[/b]\n\n"
+                            f"Your batch messages have been automatically deleted after {_format_duration(sec)}."
+                        )
+                        await _edit_emoji_text(
+                            chat_id=chat.id,
+                            message_id=warning_msg.message_id,
+                            text=deleted_text,
+                            context=context,
+                        )
+                    except Exception:
+                        pass
+                context.application.create_task(_warning_job())
+
         await db.mark_link_used(code)
         return
 
