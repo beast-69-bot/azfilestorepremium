@@ -1243,7 +1243,7 @@ async def _deliver_by_code(update: Update, context: ContextTypes.DEFAULT_TYPE, c
                 from_chat_id=msg_row["from_chat_id"],
                 message_id=msg_row["message_id"],
             )
-            await _maybe_schedule_autodelete(m.chat_id, m.message_id, context)
+            await _maybe_schedule_autodelete(chat.id, m.message_id, context)
         except Exception as e:
             logger.error("Error delivering message (msg_id=%s from chat=%s): %s", msg_row.get("message_id"), msg_row.get("from_chat_id"), e)
             await chat.send_message("❌ Unable to deliver this message (deleted or inaccessible).")
@@ -1270,12 +1270,12 @@ async def _deliver_by_code(update: Update, context: ContextTypes.DEFAULT_TYPE, c
         for mid in range(start_id, end_id + 1):
             try:
                 m = await context.bot.copy_message(chat_id=chat.id, from_chat_id=chb["channel_id"], message_id=mid)
-                await _maybe_schedule_autodelete(m.chat_id, m.message_id, context)
+                await _maybe_schedule_autodelete(chat.id, m.message_id, context)
             except RetryAfter as e:
                 await asyncio.sleep(float(getattr(e, "retry_after", 1.0)))
                 try:
                     m = await context.bot.copy_message(chat_id=chat.id, from_chat_id=chb["channel_id"], message_id=mid)
-                    await _maybe_schedule_autodelete(m.chat_id, m.message_id, context)
+                    await _maybe_schedule_autodelete(chat.id, m.message_id, context)
                 except Exception:
                     pass
             except Exception:
