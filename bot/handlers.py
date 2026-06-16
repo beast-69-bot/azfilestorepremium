@@ -1244,7 +1244,8 @@ async def _deliver_by_code(update: Update, context: ContextTypes.DEFAULT_TYPE, c
                 message_id=msg_row["message_id"],
             )
             await _maybe_schedule_autodelete(m.chat_id, m.message_id, context)
-        except Exception:
+        except Exception as e:
+            logger.error("Error delivering message (msg_id=%s from chat=%s): %s", msg_row.get("message_id"), msg_row.get("from_chat_id"), e)
             await chat.send_message("❌ Unable to deliver this message (deleted or inaccessible).")
             return
         await db.mark_link_used(code)
