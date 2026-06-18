@@ -2529,19 +2529,19 @@ async def plan(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _send_emoji_text(
         update.effective_chat.id,
         "💎 [b]Premium Plans[/b]\n\n"
-        "• [b]7 links/day[/b]: 1 Day ₹10 | 7 Days ₹35 | 1 Month ₹115\n"
-        "• [b]20 links/day[/b]: 1 Day ₹15 | 7 Days ₹50 | 1 Month ₹169\n\n"
+        "[q]• [b]7 links/day[/b]: 1 Day ₹10 | 7 Days ₹35 | 1 Month ₹115\n"
+        "• [b]20 links/day[/b]: 1 Day ₹15 | 7 Days ₹50 | 1 Month ₹169[/q]\n\n"
         "🔓 [b]Normal User Benefit[/b]\n"
         "• Final link access ke liye ads dekhne honge\n\n"
         "⭐ [b]Premium User Benefit[/b]\n"
         "• Direct access milta hai (no ads)\n\n"
-        "🛒 [b]Buy Premium[/b]: [c]/pay[/c]",
+        "🛒 [b]Buy Premium[/b]: /pay",
         context,
     )
 
     await _send_emoji_text(
         update.effective_chat.id,
-        f"👤 [b]Your Premium Status[/b]\n\n{status}",
+        f"👤 [b]Your Premium Status[/b]\n\n[q]{status}[/q]",
         context,
     )
 
@@ -2853,20 +2853,17 @@ async def _handle_manual_payment(update: Update, context: ContextTypes.DEFAULT_T
     caption = (
         "💎 <b>Premium Purchase</b>\n\n"
         f"🛍 Plan: <b>{plan_label}</b>\n"
-        f"💰 Amount: ₹{plan['amount']}\n\n"
-        "━━━━━━━━━━━━━━\n\n"
-        "📲 <b>Pay via UPI</b>\n"
-        "Scan the QR above\n"
-        "OR send to:\n\n"
-        f"<code>{upi_html}</code>\n\n"
+        f"💰 Amount: ₹{plan['amount']}\n"
         f"🆔 Order ID: <code>#{rid}</code>\n\n"
-        "━━━━━━━━━━━━━━\n\n"
+        "📲 <b>Pay via UPI</b>\n"
+        "Scan the QR above OR send to:\n"
+        f"<blockquote>{upi_html}</blockquote>\n"
         "📌 <b>How to Activate</b>\n"
         "1️⃣ Complete payment\n"
         "2️⃣ Tap \"Submit UTR\"\n"
         "3️⃣ Send transaction ID\n"
         "4️⃣ Premium activates after verification\n\n"
-        "⏳ Request expires in 5 minutes."
+        "<blockquote expandable>⏳ Request expires in 5 minutes.</blockquote>"
     )
     kb = InlineKeyboardMarkup([[InlineKeyboardButton("📩 Submit UTR", callback_data=f"payutr:{rid}")]])
 
@@ -2948,18 +2945,14 @@ async def _handle_manual_payment_recovery(
         f"🆔 <b>Order ID:</b> <code>#{rid}</code>\n"
         f"👤 <b>User ID:</b> <code>{int(update.effective_user.id)}</code>\n"
         f"📅 <b>Projected Expiry:</b> <code>{projected_expiry_utc}</code>\n\n"
-        "━━━━━━━━━━━━━━━━━━━━\n"
         "💳 <b>UPI ID</b>\n"
-        f"<code>{upi_html}</code>\n\n"
+        f"<blockquote>{upi_html}</blockquote>\n"
         "🧾 <b>Payment Note</b>\n"
-        f"<code>{note_html}</code>\n\n"
-        "━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"<blockquote>{note_html}</blockquote>\n"
         "🔹 QR Scan karke payment karo\n"
-        "🔹 Payment ke baad <b>Submit UTR</b> par tap karke\n"
-        "   UTR ya screenshot bhejo\n\n"
-        "⏳ <b>Valid for 5 minutes only</b>\n\n"
-        "<b>Premium • Private • Unfiltered</b>\n"
-        "— @az_hawas_adda"
+        "🔹 Payment ke baad <b>Submit UTR</b> par tap karke UTR ya screenshot bhejo\n\n"
+        "<blockquote expandable>⏳ Valid for 5 minutes only\n"
+        "Premium • Private • Unfiltered — @az_hawas_adda</blockquote>"
     )
     kb = InlineKeyboardMarkup([[InlineKeyboardButton("📩 Submit UTR", callback_data=f"payutr:{rid}")]])
     status_text = (
@@ -3418,14 +3411,12 @@ async def _handle_razorpay_payment(update: Update, context: ContextTypes.DEFAULT
             f"💎 <b>Plan:</b> {plan_label}\n"
             f"💰 <b>Amount:</b> ₹{amount}\n"
             f"🆔 <b>Order ID:</b> <code>#{rid}</code>\n\n"
-            "━━━━━━━━━━━━━━━━━━━━\n"
             "📲 <b>How to pay:</b>\n"
             "1️⃣ Upar diye gaye QR Code ko scan karein.\n"
-            "2️⃣ Mobile users: QR code ka screenshot lekar apne GPay/PhonePe scanner (Upload from Gallery) se pay karein.\n"
-            "3️⃣ Payment complete karte hi automatically activate ho jayega!\n"
-            "━━━━━━━━━━━━━━━━━━━━\n\n"
-            "⏳ <b>5 minutes</b> mein pay karo.\n"
-            "🚀 <b>Automatic activation</b> payment ke baad ho jaayega."
+            "2️⃣ Mobile users: QR screenshot lekar GPay/PhonePe (Upload from Gallery) se pay karein.\n"
+            "3️⃣ Payment complete hote hi automatically activate ho jayega!\n\n"
+            "<blockquote expandable>⏳ 5 minutes mein pay karo.\n"
+            "🚀 Automatic activation payment ke baad ho jaayega.</blockquote>"
         )
         kb = InlineKeyboardMarkup([
             [InlineKeyboardButton("❌ Cancel Order", callback_data=f"paycancel:{rid}")],
