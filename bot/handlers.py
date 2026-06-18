@@ -1256,20 +1256,16 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         entities = sorted([*style_entities, *emoji_entities], key=lambda e: (e.offset, e.length))
         if img_url:
             try:
-                await update.effective_chat.send_photo(photo=img_url, caption=text, caption_entities=entities)
+                # Send image alone (no caption) to avoid Telegram's 1024-char caption limit.
+                await update.effective_chat.send_photo(photo=img_url)
+                # Then send the full welcome text as a separate message.
+                await update.effective_chat.send_message(text=text, entities=entities)
                 return
             except Exception as e:
-                logger.warning("start: send_photo with caption_entities failed (%s), retrying with parse_mode=HTML", e)
-                # Build a basic HTML caption as fallback (strip custom entity tags)
-                import re as _re
-                html_caption = _re.sub(r'\[/?[bicu]\]|\[/?[bicu] \]|\[/?eq?\]', '', raw_text)
-                try:
-                    await update.effective_chat.send_photo(photo=img_url, caption=html_caption, parse_mode="HTML")
-                    return
-                except Exception as e2:
-                    logger.warning("start: send_photo HTML fallback also failed (%s), showing text only", e2)
+                logger.warning("start: send_photo failed (%s), showing text only", e)
         await update.effective_chat.send_message(text=text, entities=entities)
         return
+
     await _deliver_by_code(update, context, code)
 
 
