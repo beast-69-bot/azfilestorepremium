@@ -426,7 +426,7 @@ def _welcome_text() -> str:
     return (
         "🤖 [b]Secure File Store & Distribution Bot[/b]\n"
         "━━━━━━━━━━━━━━━━━━━━━━\n\n"
-        "👋 Welcome! I am an advanced file distribution bot. I help store files securely on Telegram and distribute them via access-controlled deep-links.\n\n"
+        "[q]👋 Welcome! I am an advanced file distribution bot. I help store files securely on Telegram and distribute them via access-controlled deep-links.[/q]\n\n"
         "📦 [b]Main Features / Bot Usage:[/b]\n"
         "• [b]Instant File Delivery[/b]: Access files and batch folders directly via deep-links.\n"
         "• [b]Force-Join Verification[/b]: Complete a simple channel join verification step to download files.\n"
@@ -436,11 +436,11 @@ def _welcome_text() -> str:
         "2️⃣ Complete channel join verification if required.\n"
         "3️⃣ Tap [b]Recheck ✅[/b] to receive your files instantly!\n\n"
         "💎 [b]Premium Plans & Commands:[/b]\n"
-        "• [c]/plan[/c] - View premium plans, features, and pricing details.\n"
-        "• [c]/pay[/c] - Purchase a premium plan (UPI / Stars).\n"
-        "• [c]/redeem <token>[/c] - Redeem a premium voucher code.\n"
-        "• [c]/cancel[/c] - Cancel any active payment or input flow.\n\n"
-        "⚠️ [b]Note[/b]: Forwarded deep-links will not work. You must click the original link to unlock.\n"
+        "• /plan - View premium plans, features, and pricing details.\n"
+        "• /pay - Purchase a premium plan (UPI / Stars).\n"
+        "• /redeem - Redeem a premium voucher code.\n"
+        "• /cancel - Cancel any active payment or input flow.\n\n"
+        "[eq]⚠️ Note: Forwarded deep-links will not work. You must click the original link to unlock.[/eq]\n"
         "━━━━━━━━━━━━━━━━━━━━━━\n"
         "✨ [i]Unlock next-level file distribution today![/i]"
     )
@@ -552,8 +552,17 @@ def _extract_style_entities(raw_text: str) -> tuple[str, list[MessageEntity]]:
         "[i]": MessageEntityType.ITALIC,
         "[u]": MessageEntityType.UNDERLINE,
         "[c]": MessageEntityType.CODE,
+        "[q]": MessageEntityType.BLOCKQUOTE,
+        "[eq]": MessageEntityType.EXPANDABLE_BLOCKQUOTE,
     }
-    closing_to_open = {"[/b]": "[b]", "[/i]": "[i]", "[/u]": "[u]", "[/c]": "[c]"}
+    closing_to_open = {
+        "[/b]": "[b]",
+        "[/i]": "[i]",
+        "[/u]": "[u]",
+        "[/c]": "[c]",
+        "[/q]": "[q]",
+        "[/eq]": "[eq]",
+    }
     markers = sorted(list(marker_to_type.keys()) + list(closing_to_open.keys()), key=len, reverse=True)
 
     out: list[str] = []
