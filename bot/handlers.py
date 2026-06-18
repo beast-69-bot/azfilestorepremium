@@ -1258,9 +1258,16 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             try:
                 await update.effective_chat.send_photo(photo=img_url, caption=text, caption_entities=entities)
                 return
-            except Exception:
-                # Fallback to text-only if URL is invalid/unreachable.
-                pass
+            except Exception as e:
+                logger.warning("start: send_photo with caption_entities failed (%s), retrying with parse_mode=HTML", e)
+                # Build a basic HTML caption as fallback (strip custom entity tags)
+                import re as _re
+                html_caption = _re.sub(r'\[/?[bicu]\]|\[/?[bicu] \]|\[/?eq?\]', '', raw_text)
+                try:
+                    await update.effective_chat.send_photo(photo=img_url, caption=html_caption, parse_mode="HTML")
+                    return
+                except Exception as e2:
+                    logger.warning("start: send_photo HTML fallback also failed (%s), showing text only", e2)
         await update.effective_chat.send_message(text=text, entities=entities)
         return
     await _deliver_by_code(update, context, code)
@@ -4952,10 +4959,22 @@ async def bsettings_misc_input(update: Update, context: ContextTypes.DEFAULT_TYP
         if not (raw.startswith("https://") or raw.startswith("http://")):
             await _send_emoji_text(update.effective_chat.id, "❌ Invalid URL. Must start with http:// or https://", context)
             return
-        await db.set_setting(SETTINGS_START_IMG_URL, raw)
+        # Upload to Telegram and store file_id for reliable future delivery.
+        try:
+            test_msg = await context.bot.send_photo(
+                chat_id=update.effective_chat.id,
+                photo=raw,
+                caption="✅ Start image set! Now /start will show the image above.",
+            )
+            fid = test_msg.photo[-1].file_id
+            await db.set_setting(SETTINGS_START_IMG_URL, fid)
+        except Exception as e:
+            logger.warning("bset setstartimg: upload failed (%s), storing raw URL.", e)
+            await db.set_setting(SETTINGS_START_IMG_URL, raw)
+            await _send_emoji_text(update.effective_chat.id, "⚠️ URL saved but Telegram could not fetch it. Try a direct image URL.", context)
         context.user_data.pop("bset_setstartimg_wait", None)
-        await _send_emoji_text(update.effective_chat.id, "✅ Start image set.", context)
         return
+
 
     mode = context.user_data.get("bset_setpay_wait")
     if mode:
@@ -5310,8 +5329,25 @@ async def setstartimg(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         await _send_emoji_text(update.effective_chat.id, "❌ Invalid URL. Must start with http:// or https://", context)
         return
     db: Database = context.application.bot_data["db"]
-    await db.set_setting(SETTINGS_START_IMG_URL, raw)
-    await _send_emoji_text(update.effective_chat.id, "✅ Start image set. Now /start will show the image.", context)
+    # Try to upload the image to Telegram first and store the stable file_id.
+    # This prevents failures caused by Telegram not being able to fetch external URLs at /start time.
+    try:
+        test_msg = await context.bot.send_photo(
+            chat_id=update.effective_chat.id,
+            photo=raw,
+            caption="✅ Start image set! Now /start will show the image above.",
+        )
+        fid = test_msg.photo[-1].file_id
+        await db.set_setting(SETTINGS_START_IMG_URL, fid)
+    except Exception as e:
+        logger.warning("setstartimg: could not upload image to Telegram (%s), storing raw URL as fallback.", e)
+        await db.set_setting(SETTINGS_START_IMG_URL, raw)
+        await _send_emoji_text(
+            update.effective_chat.id,
+            "⚠️ Image URL saved but Telegram could not fetch it. Make sure the URL is publicly accessible.",
+            context,
+        )
+
 
 
 async def getemojiid(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
