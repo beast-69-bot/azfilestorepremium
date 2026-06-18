@@ -16,6 +16,14 @@ logger = logging.getLogger(__name__)
 
 BASE_URL = "https://api.razorpay.com/v1"
 
+_session: aiohttp.ClientSession | None = None
+
+def _get_session() -> aiohttp.ClientSession:
+    global _session
+    if _session is None or _session.closed:
+        _session = aiohttp.ClientSession()
+    return _session
+
 
 async def create_qr_code(
     amount_rs: int,
@@ -48,23 +56,23 @@ async def create_qr_code(
     auth = BasicAuth(key_id, key_secret)
 
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                url,
-                json=payload,
-                auth=auth,
-                timeout=aiohttp.ClientTimeout(total=15)
-            ) as response:
-                data = await response.json()
-                if response.status >= 400:
-                    logger.error(
-                        "Razorpay create_qr_code failed: status=%s response=%s",
-                        response.status,
-                        data,
-                    )
-                    response.raise_for_status()
-                logger.info("Razorpay create_qr_code success: %s", data.get("id"))
-                return data
+        session = _get_session()
+        async with session.post(
+            url,
+            json=payload,
+            auth=auth,
+            timeout=aiohttp.ClientTimeout(total=15)
+        ) as response:
+            data = await response.json()
+            if response.status >= 400:
+                logger.error(
+                    "Razorpay create_qr_code failed: status=%s response=%s",
+                    response.status,
+                    data,
+                )
+                response.raise_for_status()
+            logger.info("Razorpay create_qr_code success: %s", data.get("id"))
+            return data
     except aiohttp.ClientError as e:
         logger.error("Razorpay HTTP request failed: %s", e)
         raise
@@ -91,36 +99,36 @@ async def check_payment_status(
     auth = BasicAuth(key_id, key_secret)
 
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                payments_url,
-                auth=auth,
-                timeout=aiohttp.ClientTimeout(total=10)
-            ) as response:
-                response.raise_for_status()
-                data = await response.json()
-                items = data.get("items", [])
+        session = _get_session()
+        async with session.get(
+            payments_url,
+            auth=auth,
+            timeout=aiohttp.ClientTimeout(total=10)
+        ) as response:
+            response.raise_for_status()
+            data = await response.json()
+            items = data.get("items", [])
 
-                for payment in items:
-                    status = payment.get("status")
-                    if status in ("captured", "authorized"):
-                        logger.info("Razorpay payment detected successfully for QR %s: status=%s", qr_code_id, status)
-                        return "TXN_SUCCESS"
-
-            # Razorpay can update QR counters before the payments list is populated.
-            # For fixed single-use QRs, any captured payment count confirms success.
-            async with session.get(
-                qr_url,
-                auth=auth,
-                timeout=aiohttp.ClientTimeout(total=10)
-            ) as response:
-                response.raise_for_status()
-                qr_data = await response.json()
-                if int(qr_data.get("payments_count_received") or 0) > 0:
-                    logger.info("Razorpay captured payment counter detected for QR %s", qr_code_id)
+            for payment in items:
+                status = payment.get("status")
+                if status in ("captured", "authorized"):
+                    logger.info("Razorpay payment detected successfully for QR %s: status=%s", qr_code_id, status)
                     return "TXN_SUCCESS"
 
-            return "pending"
+        # Razorpay can update QR counters before the payments list is populated.
+        # For fixed single-use QRs, any captured payment count confirms success.
+        async with session.get(
+            qr_url,
+            auth=auth,
+            timeout=aiohttp.ClientTimeout(total=10)
+        ) as response:
+            response.raise_for_status()
+            qr_data = await response.json()
+            if int(qr_data.get("payments_count_received") or 0) > 0:
+                logger.info("Razorpay captured payment counter detected for QR %s", qr_code_id)
+                return "TXN_SUCCESS"
+
+        return "pending"
     except Exception as e:
         logger.warning("Error checking payment status for Razorpay QR %s: %s", qr_code_id, e)
         return "pending"

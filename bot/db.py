@@ -15,11 +15,17 @@ class Database:
     def __init__(self, path: str) -> None:
         self.path = path
         self._conn: aiosqlite.Connection | None = None
+        self._settings_cache: dict[str, str | None] = {}
+        self._force_channels_cache: list[dict[str, Any]] | None = None
+        self._admins_cache: set[int] | None = None
 
     async def init(self) -> None:
         os.makedirs(os.path.dirname(self.path) or ".", exist_ok=True)
         self._conn = await aiosqlite.connect(self.path)
         await self._conn.execute("PRAGMA journal_mode=WAL;")
+        await self._conn.execute("PRAGMA synchronous=NORMAL;")
+        await self._conn.execute("PRAGMA cache_size=-64000;")
+        await self._conn.execute("PRAGMA temp_store=MEMORY;")
         await self._conn.execute("PRAGMA foreign_keys=ON;")
         await self._ensure_schema()
 
@@ -387,12 +393,13 @@ class Database:
 
     # Admins
     async def is_admin(self, user_id: int) -> bool:
-        cur = await self.conn.execute("SELECT 1 FROM admins WHERE user_id=?", (int(user_id),))
-        row = await cur.fetchone()
-        await cur.close()
-        return bool(row)
+        if self._admins_cache is None:
+            self._admins_cache = set(await self.list_admin_ids())
+        return int(user_id) in self._admins_cache
 
     async def add_admin(self, user_id: int, added_by: int) -> None:
+        if self._admins_cache is not None:
+            self._admins_cache.add(int(user_id))
         now = _now()
         await self.conn.execute(
             "INSERT OR REPLACE INTO admins(user_id, added_by, added_at) VALUES(?, ?, ?)",
@@ -401,6 +408,8 @@ class Database:
         await self.conn.commit()
 
     async def remove_admin(self, user_id: int) -> None:
+        if self._admins_cache is not None:
+            self._admins_cache.discard(int(user_id))
         await self.conn.execute("DELETE FROM admins WHERE user_id=?", (int(user_id),))
         await self.conn.commit()
 
@@ -412,6 +421,7 @@ class Database:
 
     # Settings
     async def set_setting(self, key: str, value: str | None) -> None:
+        self._settings_cache[key] = value
         if value is None:
             await self.conn.execute("DELETE FROM settings WHERE key=?", (key,))
         else:
@@ -422,10 +432,14 @@ class Database:
         await self.conn.commit()
 
     async def get_setting(self, key: str) -> Optional[str]:
+        if key in self._settings_cache:
+            return self._settings_cache[key]
         cur = await self.conn.execute("SELECT value FROM settings WHERE key=?", (key,))
         row = await cur.fetchone()
         await cur.close()
-        return row[0] if row else None
+        val = row[0] if row else None
+        self._settings_cache[key] = val
+        return val
 
     # Force channels
     async def add_force_channel(
@@ -437,6 +451,7 @@ class Database:
         username: str | None,
         added_by: int,
     ) -> None:
+        self._force_channels_cache = None
         now = _now()
         await self.conn.execute(
             """
@@ -455,21 +470,26 @@ class Database:
         await self.conn.commit()
 
     async def remove_force_channel(self, channel_id: int) -> None:
+        self._force_channels_cache = None
         await self.conn.execute("DELETE FROM force_channels WHERE channel_id=?", (int(channel_id),))
         await self.conn.commit()
 
     async def clear_force_channels(self) -> None:
+        self._force_channels_cache = None
         await self.conn.execute("DELETE FROM force_channels")
         await self.conn.execute("DELETE FROM force_join_requests")
         await self.conn.commit()
 
     async def list_force_channels(self) -> list[dict[str, Any]]:
+        if self._force_channels_cache is not None:
+            return self._force_channels_cache
         cur = await self.conn.execute("SELECT channel_id, mode, invite_link, title, username FROM force_channels ORDER BY channel_id")
         rows = await cur.fetchall()
         await cur.close()
         out: list[dict[str, Any]] = []
         for r in rows:
             out.append({"channel_id": int(r[0]), "mode": r[1], "invite_link": r[2], "title": r[3], "username": r[4]})
+        self._force_channels_cache = out
         return out
 
     async def add_force_join_request(self, channel_id: int, user_id: int) -> None:

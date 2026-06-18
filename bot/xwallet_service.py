@@ -19,6 +19,14 @@ logger = logging.getLogger(__name__)
 
 BASE_URL = "https://xwalletbot.shop/wallet/getway"
 
+_session: aiohttp.ClientSession | None = None
+
+def _get_session() -> aiohttp.ClientSession:
+    global _session
+    if _session is None or _session.closed:
+        _session = aiohttp.ClientSession()
+    return _session
+
 
 async def create_payment(amount: float, api_key: str) -> dict:
     """
@@ -34,14 +42,14 @@ async def create_payment(amount: float, api_key: str) -> dict:
     params = {"key": api_key, "amount": f"{amount:.2f}"}
 
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=15)) as response:
-                response.raise_for_status()
-                data = await response.json(content_type=None)
-                logger.info("create_payment response: %s", data)
-                if data.get("status") != "pending":
-                    raise ValueError(f"Unexpected status from XWallet: {data.get('status')} | full: {data}")
-                return data
+        session = _get_session()
+        async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=15)) as response:
+            response.raise_for_status()
+            data = await response.json(content_type=None)
+            logger.info("create_payment response: %s", data)
+            if data.get("status") != "pending":
+                raise ValueError(f"Unexpected status from XWallet: {data.get('status')} | full: {data}")
+            return data
     except aiohttp.ClientError as e:
         logger.warning("Network error in create_payment: %s", e)
         raise
@@ -65,14 +73,14 @@ async def get_qr_data(qr_code_id: str) -> dict:
     params = {"code": qr_code_id}
 
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=15)) as response:
-                response.raise_for_status()
-                data = await response.json(content_type=None)
-                logger.info("get_qr_data response: %s", data)
-                if data.get("status") != "success":
-                    raise ValueError(f"Unexpected status from api_qr: {data.get('status')} | full: {data}")
-                return data
+        session = _get_session()
+        async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=15)) as response:
+            response.raise_for_status()
+            data = await response.json(content_type=None)
+            logger.info("get_qr_data response: %s", data)
+            if data.get("status") != "success":
+                raise ValueError(f"Unexpected status from api_qr: {data.get('status')} | full: {data}")
+            return data
     except aiohttp.ClientError as e:
         logger.warning("Network error in get_qr_data: %s", e)
         raise
@@ -101,12 +109,12 @@ async def check_payment_status(qr_code_id: str) -> str:
     params = {"code": qr_code_id}
 
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=10)) as response:
-                response.raise_for_status()
-                data = await response.json(content_type=None)
-                status = data.get("status", "pending")
-                return str(status)
+        session = _get_session()
+        async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=10)) as response:
+            response.raise_for_status()
+            data = await response.json(content_type=None)
+            status = data.get("status", "pending")
+            return str(status)
     except Exception as e:
         logger.warning("Error in check_payment_status for %s: %s", qr_code_id, e)
         return "pending"

@@ -17,6 +17,9 @@ class MongoDatabase:
         self.db_name = db_name
         self._client: AsyncIOMotorClient | None = None
         self._db: AsyncIOMotorDatabase | None = None
+        self._settings_cache: dict[str, str | None] = {}
+        self._force_channels_cache: list[dict[str, Any]] | None = None
+        self._admins_cache: set[int] | None = None
 
     @property
     def db(self) -> AsyncIOMotorDatabase:
@@ -269,10 +272,13 @@ class MongoDatabase:
 
     # Admins
     async def is_admin(self, user_id: int) -> bool:
-        row = await self.db.admins.find_one({"user_id": int(user_id)}, {"_id": 1})
-        return bool(row)
+        if self._admins_cache is None:
+            self._admins_cache = set(await self.list_admin_ids())
+        return int(user_id) in self._admins_cache
 
     async def add_admin(self, user_id: int, added_by: int) -> None:
+        if self._admins_cache is not None:
+            self._admins_cache.add(int(user_id))
         now = _now()
         await self.db.admins.update_one(
             {"user_id": int(user_id)},
@@ -281,6 +287,8 @@ class MongoDatabase:
         )
 
     async def remove_admin(self, user_id: int) -> None:
+        if self._admins_cache is not None:
+            self._admins_cache.discard(int(user_id))
         await self.db.admins.delete_one({"user_id": int(user_id)})
 
     async def list_admin_ids(self) -> list[int]:
@@ -292,14 +300,19 @@ class MongoDatabase:
 
     # Settings
     async def set_setting(self, key: str, value: str | None) -> None:
+        self._settings_cache[key] = value
         if value is None:
             await self.db.settings.delete_one({"key": key})
             return
         await self.db.settings.update_one({"key": key}, {"$set": {"key": key, "value": value}}, upsert=True)
 
     async def get_setting(self, key: str) -> Optional[str]:
+        if key in self._settings_cache:
+            return self._settings_cache[key]
         row = await self.db.settings.find_one({"key": key}, {"value": 1, "_id": 0})
-        return row.get("value") if row else None
+        val = row.get("value") if row else None
+        self._settings_cache[key] = val
+        return val
 
     # Force channels
     async def add_force_channel(
@@ -311,6 +324,7 @@ class MongoDatabase:
         username: str | None,
         added_by: int,
     ) -> None:
+        self._force_channels_cache = None
         now = _now()
         await self.db.force_channels.update_one(
             {"channel_id": int(channel_id)},
@@ -329,13 +343,17 @@ class MongoDatabase:
         )
 
     async def remove_force_channel(self, channel_id: int) -> None:
+        self._force_channels_cache = None
         await self.db.force_channels.delete_one({"channel_id": int(channel_id)})
 
     async def clear_force_channels(self) -> None:
+        self._force_channels_cache = None
         await self.db.force_channels.delete_many({})
         await self.db.force_join_requests.delete_many({})
 
     async def list_force_channels(self) -> list[dict[str, Any]]:
+        if self._force_channels_cache is not None:
+            return self._force_channels_cache
         rows = self.db.force_channels.find({}, {"_id": 0}).sort("channel_id", 1)
         out: list[dict[str, Any]] = []
         async for r in rows:
@@ -348,6 +366,7 @@ class MongoDatabase:
                     "username": r.get("username"),
                 }
             )
+        self._force_channels_cache = out
         return out
 
     async def add_force_join_request(self, channel_id: int, user_id: int) -> None:

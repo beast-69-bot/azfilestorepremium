@@ -72,6 +72,15 @@ async def _post_shutdown(app: Application) -> None:
     if db:
         await db.close()
 
+    try:
+        from bot import razorpay_service, xwallet_service
+        if getattr(razorpay_service, "_session", None) and not razorpay_service._session.closed:
+            await razorpay_service._session.close()
+        if getattr(xwallet_service, "_session", None) and not xwallet_service._session.closed:
+            await xwallet_service._session.close()
+    except Exception:
+        pass
+
 
 def main() -> None:
     load_dotenv()
