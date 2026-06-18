@@ -1868,7 +1868,10 @@ async def batch_link_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
     if not await _bot_is_admin(int(chat_id), context):
         context.user_data.pop("chbatch_state", None)
-        await update.effective_chat.send_message("Bot is not admin in that channel. Pehle bot ko admin banao, phir /batch run karo.")
+        await update.effective_chat.send_message(
+            "Bot is not admin in that channel.\n\n"
+            "<blockquote>Pehle bot ko admin banao, phir /batch run karo.</blockquote>"
+        )
         return
 
     await _batch_ui_edit(update, context, "🔄 Creating batch...\nPlease wait...")
@@ -1969,8 +1972,8 @@ async def custombatch(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     await _send_emoji_text(
         update.effective_chat.id,
         "🧩 Custom Batch Mode Started\n\n"
-        "📤 Files / media bhejo.\n"
-        "Main unko custom batch me add karta rahunga.\n\n"
+        "📤 Send files / media.\n"
+        "I will keep adding them to the custom batch.\n\n"
         "❌ Cancel anytime: press Cancel Process button.",
         context,
     )
@@ -2235,7 +2238,7 @@ async def extendlast24h(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             await _send_emoji_text(
                 uid,
                 "🎁 Premium Plan Extended\n\n"
-                "Aapka premium plan goodwill me +1 day extend kiya gaya hai.\n"
+                "Your premium plan has been extended by +1 day as a gesture of goodwill.\n"
                 f"⏳ New Expiry: [c]{expiry_utc}[/c]",
                 context,
             )
@@ -2496,7 +2499,7 @@ async def redeem(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     success_text = (
         "✅ [b]Token Redeemed Successfully![/b] 🎉\n\n"
-        "Aapka account premium mein upgrade ho chuka hai.\n"
+        "Your account has been upgraded to Premium.\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
         f"📅 [b]New Expiry Date:[/b] [c]{expiry_utc}[/c]\n"
         "━━━━━━━━━━━━━━━━━━━━\n\n"
@@ -2530,9 +2533,9 @@ async def plan(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "[q]• [b]7 links/day[/b]: 1 Day ₹10 | 7 Days ₹35 | 1 Month ₹115\n"
         "• [b]20 links/day[/b]: 1 Day ₹15 | 7 Days ₹50 | 1 Month ₹169[/q]\n\n"
         "🔓 [b]Normal User Benefit[/b]\n"
-        "• Final link access ke liye ads dekhne honge\n\n"
+        "• You must watch ads to access final links\n\n"
         "⭐ [b]Premium User Benefit[/b]\n"
-        "• Direct access milta hai (no ads)\n\n"
+        "• Direct access (no ads)\n\n"
         "🛒 [b]Buy Premium[/b]: /pay",
         context,
     )
@@ -2947,8 +2950,8 @@ async def _handle_manual_payment_recovery(
         f"<blockquote>{upi_html}</blockquote>\n"
         "🧾 <b>Payment Note</b>\n"
         f"<blockquote>{note_html}</blockquote>\n"
-        "🔹 QR Scan karke payment karo\n"
-        "🔹 Payment ke baad <b>Submit UTR</b> par tap karke UTR ya screenshot bhejo\n\n"
+        "🔹 Scan QR to pay\n"
+        "🔹 After payment, tap <b>Submit UTR</b> and send your transaction ID or screenshot\n\n"
         "<blockquote expandable>⏳ Valid for 5 minutes only\n"
         "Premium • Private • Unfiltered — @az_hawas_adda</blockquote>"
     )
@@ -3041,24 +3044,24 @@ async def _send_premium_direct_access_message(user_id: int, context: ContextType
     channels_section = (
         "\n\n📢 [b]Connected Premium Channels[/b]\n"
         + channels_text
-        + "\n\nIn sabhi channels ki posts me [b]Premium Link[/b] hota hai."
+        + "\n\nEvery post in these channels includes a [b]Premium Link[/b]."
     ) if channels_text else (
-        "\n\n📢 [b]@az_hawas_adda se connected channels[/b] ki posts me [b]Premium Link[/b] hota hai."
+        "\n\n📢 [b]Channels connected to @az_hawas_adda[/b] have a [b]Premium Link[/b] in their posts."
     )
     text = (
-        "⭐ [b]Premium Active Hone Ka Real Benefit[/b]\n\n"
-        "🔥 Premium ka main fayda ye hai ki aap [b]bina ads ke direct content access[/b] kar paoge."
+        "⭐ [b]Real Benefits of Active Premium[/b]\n\n"
+        "🔥 The main benefit is that you can access content [b]directly without ads[/b]."
         + channels_section +
-        "\n\n🔐 Ye Premium Link sirf [b]active premium users[/b] ke liye work karta hai.\n\n"
-        "✅ [b]Premium active hote hi aapko milta hai:[/b]\n"
+        "\n\n🔐 This Premium Link works only for [b]active premium users[/b].\n\n"
+        "✅ [b]With Premium, you get:[/b]\n"
         "• 🚀 Direct content access\n"
         "• ❌ No Ads\n"
-        "• ⚡ Fast open\n"
-        "• 🔓 Locked premium links unlocked\n\n"
-        "📦 Iska matlab:\n"
-        "Jab aap kisi post ko open karoge, usme diya gaya [b]Premium Link[/b] aapke liye direct content khol dega.\n\n"
-        "👀 [b]Normal users[/b] ke liye ye links locked rehte hain,\n"
-        "lekin [b]Premium users[/b] unhi posts se [b]seedha content dekh sakte hain[/b].\n\n"
+        "• ⚡ Fast loading\n"
+        "• 🔓 Unlocked premium links\n\n"
+        "📦 Meaning:\n"
+        "When you open any post, the [b]Premium Link[/b] provided will open content directly for you.\n\n"
+        "👀 [b]Normal users[/b] find these links locked,\n"
+        "but [b]Premium users[/b] can [b]access content directly[/b] from the same posts.\n\n"
         "💎 [b]Simple Formula:[/b]\n"
         "[b]Premium = Direct Content Access + No Ads[/b]"
     )
@@ -3087,7 +3090,7 @@ async def _notify_autoverify_success(context: ContextTypes.DEFAULT_TYPE, req: di
         f"💎 Plan: [b]{plan_name}[/b] ({req['plan_days']} days)\n"
         f"💰 Amount: ₹{req['amount_rs']}\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
-        "✅ Payment auto-verify ho gayi aur plan activate kar diya gaya hai."
+        "✅ Payment auto-verified and plan activated."
     )
 
     for aid in targets:
@@ -3120,7 +3123,7 @@ async def _poll_and_complete(context: ContextTypes.DEFAULT_TYPE, rid: int, qr_co
             req,
             context,
             "Payment Status: SUCCESS",
-            ["Is order ki payment verify ho chuki hai."],
+            ["This order's payment has been verified."],
         )
 
         # 2. Send a BRAND NEW detailed message with premium custom emojis
@@ -3130,14 +3133,14 @@ async def _poll_and_complete(context: ContextTypes.DEFAULT_TYPE, rid: int, qr_co
 
             success_text = (
                 "⭐ [b]Premium Activated Successfully![/b] ⭐\n\n"
-                "⭐ [b]Congratulations![/b] Aapka payment verify ho gaya hai aur aapka account premium mein upgrade ho chuka hai.\n\n"
+                "⭐ [b]Congratulations![/b] Your payment has been verified and your account has been upgraded to Premium.\n\n"
                 "━━━━━━━━━━━━━━━━━━━━\n"
                 f"🎟 [b]Plan:[/b] [c]{plan_name}[/c]\n"
                 f"📅 [b]Duration:[/b] [c]{req['plan_days']} Days[/c]\n"
                 f"🆔 [b]Order ID:[/b] [c]#{req['id']}[/c]\n"
                 f"🕒 [b]Expiry Date:[/b] [c]{expiry_utc}[/c]\n"
                 "━━━━━━━━━━━━━━━━━━━━\n\n"
-                "✅ Aap ab bina kisi ads ke sabhi files access aur download kar sakte hain.\n"
+                "✅ You can now access and download all files without any ads.\n"
                 "🚀 [b]Enjoy Premium Experience![/b]"
             )
 
@@ -3161,14 +3164,14 @@ async def _poll_and_complete(context: ContextTypes.DEFAULT_TYPE, rid: int, qr_co
                     await context.bot.edit_message_text(
                         chat_id=int(user_chat_id),
                         message_id=int(details_msg_id),
-                        text="⏰ <b>Payment Expired</b>\n\nTime out ho gaya. /pay se dobara try karo.",
+                        text="⏰ <b>Payment Expired</b>\n\nTime out. Please try again with /pay.",
                         parse_mode="HTML",
                     )
                 except Exception:
                     try:
                         await _send_emoji_text(
                             int(req["user_id"]),
-                            "⏰ Payment time expired.\n\nOrder expire ho gaya. Please /pay se naya order banao.",
+                            "⏰ Payment time expired.\n\nOrder expired. Please create a new order using /pay.",
                             context,
                         )
                     except Exception:
@@ -3177,7 +3180,7 @@ async def _poll_and_complete(context: ContextTypes.DEFAULT_TYPE, rid: int, qr_co
                 try:
                     await _send_emoji_text(
                         int(req["user_id"]),
-                        "⏰ Payment time expired.\n\nOrder expire ho gaya. Please /pay se naya order banao.",
+                        "⏰ Payment time expired.\n\nOrder expired. Please create a new order using /pay.",
                         context,
                     )
                 except Exception:
@@ -3217,14 +3220,14 @@ async def _poll_razorpay_and_complete(context: ContextTypes.DEFAULT_TYPE, rid: i
 
             success_text = (
                 "⭐ [b]Premium Activated Successfully![/b] ⭐\n\n"
-                "⭐ [b]Congratulations![/b] Aapka payment verify ho gaya hai aur aapka account premium mein upgrade ho chuka hai.\n\n"
+                "⭐ [b]Congratulations![/b] Your payment has been verified and your account has been upgraded to Premium.\n\n"
                 "━━━━━━━━━━━━━━━━━━━━\n"
                 f"🎟 [b]Plan:[/b] [c]{plan_name}[/c]\n"
                 f"📅 [b]Duration:[/b] [c]{req['plan_days']} Days[/c]\n"
                 f"🆔 [b]Order ID:[/b] [c]#{req['id']}[/c]\n"
                 f"🕒 [b]Expiry Date:[/b] [c]{expiry_utc}[/c]\n"
                 "━━━━━━━━━━━━━━━━━━━━\n\n"
-                "✅ Aap ab bina kisi ads ke sabhi files access aur download kar sakte hain.\n"
+                "✅ You can now access and download all files without any ads.\n"
                 "🚀 [b]Enjoy Premium Experience![/b]"
             )
 
@@ -3244,7 +3247,7 @@ async def _poll_razorpay_and_complete(context: ContextTypes.DEFAULT_TYPE, rid: i
             try:
                 await _send_emoji_text(
                     int(req["user_id"]),
-                    "⏰ Payment time expired.\n\nOrder expire ho gaya. Please /pay se naya order banao.",
+                    "⏰ Payment time expired.\n\nOrder expired. Please create a new order using /pay.",
                     context,
                 )
             except Exception:
@@ -3257,7 +3260,7 @@ async def _handle_xwallet_payment(update: Update, context: ContextTypes.DEFAULT_
     db: Database = context.application.bot_data["db"]
     loading = None
     try:
-        loading = await _send_emoji_text(update.effective_chat.id, "⏳ Payment link generate ho raha hai...", context)
+        loading = await _send_emoji_text(update.effective_chat.id, "⏳ Generating payment link...", context)
         amount = float(plan["amount"])
         api_key = await _get_xwallet_api_key(db, cfg)
 
@@ -3307,15 +3310,13 @@ async def _handle_xwallet_payment(update: Update, context: ContextTypes.DEFAULT_
             f"🛍 Plan: [b]{plan_label}[/b]\n"
             f"💰 Amount: [b]₹{int(amount)}[/b]\n"
             f"🆔 Order ID: [c]#{rid}[/c]\n\n"
-            "━━━━━━━━━━━━━━━━━━━━\n"
-            "📌 [b]Payment Process:[/b]\n"
-            "1️⃣ Niche diye gaye button par tap karke link open karein.\n"
-            "2️⃣ Payment complete karein.\n"
-            "3️⃣ Payment ke baad browser ko close na karein, site refresh hone dein.\n\n"
-            "⚠️ [b]Note:[/b] Agar browser galti se band ho jaye, toh wapis link open karein, refresh ho jayega.\n"
-            "━━━━━━━━━━━━━━━━━━━━\n\n"
-            "⏳ [b]5 minutes[/b] mein pay karo.\n"
-            "🚀 [b]Automatic activation[/b] payment ke baad ho jaayega."
+            "📌 [b]Payment Steps:[/b]\n"
+            "1️⃣ Tap the button below to open the payment link.\n"
+            "2️⃣ Complete the payment on the page.\n"
+            "3️⃣ Do NOT close the browser — wait for the page to refresh automatically.\n\n"
+            "<blockquote expandable>⚠️ If the browser closes accidentally, re-open the same link — it will refresh and confirm.\n"
+            "⏳ Complete payment within 5 minutes.\n"
+            "🚀 Premium activates automatically after payment.</blockquote>"
         )
         kb = InlineKeyboardMarkup([
             [InlineKeyboardButton(f"💳 Pay ₹{int(amount)} — Tap Here", url=payment_link)],
@@ -3347,7 +3348,7 @@ async def _handle_xwallet_payment(update: Update, context: ContextTypes.DEFAULT_
                 pass
         await _send_emoji_text(
             update.effective_chat.id,
-            "⚠️ Payment gateway error.\n\nPlease thodi der baad try karo ya admin se contact karo.",
+            "⚠️ Payment gateway error.\n\nPlease try again after a moment or contact the admin.",
             context,
         )
 
@@ -3357,7 +3358,7 @@ async def _handle_razorpay_payment(update: Update, context: ContextTypes.DEFAULT
     db: Database = context.application.bot_data["db"]
     loading = None
     try:
-        loading = await _send_emoji_text(update.effective_chat.id, "⏳ Razorpay UPI QR Code generate ho raha hai...", context)
+        loading = await _send_emoji_text(update.effective_chat.id, "⏳ Generating Razorpay UPI QR Code...", context)
         amount = int(plan["amount"])
 
         key_id = await _get_razorpay_key_id(db, cfg)
@@ -3410,11 +3411,11 @@ async def _handle_razorpay_payment(update: Update, context: ContextTypes.DEFAULT
             f"💰 <b>Amount:</b> ₹{amount}\n"
             f"🆔 <b>Order ID:</b> <code>#{rid}</code>\n\n"
             "📲 <b>How to pay:</b>\n"
-            "1️⃣ Upar diye gaye QR Code ko scan karein.\n"
-            "2️⃣ Mobile users: QR screenshot lekar GPay/PhonePe (Upload from Gallery) se pay karein.\n"
-            "3️⃣ Payment complete hote hi automatically activate ho jayega!\n\n"
-            "<blockquote expandable>⏳ 5 minutes mein pay karo.\n"
-            "🚀 Automatic activation payment ke baad ho jaayega.</blockquote>"
+            "1️⃣ Scan the QR Code above using any UPI app.\n"
+            "2️⃣ Mobile users: Screenshot the QR and upload it in GPay/PhonePe scanner.\n"
+            "3️⃣ Premium activates automatically once payment is complete!\n\n"
+            "<blockquote expandable>⏳ Complete payment within 5 minutes.\n"
+            "🚀 Activation is automatic — no action needed after payment.</blockquote>"
         )
         kb = InlineKeyboardMarkup([
             [InlineKeyboardButton("❌ Cancel Order", callback_data=f"paycancel:{rid}")],
@@ -3447,7 +3448,7 @@ async def _handle_razorpay_payment(update: Update, context: ContextTypes.DEFAULT
                 pass
         await _send_emoji_text(
             update.effective_chat.id,
-            "⚠️ Payment gateway error.\n\nPlease manual option use karein ya admin se contact karo.",
+            "⚠️ Payment gateway error.\n\nPlease use the manual UPI option or contact the admin.",
             context,
         )
 
@@ -3493,8 +3494,7 @@ async def _handle_stars_payment(update: Update, context: ContextTypes.DEFAULT_TY
             f"🛍 Plan: [b]{plan['label']}[/b]\n"
             f"💰 Price: {stars_amount} Stars ⭐\n"
             f"⏳ Duration: {plan['days']} Days\n\n"
-            f"━━━━━━━━━━━━━━\n\n"
-            f"Neeche diye button par click karke payment instantly complete karein.",
+            f"Tap the button below to complete your payment instantly.",
             context,
             reply_markup=kb,
         )
@@ -3503,7 +3503,7 @@ async def _handle_stars_payment(update: Update, context: ContextTypes.DEFAULT_TY
         logger.warning("Error in _handle_stars_payment: %s", e)
         await _send_emoji_text(
             update.effective_chat.id,
-            "⚠️ Invoice generate karne mein dikkat aayi. Please admin se contact karein.",
+            "⚠️ Failed to generate invoice. Please contact the admin.",
             context,
         )
 
@@ -3558,7 +3558,7 @@ async def successful_payment_callback(update: Update, context: ContextTypes.DEFA
         logger.info("User %d successfully donated %s Stars", user_id, stars)
         await _send_emoji_text(
             message.chat.id,
-            f"❤️ [b]Thank you for your support![/b]\n\nAapka {stars} Telegram Star(s) ka donation successfully receive ho gaya hai. Test complete!",
+            f"❤️ [b]Thank you for your support![/b]\n\nYour donation of {stars} Telegram Star(s) was received successfully. Test complete!",
             context,
         )
         return
@@ -3575,8 +3575,8 @@ async def successful_payment_callback(update: Update, context: ContextTypes.DEFA
 
         success_text = (
             "🎉 [b]Link Unlocked Successfully![/b] 🎉\n\n"
-            "Aapne 1 Telegram Star pay karke is specific premium link ka access unlock kar liya hai.\n\n"
-            "👇 Niche diye gaye button par tap karke link access karein:"
+            "You've unlocked access to this premium link by paying 1 Telegram Star.\n\n"
+            "👇 Tap the button below to access your link:"
         )
         kb = InlineKeyboardMarkup([
             [InlineKeyboardButton("✅ Access Unlocked Link", callback_data=f"recheck:{code}")]
@@ -3614,7 +3614,7 @@ async def successful_payment_callback(update: Update, context: ContextTypes.DEFA
         req,
         context,
         "Payment Status: SUCCESS",
-        ["Is order ki payment verify ho chuki hai via Telegram Stars."],
+        ["This order's payment has been verified via Telegram Stars."],
     )
 
     try:
@@ -3623,15 +3623,15 @@ async def successful_payment_callback(update: Update, context: ContextTypes.DEFA
 
         success_text = (
             "⭐ [b]Premium Activated Successfully![/b] ⭐\n\n"
-            "⭐ [b]Congratulations![/b] Aapka payment verify ho gaya hai aur aapka account premium mein upgrade ho chuka hai.\n\n"
+            "🎉 [b]Congratulations![/b] Your payment has been verified and your account has been upgraded to Premium.\n\n"
             "━━━━━━━━━━━━━━━━━━━━\n"
             f"🎟 [b]Plan:[/b] [c]{plan_name}[/c]\n"
             f"📅 [b]Duration:[/b] [c]{req['plan_days']} Days[/c]\n"
             f"🆔 [b]Order ID:[/b] [c]#{req['id']}[/c]\n"
             f"🕒 [b]Expiry Date:[/b] [c]{expiry_utc}[/c]\n"
             "━━━━━━━━━━━━━━━━━━━━\n\n"
-            "✅ Aap ab bina kisi ads ke sabhi files access aur download kar sakte hain.\n"
-            "🚀 [b]Enjoy Premium Experience![/b]"
+            "✅ You can now access and download all files without any ads.\n"
+            "🚀 [b]Enjoy the Premium Experience![/b]"
         )
 
         await _send_emoji_text(
@@ -3653,7 +3653,7 @@ async def pay(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     gateway = await _get_payment_gateway(db, cfg)
 
     plans_text = (
-        "📦 [b]Plans Choose Karo[/b]\n"
+        "📦 [b]Available Plans[/b]\n"
         "• [b]7 links/day[/b]: 1 Day (₹10 / 10 Stars ⭐) | 7 Days (₹35 / 35 Stars ⭐) | 1 Month (₹115 / 115 Stars ⭐)\n"
         "• [b]20 links/day[/b]: 1 Day (₹15 / 15 Stars ⭐) | 7 Days (₹50 / 50 Stars ⭐) | 1 Month (₹169 / 169 Stars ⭐)\n"
         "• [b]Unlimited links/day[/b]: 1 Month (₹199 / 199 Stars ⭐)\n\n"
@@ -3662,15 +3662,15 @@ async def pay(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     text_to_send = (
         "⭐ [b]Premium Membership[/b]\n\n"
         "🔓 [b]Free Users[/b]\n"
-        "• Sirf Normal links access kar sakte hain\n"
-        "• Premium links [b]block[/b] rahenge\n\n"
-        "💎 [b]Premium Users Ko Milta Hai[/b]\n"
-        "• ✅ Premium (VIP) links instantly open honge\n"
-        "• ✅ No Ads — seedha file/content deliver\n"
-        "• ✅ Instant Delivery — koi rukawat nahi\n"
+        "• Can access Normal links only\n"
+        "• Premium links will be [b]blocked[/b]\n\n"
+        "💎 [b]Premium Users Get[/b]\n"
+        "• ✅ Premium (VIP) links open instantly\n"
+        "• ✅ No Ads — direct file/content delivery\n"
+        "• ✅ Instant Delivery — zero interruptions\n"
         "• ✅ All exclusive content unlocked\n\n" +
         plans_text +
-        "👇 Neeche apna plan select karo:"
+        "👇 Select your plan below:"
     )
 
     q = update.callback_query
@@ -3735,7 +3735,7 @@ async def pay_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             logger.warning("Error in donation invoice creation: %s", e)
             await _send_emoji_text(
                 update.effective_chat.id,
-                "⚠️ Invoice generate karne mein dikkat aayi. Please contact admin.",
+                "⚠️ Failed to generate invoice. Please contact admin.",
                 context,
             )
         return
@@ -3762,7 +3762,7 @@ async def pay_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             logger.warning("Error in stars link unlock invoice creation: %s", e)
             await _send_emoji_text(
                 update.effective_chat.id,
-                "⚠️ Invoice generate karne mein dhikkat aayi. Please admin se contact karein.",
+                "⚠️ Failed to generate invoice. Please contact the admin.",
                 context,
             )
         return
@@ -3869,7 +3869,7 @@ async def pay_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await _delete_payment_qr_message(req, context)
         await _send_emoji_text(
             update.effective_chat.id,
-            "❌ Order cancel kar diya gaya.\n\nNaya plan lene ke liye /pay use karo.",
+            "✅ Order has been cancelled.\n\nUse /pay to start a new plan.",
             context,
         )
         return
@@ -3991,8 +3991,8 @@ async def pay_utr_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     await _send_emoji_text(
         update.effective_chat.id,
         "✅ UTR submitted successfully.\n"
-        "Admin ko notify kar diya gaya hai.\n"
-        "Plan verification ke baad manually activate kiya jayega.",
+        "Admin has been notified.\n"
+        "Plan will be activated manually after payment verification.",
         context,
     )
 
@@ -4061,7 +4061,7 @@ async def pay_admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
             ch_section = (
                 "\n\n📢 [b]Premium Content Channels:[/b]\n"
                 + ch_text +
-                "\n\n✨ In sabhi channels ki posts mein ab aap [b]direct link[/b] le sakte ho — [b]bina ads ke![/b]"
+                "\n\n✨ You can now get [b]direct links[/b] from all these channels — [b]completely ad-free![/b]"
             ) if ch_text else ""
             await _send_emoji_text(
                 int(req["user_id"]),
@@ -4220,7 +4220,7 @@ async def manualapprove(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         ch_section = (
             "\n\n\U0001f4e2 [b]Premium Content Channels:[/b]\n"
             + ch_text +
-            "\n\n\u2728 In sabhi channels ki posts mein ab aap [b]direct link[/b] le sakte ho - [b]bina ads ke![/b]"
+            "\n\n\u2728 In all these channels, you can now get [b]direct links[/b] — [b]ad-free![/b]"
         ) if ch_text else ""
         await _send_emoji_text(
             int(req["user_id"]),
@@ -4404,7 +4404,7 @@ async def bsettings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await _edit_emoji_text(
             update.effective_chat.id,
             q.message.message_id,
-            "⭐ [b]Add Premium[/b]\n\nFormat bhejo: [c]<user_id> [days][/c]\nExample: [c]123456789 7[/c]",
+            "⭐ [b]Add Premium[/b]\n\nSend in format: [c]<user_id> [days][/c]\nExample: [c]123456789 7[/c]",
             context,
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back", callback_data="bset:back")]]),
         )
@@ -4414,7 +4414,7 @@ async def bsettings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await _edit_emoji_text(
             update.effective_chat.id,
             q.message.message_id,
-            "❌ [b]Remove Premium[/b]\n\nUser ID bhejo:\n[c]123456789[/c]",
+            "❌ [b]Remove Premium[/b]\n\nSend the User ID:\n[c]123456789[/c]",
             context,
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back", callback_data="bset:back")]]),
         )
@@ -4424,7 +4424,7 @@ async def bsettings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await _edit_emoji_text(
             update.effective_chat.id,
             q.message.message_id,
-            "📝 [b]Set Caption[/b]\n\nCaption text bhejo.\nHTML tags supported: [c]<b> <i> <code>[/c]",
+            "📝 [b]Set Caption[/b]\n\nSend the caption text.\nHTML tags supported: [c]<b> <i> <code>[/c]",
             context,
             reply_markup=InlineKeyboardMarkup(
                 [
@@ -4451,7 +4451,7 @@ async def bsettings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await _edit_emoji_text(
             update.effective_chat.id,
             q.message.message_id,
-            "⏱ [b]Set Auto-Delete Time[/b]\n\nValue bhejo:\n[c]60[/c], [c]5m[/c], [c]1h[/c], [c]off[/c]",
+            "⏱ [b]Set Auto-Delete Time[/b]\n\nSend the value:\n[c]60[/c], [c]5m[/c], [c]1h[/c], [c]off[/c]",
             context,
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back", callback_data="bset:back")]]),
         )
@@ -4461,7 +4461,7 @@ async def bsettings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await _edit_emoji_text(
             update.effective_chat.id,
             q.message.message_id,
-            "🖼 [b]Set Start Image[/b]\n\nImage URL bhejo ([c]http/https[/c]) ya [c]off[/c].",
+            "🖼 [b]Set Start Image[/b]\n\nSend image URL ([c]http/https[/c]) or [c]off[/c].",
             context,
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back", callback_data="bset:back")]]),
         )
@@ -4636,7 +4636,7 @@ async def bsettings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
             update.effective_chat.id,
             q.message.message_id,
             "👮 [b]Add Admin[/b]\n\n"
-            "Owner ID send kare: jis user ko admin banana hai uska numeric user_id bhejo.\n\n"
+            "Send the numeric User ID of the user you want to promote as admin.\n\n"
             "Example: [c]123456789[/c]",
             context,
             reply_markup=kb,
@@ -4653,7 +4653,7 @@ async def bsettings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
             update.effective_chat.id,
             q.message.message_id,
             "🚫 [b]Remove Admin[/b]\n\n"
-            "Owner ID send kare: jis admin ko remove karna hai uska numeric user_id bhejo.\n\n"
+            "Send the numeric User ID of the admin you want to remove.\n\n"
             "Example: [c]123456789[/c]",
             context,
             reply_markup=kb,
@@ -4799,7 +4799,7 @@ async def bsettings_owner_addadmin_input(update: Update, context: ContextTypes.D
     try:
         uid = int(raw)
     except ValueError:
-        await _send_emoji_text(update.effective_chat.id, "❌ Invalid user_id. Numeric ID bhejo.", context)
+        await _send_emoji_text(update.effective_chat.id, "❌ Invalid user ID. Please send a numeric ID.", context)
         return
 
     db: Database = context.application.bot_data["db"]
@@ -4822,7 +4822,7 @@ async def bsettings_owner_removeadmin_input(update: Update, context: ContextType
     try:
         uid = int(raw)
     except ValueError:
-        await _send_emoji_text(update.effective_chat.id, "❌ Invalid user_id. Numeric ID bhejo.", context)
+        await _send_emoji_text(update.effective_chat.id, "❌ Invalid user ID. Please send a numeric ID.", context)
         return
 
     db: Database = context.application.bot_data["db"]
@@ -4844,7 +4844,7 @@ async def bsettings_gencode_input(update: Update, context: ContextTypes.DEFAULT_
     try:
         count = int(raw)
     except ValueError:
-        await _send_emoji_text(update.effective_chat.id, "❌ Invalid number. 1 to 20 bhejo.", context)
+        await _send_emoji_text(update.effective_chat.id, "❌ Invalid number. Please send a value between 1 and 20.", context)
         return
     if count < 1:
         count = 1
@@ -5127,7 +5127,7 @@ async def forcech_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             ]
         ]
     )
-    await _send_emoji_text(update.effective_chat.id, "Mode select karo:", context, reply_markup=kb)
+    await _send_emoji_text(update.effective_chat.id, "Select the mode:", context, reply_markup=kb)
 
 
 async def forcech_mode_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -5182,8 +5182,8 @@ async def forcech_mode_callback(update: Update, context: ContextTypes.DEFAULT_TY
             await _edit_emoji_text(
                 update.effective_chat.id,
                 q.message.message_id,
-                "❌ Request mode invite link generate nahi hua.\n"
-                "Channel settings me Join Requests enable karo, phir /forcech fir se run karo.",
+                "❌ Failed to generate request-mode invite link.\n"
+                "Enable Join Requests in channel settings, then run /forcech again.",
                 context,
             )
             context.user_data.pop("forcech_state", None)
@@ -5203,7 +5203,7 @@ async def forcech_mode_callback(update: Update, context: ContextTypes.DEFAULT_TY
                 await _edit_emoji_text(
                     update.effective_chat.id,
                     q.message.message_id,
-                    "❌ Invite link generate nahi hua. Check bot admin permissions.",
+                    "❌ Failed to generate invite link. Check bot admin permissions.",
                     context,
                 )
                 context.user_data.pop("forcech_state", None)
@@ -5717,7 +5717,7 @@ async def setpremiumch(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         if any(ch["name"].lower() == name.lower() for ch in channels):
             await _send_emoji_text(
                 update.effective_chat.id,
-                f"⚠️ '[b]{name}[/b]' pehle se exist karta hai. Pehle remove karo.",
+                f"⚠️ '[b]{name}[/b]' already exists. Please remove it first.",
                 context,
             )
             return
@@ -5744,7 +5744,7 @@ async def setpremiumch(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         if len(channels) == before:
             await _send_emoji_text(
                 update.effective_chat.id,
-                f"❌ '[b]{name}[/b]' nahi mila.",
+                f"❌ '[b]{name}[/b]' was not found.",
                 context,
             )
             return
