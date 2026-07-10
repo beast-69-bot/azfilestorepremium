@@ -106,136 +106,250 @@ UNICODE_TO_UI_NAME = {
     "⭐": "premium_star",
 }
 
-PAY_PLANS: dict[str, dict[str, Any]] = {
-    "1d": {"label": "1 Day - 7 Links/Day", "days": 1, "amount": 10, "daily_limit": 7, "stars": 10},
-    "7d": {"label": "7 Days - 7 Links/Day", "days": 7, "amount": 35, "daily_limit": 7, "stars": 35},
-    "30d": {"label": "1 Month - 7 Links/Day", "days": 30, "amount": 115, "daily_limit": 7, "stars": 115},
-    "20l_1d": {"label": "1 Day - 20 Links/Day", "days": 1, "amount": 15, "daily_limit": 20, "stars": 15},
-    "20l_7d": {"label": "7 Days - 20 Links/Day", "days": 7, "amount": 50, "daily_limit": 20, "stars": 50},
-    "20l_30d": {"label": "1 Month - 20 Links/Day", "days": 30, "amount": 169, "daily_limit": 20, "stars": 169},
-    "unl_30d": {"label": "1 Month - Unlimited Links/Day", "days": 30, "amount": 199, "daily_limit": 999999, "stars": 199},
+_SMALL_CAPS_MAP = {
+    'a': 'ᴀ', 'b': 'ʙ', 'c': 'ᴄ', 'd': 'ᴅ', 'e': 'ᴇ', 'f': 'ꜰ', 'g': 'ɢ', 'h': 'ʜ', 'i': 'ɪ', 'j': 'ᴊ', 'k': 'ᴋ', 'l': 'ʟ', 'm': 'ᴍ', 'n': 'ɴ', 'o': 'ᴏ', 'p': 'ᴘ', 'q': 'Q', 'r': 'ʀ', 's': 'ꜱ', 't': 'ᴛ', 'u': 'ᴜ', 'v': 'ᴠ', 'w': 'ᴡ', 'x': 'x', 'y': 'ʏ', 'z': 'ᴢ',
+    'A': 'ᴀ', 'B': 'ʙ', 'C': 'ᴄ', 'D': 'ᴅ', 'E': 'ᴇ', 'F': 'ꜰ', 'G': 'ɢ', 'H': 'ʜ', 'I': 'ɪ', 'J': 'ᴊ', 'K': 'ᴋ', 'L': 'ʟ', 'M': 'ᴍ', 'N': 'ɴ', 'O': 'ᴏ', 'P': 'ᴘ', 'Q': 'Q', 'R': 'ʀ', 'S': 'ꜱ', 'T': 'ᴛ', 'U': 'ᴜ', 'V': 'ᴠ', 'W': 'ᴡ', 'X': 'x', 'Y': 'ʏ', 'Z': 'ᴢ'
 }
+
+def to_small_caps(text: str) -> str:
+    if not text:
+        return ""
+    # Split by HTML tags to prevent modifying tag names (e.g. <b>, <code>)
+    tokens = re.split(r'(<[^>]*>)', text)
+    new_tokens = []
+    for token in tokens:
+        if token.startswith('<') and token.endswith('>'):
+            new_tokens.append(token)
+        else:
+            new_tokens.append("".join(_SMALL_CAPS_MAP.get(c, c) for c in token))
+    return "".join(new_tokens)
+
+
+ICON_REPLACEMENTS = {
+    "✅": "✔",
+    "❌": "✖",
+    "⚠️": "⚑",
+    "ℹ️": "ℹ️",
+    "⏳": "⏳",
+}
+
+def _convert_square_brackets_to_html(text: str) -> str:
+    replacements = {
+        "[b]": "<b>", "[/b]": "</b>",
+        "[i]": "<i>", "[/i]": "</i>",
+        "[u]": "<u>", "[/u]": "</u>",
+        "[c]": "<code>", "[/c]": "</code>",
+        "[q]": "<blockquote>", "[/q]": "</blockquote>",
+        "[eq]": "<blockquote expandable>", "[/eq]": "</blockquote>",
+    }
+    for old, new in replacements.items():
+        text = text.replace(old, new)
+    return text
+
+def to_small_caps_auto(text: str) -> str:
+    if not text:
+        return ""
+    pattern = r'(<[^>]+>|{.*?}|https?://\S+|@\w+|/\w+|[a-zA-Z0-9_\-\./]+\.[a-zA-Z0-9]+|\w+_\w+|-?\d+|&\w+;)'
+    tokens = re.split(pattern, text)
+    new_tokens = []
+    for token in tokens:
+        if token and re.match(pattern, token):
+            new_tokens.append(token)
+        else:
+            new_tokens.append("".join(_SMALL_CAPS_MAP.get(c, c) for c in token))
+    return "".join(new_tokens)
+
+
+_ORIGINAL_BUTTON_INIT = InlineKeyboardButton.__init__
+
+def _wrapped_button_init(self, text: str, *args, **kwargs):
+    t_lower = text.lower()
+    
+    style = kwargs.get("style")
+    if style is None:
+        if any(w in t_lower for w in ["save", "confirm", "start", "enable", "activate", "upload", "resume", "approve", "publish", "join", "recheck", "submit", "accept"]):
+            kwargs["style"] = "success"
+        elif any(w in t_lower for w in ["delete", "remove", "stop", "disable", "cancel", "reset", "logout", "clear", "deactivate"]):
+            kwargs["style"] = "danger"
+        elif any(w in t_lower for w in ["home", "setting", "continue", "next", "open", "dashboard", "manage", "menu", "back"]):
+            kwargs["style"] = "primary"
+            
+    emoji_map = {
+        "settings": "⚙️",
+        "statistics": "📊",
+        "stats": "📊",
+        "history": "📜",
+        "source": "📁",
+        "targets": "🎯",
+        "start": "🚀",
+        "stop": "🛑",
+        "clear all": "🗑️",
+        "clear": "🗑️",
+        "save": "💾",
+        "cancel": "❌",
+        "back": "🔙",
+        "confirm": "🟩",
+        "delete": "🟥",
+        "remove": "➖",
+        "add": "➕",
+        "submit": "📩",
+        "generate": "⚡",
+        "view": "👁",
+    }
+    
+    formatted_text = to_small_caps(text)
+    
+    has_emoji = False
+    for char in formatted_text:
+        ord_val = ord(char)
+        if ord_val > 255 or ord_val in (169, 174):
+            has_emoji = True
+            break
+            
+    if not has_emoji:
+        for key, emo in emoji_map.items():
+            if key in t_lower:
+                formatted_text = f"{emo} {formatted_text}"
+                break
+                
+    _ORIGINAL_BUTTON_INIT(self, formatted_text, *args, **kwargs)
+
+InlineKeyboardButton.__init__ = _wrapped_button_init
+
+
+PAY_PLANS: dict[str, dict[str, Any]] = {
+    "1d": {"label": "1 ᴅᴀʏ - 7 ʟɪɴᴋꜱ/ᴅᴀʏ", "days": 1, "amount": 10, "daily_limit": 7, "stars": 10},
+    "7d": {"label": "7 ᴅᴀʏꜱ - 7 ʟɪɴᴋꜱ/ᴅᴀʏ", "days": 7, "amount": 35, "daily_limit": 7, "stars": 35},
+    "30d": {"label": "1 ᴍᴏɴᴛʜ - 7 ʟɪɴᴋꜱ/ᴅᴀʏ", "days": 30, "amount": 115, "daily_limit": 7, "stars": 115},
+    "20l_1d": {"label": "1 ᴅᴀʏ - 20 ʟɪɴᴋꜱ/ᴅᴀʏ", "days": 1, "amount": 15, "daily_limit": 20, "stars": 15},
+    "20l_7d": {"label": "7 ᴅᴀʏꜱ - 20 ʟɪɴᴋꜱ/ᴅᴀʏ", "days": 7, "amount": 50, "daily_limit": 20, "stars": 50},
+    "20l_30d": {"label": "1 ᴍᴏɴᴛʜ - 20 ʟɪɴᴋꜱ/ᴅᴀʏ", "days": 30, "amount": 169, "daily_limit": 20, "stars": 169},
+    "unl_30d": {"label": "1 ᴍᴏɴᴛʜ - ᴜɴʟɪᴍɪᴛᴇᴅ ʟɪɴᴋꜱ/ᴅᴀʏ", "days": 30, "amount": 199, "daily_limit": 999999, "stars": 199},
+}
+
 
 BSETTINGS_DOCS: dict[str, dict[str, str]] = {
     "getlink": {
-        "title": "🔗 /getlink",
+        "title": "<b>🔗 /getlink</b>\n━━━━━━━━━━━━━━\n",
         "body": (
-            "Purpose:\nGenerate dual links (Normal + Premium) for a file/message.\n\n"
-            "Usage:\n"
-            "1) Reply to a file/message and send: /getlink\n"
-            "2) Or direct by id: /getlink <file_id>\n\n"
-            "Output:\n"
+            "▸ <b>ᴘuʀᴘᴏꜱᴇ</b>\nGenerate dual links (Normal + Premium) for a file/message.\n\n"
+            "▸ <b>uꜱᴀɢᴇ</b>\n"
+            "1) Reply to a file/message and send: <code>/getlink</code>\n"
+            "2) Or direct by ID: <code>/getlink &lt;file_id&gt;</code>\n\n"
+            "▸ <b>ᴏuᴛᴘuᴛ</b>\n"
             "• Normal Link -> normal+premium users\n"
             "• Premium Link -> premium users only\n\n"
-            "Notes:\n"
+            "▸ <b>ɴᴏᴛᴇꜱ</b>\n"
             "• Force-channel checks always apply\n"
             "• Premium link checks active premium in real time"
         ),
     },
     "batch": {
-        "title": "📦 /batch",
+        "title": "<b>📦 /batch</b>\n━━━━━━━━━━━━━━\n",
         "body": (
-            "Purpose:\nCreate one channel-post range batch link pair.\n\n"
-            "Flow:\n"
-            "1) /batch\n"
+            "▸ <b>ᴘuʀᴘᴏꜱᴇ</b>\nCreate one channel-post range batch link pair.\n\n"
+            "▸ <b>ꜰʟᴏᴡ</b>\n"
+            "1) Send <code>/batch</code>\n"
             "2) Send START post link\n"
             "3) Send END post link\n"
             "4) Bot creates Normal + Premium links\n\n"
-            "Cancel:\n"
-            "• /batch cancel\n\n"
-            "Requirements:\n"
+            "▸ <b>ᴄᴀɴᴄᴇʟ</b>\n"
+            "• Send <code>/batch cancel</code>\n\n"
+            "▸ <b>ʀᴇQuɪʀᴇᴍᴇɴᴛꜱ</b>\n"
             "• Bot must be admin in source channel"
         ),
     },
     "custombatch": {
-        "title": "🧩 /custombatch",
+        "title": "<b>🧩 /custombatch</b>\n━━━━━━━━━━━━━━\n",
         "body": (
-            "Purpose:\nManually collect files/media and generate one batch pair.\n\n"
-            "Flow:\n"
-            "1) /custombatch\n"
+            "▸ <b>ᴘuʀᴘᴏꜱᴇ</b>\nManually collect files/media and generate one batch pair.\n\n"
+            "▸ <b>ꜰʟᴏᴡ</b>\n"
+            "1) Send <code>/custombatch</code>\n"
             "2) Send multiple files/media\n"
             "3) Tap Generate Link\n\n"
-            "Buttons:\n"
+            "▸ <b>ʙuᴛᴛᴏɴꜱ</b>\n"
             "• Generate Link\n"
             "• Cancel Process\n\n"
-            "Extra:\n"
+            "▸ <b>ᴇxᴛʀᴀ</b>\n"
             "• Temp upload messages are cleaned on finish/cancel"
         ),
     },
     "addadmin": {
-        "title": "👮 /addadmin",
-        "body": "Owner-only.\n\nUsage:\n/addadmin <user_id>\n\nAdds user as bot admin.",
+        "title": "<b>👮 /addadmin</b>\n━━━━━━━━━━━━━━\n",
+        "body": "<i>Owner-only.</i>\n\n▸ <b>uꜱᴀɢᴇ</b>\n<code>/addadmin &lt;user_id&gt;</code>\n\nAdds user as bot admin.",
     },
     "removeadmin": {
-        "title": "🚫 /removeadmin",
-        "body": "Owner-only.\n\nUsage:\n/removeadmin <user_id>\n\nRemoves bot admin role.",
+        "title": "<b>🚫 /removeadmin</b>\n━━━━━━━━━━━━━━\n",
+        "body": "<i>Owner-only.</i>\n\n▸ <b>uꜱᴀɢᴇ</b>\n<code>/removeadmin &lt;user_id&gt;</code>\n\nRemoves bot admin role.",
     },
     "addpremium": {
-        "title": "⭐ /addpremium",
+        "title": "<b>⭐ /addpremium</b>\n━━━━━━━━━━━━━━\n",
         "body": (
-            "Admin/Owner.\n\nUsage:\n"
-            "/addpremium <user_id> [days]\n\n"
-            "Example:\n/addpremium 123456789 7\n\n"
+            "<i>Admin/Owner.</i>\n\n"
+            "▸ <b>uꜱᴀɢᴇ</b>\n<code>/addpremium &lt;user_id&gt; [days]</code>\n\n"
+            "▸ <b>ᴇxᴀᴍᴘʟᴇ</b>\n<code>/addpremium 123456789 7</code>\n\n"
             "Adds premium duration (default 1 day)."
         ),
     },
     "removepremium": {
-        "title": "❌ /removepremium",
-        "body": "Admin/Owner.\n\nUsage:\n/removepremium <user_id>\n\nDisables premium instantly.",
+        "title": "<b>❌ /removepremium</b>\n━━━━━━━━━━━━━━\n",
+        "body": "<i>Admin/Owner.</i>\n\n▸ <b>uꜱᴀɢᴇ</b>\n<code>/removepremium &lt;user_id&gt;</code>\n\nDisables premium instantly.",
     },
     "gencode": {
-        "title": "🎟 /gencode",
+        "title": "<b>🎟 /gencode</b>\n━━━━━━━━━━━━━━\n",
         "body": (
-            "Admin/Owner.\n\nUsage:\n"
-            "/gencode\n"
-            "/gencode <count>\n\n"
-            "Examples:\n"
-            "/gencode\n"
-            "/gencode 10\n\n"
+            "<i>Admin/Owner.</i>\n\n"
+            "▸ <b>uꜱᴀɢᴇ</b>\n"
+            "<code>/gencode</code>\n"
+            "<code>/gencode &lt;count&gt;</code>\n\n"
+            "▸ <b>ᴇxᴀᴍᴘʟᴇꜱ</b>\n"
+            "<code>/gencode</code>\n"
+            "<code>/gencode 10</code>\n\n"
             "Generates one-time premium tokens (1 day each, max 20 at once)."
         ),
     },
     "forcech": {
-        "title": "📣 /forcech",
+        "title": "<b>📣 /forcech</b>\n━━━━━━━━━━━━━━\n",
         "body": (
-            "Admin/Owner force-join management.\n\n"
-            "Add flow:\n"
-            "1) /forcech\n"
+            "<i>Admin/Owner force-join management.</i>\n\n"
+            "▸ <b>ᴀᴅᴅ ꜰʟᴏᴡ</b>\n"
+            "1) Send <code>/forcech</code>\n"
             "2) Send channel id/username\n"
             "3) Select mode (Direct/Request)\n\n"
-            "Other:\n"
-            "• /forcech list\n"
-            "• /forcech remove <channel_id|@username>\n"
-            "• /forcech reset"
+            "▸ <b>ᴏᴛʜᴇʀ</b>\n"
+            "• <code>/forcech list</code>\n"
+            "• <code>/forcech remove &lt;channel_id|@username&gt;</code>\n"
+            "• <code>/forcech reset</code>"
         ),
     },
     "forcechdebug": {
-        "title": "🧪 /forcechdebug",
+        "title": "<b>🧪 /forcechdebug</b>\n━━━━━━━━━━━━━━\n",
         "body": (
-            "Admin/Owner debug helper.\n\nUsage:\n"
-            "/forcechdebug <user_id>\n\n"
-            "Shows per-channel evaluation:\n"
+            "<i>Admin/Owner debug helper.</i>\n\n"
+            "▸ <b>uꜱᴀɢᴇ</b>\n<code>/forcechdebug &lt;user_id&gt;</code>\n\n"
+            "▸ <b>ᴅᴇᴛᴀɪʟꜱ</b>\n"
             "• mode\n• joined\n• request\n• pass\n• error details"
         ),
     },
     "broadcast": {
-        "title": "📢 /broadcast",
+        "title": "<b>📢 /broadcast</b>\n━━━━━━━━━━━━━━\n",
         "body": (
-            "Admin/Owner.\n\nUsage:\n"
-            "Reply to any message then send /broadcast\n\n"
+            "<i>Admin/Owner.</i>\n\n"
+            "▸ <b>uꜱᴀɢᴇ</b>\n"
+            "Reply to any message then send <code>/broadcast</code>\n\n"
             "Bot copies that message to all known users."
         ),
     },
     "stats": {
-        "title": "📊 /stats",
-        "body": "Admin/Owner.\n\nShows users, files, links, premium, tokens and other counts.",
+        "title": "<b>📊 /stats</b>\n━━━━━━━━━━━━━━\n",
+        "body": "<i>Admin/Owner.</i>\n\nShows users, files, links, premium, tokens and other counts.",
     },
     "premiumdb": {
-        "title": "📥 /premiumdb",
+        "title": "<b>📥 /premiumdb</b>\n━━━━━━━━━━━━━━\n",
         "body": (
-            "Admin/Owner.\n\n"
+            "<i>Admin/Owner.</i>\n\n"
             "Exports full premium records to an Excel file.\n\n"
-            "Output columns include:\n"
+            "▸ <b>ᴄᴏʟuᴍɴꜱ</b>\n"
             "• user_id, name, username\n"
             "• premium_until (unix + UTC)\n"
             "• active status\n"
@@ -243,101 +357,105 @@ BSETTINGS_DOCS: dict[str, dict[str, str]] = {
         ),
     },
     "setcaption": {
-        "title": "📝 /setcaption",
+        "title": "<b>📝 /setcaption</b>\n━━━━━━━━━━━━━━\n",
         "body": (
-            "Admin/Owner.\n\nUsage:\n"
-            "/setcaption <text>\n"
-            "or reply to text and use /setcaption\n\n"
+            "<i>Admin/Owner.</i>\n\n"
+            "▸ <b>uꜱᴀɢᴇ</b>\n"
+            "<code>/setcaption &lt;text&gt;</code>\n"
+            "or reply to text and use <code>/setcaption</code>\n\n"
             "HTML supported for styling:\n"
             "<b>bold</b> <i>italic</i> <code>code</code>"
         ),
     },
     "removecaption": {
-        "title": "🗑 /removecaption",
-        "body": "Admin/Owner.\n\nRemoves default caption.",
+        "title": "<b>🗑 /removecaption</b>\n━━━━━━━━━━━━━━\n",
+        "body": "<i>Admin/Owner.</i>\n\nRemoves default caption.",
     },
     "settime": {
-        "title": "⏱ /settime",
+        "title": "<b>⏱ /settime</b>\n━━━━━━━━━━━━━━\n",
         "body": (
-            "Admin/Owner auto-delete setting.\n\nUsage:\n"
-            "/settime 60\n"
-            "/settime 5m\n"
-            "/settime 1h\n"
-            "/settime off\n\n"
+            "<i>Admin/Owner auto-delete setting.</i>\n\n"
+            "▸ <b>uꜱᴀɢᴇ</b>\n"
+            "<code>/settime 60</code>\n"
+            "<code>/settime 5m</code>\n"
+            "<code>/settime 1h</code>\n"
+            "<code>/settime off</code>\n\n"
             "Applied on files/messages delivered via links."
         ),
     },
     "setstartimg": {
-        "title": "🖼 /setstartimg",
+        "title": "<b>🖼 /setstartimg</b>\n━━━━━━━━━━━━━━\n",
         "body": (
-            "Admin/Owner.\n\nUsage:\n"
-            "/setstartimg <image_url>\n"
-            "/setstartimg off\n\n"
+            "<i>Admin/Owner.</i>\n\n"
+            "▸ <b>uꜱᴀɢᴇ</b>\n"
+            "<code>/setstartimg &lt;image_url&gt;</code>\n"
+            "<code>/setstartimg off</code>\n\n"
             "Adds/removes image in /start welcome."
         ),
     },
     "setpay": {
-        "title": "💳 /setpay",
+        "title": "<b>💳 /setpay</b>\n━━━━━━━━━━━━━━\n",
         "body": (
-            "Admin/Owner payment config.\n\nUsage:\n"
-            "/setpay view\n"
-            "/setpay upi <upi_id>\n"
-            "/setpay name <payee_name>\n"
-            "/setpay text <instructions>\n"
-            "/setpay clearupi\n\n"
+            "<i>Admin/Owner payment config.</i>\n\n"
+            "▸ <b>uꜱᴀɢᴇ</b>\n"
+            "<code>/setpay view</code>\n"
+            "<code>/setpay upi &lt;upi_id&gt;</code>\n"
+            "<code>/setpay name &lt;payee_name&gt;</code>\n"
+            "<code>/setpay text &lt;instructions&gt;</code>\n"
+            "<code>/setpay clearupi</code>\n\n"
             "Bot will auto-generate plan-wise UPI QR for users."
         ),
     },
     "getemojiid": {
-        "title": "🆔 /getemojiid",
-        "body": "Admin/Owner.\n\nReply to a message with custom emojis and run /getemojiid to extract custom_emoji_id values.",
+        "title": "<b>🆔 /getemojiid</b>\n━━━━━━━━━━━━━━\n",
+        "body": "<i>Admin/Owner.</i>\n\nReply to a message with custom emojis and run <code>/getemojiid</code> to extract custom_emoji_id values.",
     },
     "setuitemoji": {
-        "title": "😀 /setuitemoji",
+        "title": "<b>😀 /setuitemoji</b>\n━━━━━━━━━━━━━━\n",
         "body": (
-            "Admin/Owner.\n\nUsage:\n"
-            "/setuitemoji <name> <custom_emoji_id>\n"
-            "/setuitemoji <name> off\n\n"
+            "<i>Admin/Owner.</i>\n\n"
+            "▸ <b>uꜱᴀɢᴇ</b>\n"
+            "<code>/setuitemoji &lt;name&gt; &lt;custom_emoji_id&gt;</code>\n"
+            "<code>/setuitemoji &lt;name&gt; off</code>\n\n"
             "Stores UI emoji id mapping."
         ),
     },
     "setemojipreset": {
-        "title": "✨ /setemojipreset",
-        "body": "Admin/Owner.\n\nApplies predefined custom emoji id preset in one shot.",
+        "title": "<b>✨ /setemojipreset</b>\n━━━━━━━━━━━━━━\n",
+        "body": "<i>Admin/Owner.</i>\n\nApplies predefined custom emoji id preset in one shot.",
     },
 }
 
-
 def _bsettings_keyboard() -> InlineKeyboardMarkup:
     # Intentionally exclude /getlink, /batch, /custombatch from this panel.
-    button_items: list[tuple[str, str]] = [
-        ("addadmin", "👮 Add Admin"),
-        ("removeadmin", "🚫 Remove Admin"),
-        ("addpremium", "⭐ Add Premium"),
-        ("removepremium", "❌ Remove Premium"),
-        ("gencode", "🎟 Generate Codes"),
-        ("forcech", "📣 Force Channel"),
-        ("forcechdebug", "🧪 Force Debug"),
-        ("broadcast", "📢 Broadcast"),
-        ("stats", "📊 Stats"),
-        ("premiumdb", "📥 Premium DB"),
-        ("setcaption", "📝 Set Caption"),
-        ("removecaption", "🗑 Remove Caption"),
-        ("settime", "⏱ Set AutoDelete"),
-        ("setstartimg", "🖼 Start Image"),
-        ("setpay", "💳 Payment"),
-        ("getemojiid", "🆔 Emoji IDs"),
-        ("setuitemoji", "😀 UI Emoji"),
-        ("setemojipreset", "✨ Emoji Preset"),
+    button_items: list[tuple[str, str, str | None]] = [
+        ("addadmin", "➕ ᴀᴅᴅ ᴀᴅᴍɪɴ", "success"),
+        ("removeadmin", "🚫 ʀᴇᴍᴏᴠᴇ ᴀᴅᴍɪɴ", "danger"),
+        ("addpremium", "⭐ ᴀᴅᴅ ᴘʀᴇᴍɪᴜᴍ", "success"),
+        ("removepremium", "❌ ʀᴇᴍᴏᴠᴇ ᴘʀᴇᴍɪᴜᴍ", "danger"),
+        ("gencode", "🎟 ɢᴇɴᴇʀᴀᴛᴇ ᴄᴏᴅᴇꜱ", "primary"),
+        ("forcech", "📣 ꜰᴏʀᴄᴇ ᴄʜᴀɴɴᴇʟ", "primary"),
+        ("forcechdebug", "🧪 ꜰᴏʀᴄᴇ ᴅᴇʙᴜɢ", None),
+        ("broadcast", "📢 ʙʀᴏᴀᴅᴄᴀꜱᴛ", "primary"),
+        ("stats", "📊 ꜱᴛᴀᴛɪꜱᴛɪᴄꜱ", None),
+        ("premiumdb", "📥 ᴘʀᴇᴍɪᴜᴍ ᴅʙ", None),
+        ("setcaption", "📝 ꜱᴇᴛ ᴄᴀᴘᴛɪᴏɴ", "primary"),
+        ("removecaption", "🗑 ʀᴇᴍᴏᴠᴇ ᴄᴀᴘᴛɪᴏɴ", "danger"),
+        ("settime", "⏱ ꜱᴇᴛ ᴀᴜᴛᴏᴅᴇʟᴇᴛᴇ", "primary"),
+        ("setstartimg", "🖼 ꜱᴛᴀʀᴛ ɪᴍᴀɢᴇ", "primary"),
+        ("setpay", "💳 ᴘᴀʏᴍᴇɴᴛ", "primary"),
+        ("getemojiid", "🆔 ᴇᴍᴏᴊɪ ɪᴅꜱ", None),
+        ("setuitemoji", "😀 ᴜɪ ᴇᴍᴏᴊɪ", "primary"),
+        ("setemojipreset", "✨ ᴇᴍᴏᴊɪ ᴘʀᴇꜱᴇᴛ", "primary"),
     ]
     rows: list[list[InlineKeyboardButton]] = []
     for i in range(0, len(button_items), 2):
         row: list[InlineKeyboardButton] = []
-        k1, label1 = button_items[i]
-        row.append(InlineKeyboardButton(label1, callback_data=f"bset:{k1}"))
+        k1, label1, style1 = button_items[i]
+        row.append(InlineKeyboardButton(label1, callback_data=f"bset:{k1}", style=style1))
         if i + 1 < len(button_items):
-            k2, label2 = button_items[i + 1]
-            row.append(InlineKeyboardButton(label2, callback_data=f"bset:{k2}"))
+            k2, label2, style2 = button_items[i + 1]
+            row.append(InlineKeyboardButton(label2, callback_data=f"bset:{k2}", style=style2))
         rows.append(row)
     return InlineKeyboardMarkup(rows)
 
@@ -346,61 +464,66 @@ def _bset_forcech_panel_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [
             [
-                InlineKeyboardButton("➕ Add", callback_data="bset:forcech_add"),
-                InlineKeyboardButton("📋 List", callback_data="bset:forcech_list"),
+                InlineKeyboardButton("➕ ᴀᴅᴅ", callback_data="bset:forcech_add", style="success"),
+                InlineKeyboardButton("📋 ʟɪꜱᴛ", callback_data="bset:forcech_list"),
             ],
             [
-                InlineKeyboardButton("➖ Remove", callback_data="bset:forcech_remove"),
-                InlineKeyboardButton("🗑 Reset", callback_data="bset:forcech_reset"),
+                InlineKeyboardButton("➖ ʀᴇᴍᴏᴠᴇ", callback_data="bset:forcech_remove", style="danger"),
+                InlineKeyboardButton("🗑 ʀᴇꜱᴇᴛ", callback_data="bset:forcech_reset", style="danger"),
             ],
-            [InlineKeyboardButton("⬅️ Back", callback_data="bset:back")],
+            [InlineKeyboardButton("🔙 ʙᴀᴄᴋ", callback_data="bset:back", style="danger")],
         ]
     )
 
 
 def _bset_forcech_panel_text() -> str:
     return (
-        "📣 [b]Force Channel Manager[/b]\n\n"
-        "[u]Instructions[/u]\n"
-        "1) [b]Add[/b] pe click karo\n"
-        "2) Channel ID/username bhejo ([c]-100xxxx[/c] ya [c]@channel[/c])\n"
-        "3) Mode select karo: [b]Direct[/b] ya [b]Request[/b]\n\n"
-        "[u]Quick Actions[/u]\n"
-        "• [b]List[/b]: saved required channels dekho\n"
-        "• [b]Remove[/b]: specific channel hatao\n"
-        "• [b]Reset[/b]: sab force channels clear karo"
+        "<b>📣 ꜰᴏʀᴄᴇ ᴄʜᴀɴɴᴇʟ ᴍᴀɴᴀɢᴇʀ</b>\n"
+        "━━━━━━━━━━━━━━\n\n"
+        "<i>ɪɴꜱᴛʀᴜᴄᴛɪᴏɴꜱ</i>\n"
+        "▸ Click <b>➕ ᴀᴅᴅ</b>\n"
+        "▸ Send Channel ID/username (<code>-100xxxx</code> or <code>@channel</code>)\n"
+        "▸ Select Mode: <b>ᴅɪʀᴇᴄᴛ</b> or <b>ʀᴇQᴜᴇꜱᴛ</b>\n\n"
+        "<i>Qᴜɪᴄᴋ ᴀᴄᴛɪᴏɴꜱ</i>\n"
+        "• <b>ʟɪꜱᴛ</b>: View saved required channels\n"
+        "• <b>ʀᴇᴍᴏᴠᴇ</b>: Delete a specific channel\n"
+        "• <b>ʀᴇꜱᴇᴛ</b>: Clear all force channels"
     )
 
 
 def _bset_setpay_keyboard(gateway: str = "manual") -> InlineKeyboardMarkup:
     def active_indicator(g: str) -> str:
-        return " ✅" if gateway == g else ""
+        return " ✔" if gateway == g else ""
+
+    style_man = "success" if gateway == "manual" else None
+    style_xwa = "success" if gateway == "xwallet" else None
+    style_raz = "success" if gateway == "razorpay" else None
 
     return InlineKeyboardMarkup(
         [
             [
-                InlineKeyboardButton("👁 View Status", callback_data="bset:setpay_view"),
+                InlineKeyboardButton("👁 ᴠɪᴇᴡ ꜱᴛᴀᴛᴜꜱ", callback_data="bset:setpay_view", style="primary"),
             ],
             [
-                InlineKeyboardButton(f"Manual{active_indicator('manual')}", callback_data="bset:setpay_mode_manual"),
-                InlineKeyboardButton(f"XWallet{active_indicator('xwallet')}", callback_data="bset:setpay_mode_xwallet"),
-                InlineKeyboardButton(f"Razorpay{active_indicator('razorpay')}", callback_data="bset:setpay_mode_razorpay"),
+                InlineKeyboardButton(f"💳 ᴍᴀɴᴜᴀʟ{active_indicator('manual')}", callback_data="bset:setpay_mode_manual", style=style_man),
+                InlineKeyboardButton(f"🔌 xᴡᴀʟʟᴇᴛ{active_indicator('xwallet')}", callback_data="bset:setpay_mode_xwallet", style=style_xwa),
+                InlineKeyboardButton(f"💳 ʀᴀᴢᴏʀᴘᴀʏ{active_indicator('razorpay')}", callback_data="bset:setpay_mode_razorpay", style=style_raz),
             ],
             [
-                InlineKeyboardButton("🆔 Set UPI ID", callback_data="bset:setpay_upi"),
-                InlineKeyboardButton("👤 Set Name", callback_data="bset:setpay_name"),
+                InlineKeyboardButton("🆔 ꜱᴇᴛ ᴜᴘɪ ɪᴅ", callback_data="bset:setpay_upi", style="primary"),
+                InlineKeyboardButton("👤 ꜱᴇᴛ ɴᴀᴍᴇ", callback_data="bset:setpay_name", style="primary"),
             ],
             [
-                InlineKeyboardButton("🧾 Set Instructions", callback_data="bset:setpay_text"),
-                InlineKeyboardButton("🎟 Set XWallet Key", callback_data="bset:setpay_xwalletkey"),
+                InlineKeyboardButton("🧾 ꜱᴇᴛ ɪɴꜱᴛʀᴜᴄᴛɪᴏɴꜱ", callback_data="bset:setpay_text", style="primary"),
+                InlineKeyboardButton("🎟 ꜱᴇᴛ xᴡᴀʟʟᴇᴛ ᴋᴇʏ", callback_data="bset:setpay_xwalletkey", style="primary"),
             ],
             [
-                InlineKeyboardButton("💳 Set Razorpay ID", callback_data="bset:setpay_razorpayid"),
-                InlineKeyboardButton("🔑 Set Razorpay Secret", callback_data="bset:setpay_razorpaysecret"),
+                InlineKeyboardButton("💳 ꜱᴇᴛ ʀᴀᴢᴏʀᴘᴀʏ ɪᴅ", callback_data="bset:setpay_razorpayid", style="primary"),
+                InlineKeyboardButton("🔑 ꜱᴇᴛ ʀᴀᴢᴏʀᴘᴀʏ ꜱᴇᴄʀᴇᴛ", callback_data="bset:setpay_razorpaysecret", style="primary"),
             ],
             [
-                InlineKeyboardButton("🗑 Clear UPI", callback_data="bset:setpay_clearupi"),
-                InlineKeyboardButton("⬅️ Back", callback_data="bset:back"),
+                InlineKeyboardButton("🗑 ᴄʟᴇᴀʀ ᴜᴘɪ", callback_data="bset:setpay_clearupi", style="danger"),
+                InlineKeyboardButton("🔙 ʙᴀᴄᴋ", callback_data="bset:back", style="danger"),
             ],
         ]
     )
@@ -424,23 +547,24 @@ def _clear_bsettings_wait_states(context: ContextTypes.DEFAULT_TYPE) -> None:
 
 def _welcome_text() -> str:
     return (
-        "🤖 [b]Secure File Store & Distribution Bot[/b]\n"
-        "━━━━━━━━━━━━━━━━━━━━━━\n\n"
-        "[q]👋 Advanced file distribution bot — store & deliver files securely via deep-links.[/q]\n\n"
-        "📦 [b]Features:[/b]\n"
-        "• [b]Instant Delivery[/b] via deep-links\n"
-        "• [b]Force-Join Verification[/b] before access\n"
-        "• [b]Premium VIP[/b]: No ads, higher daily quota\n\n"
-        "📌 [b]How to Get Files:[/b]\n"
+        "🤖 <b>ꜱᴇᴄᴜʀᴇ ꜰɪʟᴇ ꜱᴛᴏʀᴇ & ᴅɪꜱᴛʀɪʙᴜᴛɪᴏɴ ʙᴏᴛ</b>\n"
+        "━━━━━━━━━━━━━━\n\n"
+        "<blockquote>👋 ᴀᴅᴠᴀɴᴄᴇᴅ ꜰɪʟᴇ ᴅɪꜱᴛʀɪʙᴜᴛɪᴏɴ ʙᴏᴛ — ꜱᴛᴏʀᴇ & ᴅᴇʟɪᴠᴇʀ ꜰɪʟᴇꜱ ꜱᴇᴄᴜʀᴇʟʏ ᴠɪᴀ ᴅᴇᴇᴘ-ʟɪɴᴋꜱ.</blockquote>\n\n"
+        "📦 <b>ꜰᴇᴀᴛᴜʀᴇꜱ</b>\n"
+        "▸ <b>ɪɴꜱᴛᴀɴᴛ ᴅᴇʟɪᴠᴇʀʏ</b> via deep-links\n"
+        "▸ <b>ꜰᴏʀᴄᴇ-ᴊᴏɪɴ ᴠᴇʀɪꜰɪᴄᴀᴛɪᴏɴ</b> before access\n"
+        "▸ <b>ᴘʀᴇᴍɪᴜᴍ ᴠɪᴘ</b>: No ads, higher daily quota\n\n"
+        "📌 <b>ʜᴏᴡ ᴛᴏ ɢᴇᴛ ꜰɪʟᴇꜱ</b>\n"
         "1️⃣ Click the deep-link\n"
         "2️⃣ Complete channel join if required\n"
-        "3️⃣ Tap [b]Recheck ✅[/b] to receive files!\n\n"
-        "💎 [b]Commands:[/b]\n"
-        "/plan · /pay · /redeem · /cancel\n\n"
-        "[eq]⚠️ Forwarded links won't work — click original link only.[/eq]\n"
-        "━━━━━━━━━━━━━━━━━━━━━━\n"
-        "✨ [i]Unlock next-level file distribution today![/i]"
+        "3️⃣ Tap <b>ʀᴇᴄʜᴇᴄᴋ ✅</b> to receive files!\n\n"
+        "💎 <b>ᴄᴏᴍᴍᴀɴᴅꜱ</b>\n"
+        "<code>/plan</code> · <code>/pay</code> · <code>/redeem</code> · <code>/cancel</code>\n\n"
+        "<blockquote expandable>⚠️ Forwarded links won't work — click original link only.</blockquote>\n"
+        "━━━━━━━━━━━━━━\n"
+        "✨ <i>Unlock next-level file distribution today!</i>"
     )
+
 
 
 async def _get_payment_gateway(db: Database, cfg: Any) -> str:
@@ -603,6 +727,41 @@ def _extract_style_entities(raw_text: str) -> tuple[str, list[MessageEntity]]:
     return "".join(out), entities
 
 
+async def _format_custom_emojis_html(html_text: str, context: ContextTypes.DEFAULT_TYPE) -> str:
+    if not html_text:
+        return ""
+    name_to_id = await _get_ui_emoji_map(context)
+    vs16 = "\ufe0f"
+    tokens = re.split(r'(<[^>]*>)', html_text)
+    new_tokens = []
+    for token in tokens:
+        if token.startswith('<') and token.endswith('>'):
+            new_tokens.append(token)
+        else:
+            out_chars = []
+            i = 0
+            while i < len(token):
+                ch = token[i]
+                step = 1
+                emoji_token = ch
+                if i + 1 < len(token) and token[i + 1] == vs16:
+                    emoji_token = ch + vs16
+                    step = 2
+                
+                name = UNICODE_TO_UI_NAME.get(ch)
+                if name:
+                    eid = name_to_id.get(name)
+                    if eid and eid.isdigit():
+                        out_chars.append(f'<tg-emoji emoji-id="{eid}">{emoji_token}</tg-emoji>')
+                    else:
+                        out_chars.append(emoji_token)
+                else:
+                    out_chars.append(ch)
+                i += step
+            new_tokens.append("".join(out_chars))
+    return "".join(new_tokens)
+
+
 async def _send_emoji_text(
     chat_id: int,
     text: str,
@@ -610,13 +769,15 @@ async def _send_emoji_text(
     reply_markup: Optional[InlineKeyboardMarkup] = None,
     disable_web_page_preview: Optional[bool] = None,
 ) -> Any:
-    clean_text, style_entities = _extract_style_entities(text)
-    emoji_entities = await _build_custom_emoji_entities(clean_text, context)
-    entities = sorted([*style_entities, *emoji_entities], key=lambda e: (e.offset, e.length))
+    text = _convert_square_brackets_to_html(text)
+    for old, new in ICON_REPLACEMENTS.items():
+        text = text.replace(old, new)
+    text = to_small_caps_auto(text)
+    formatted_text = await _format_custom_emojis_html(text, context)
     return await context.bot.send_message(
         chat_id=chat_id,
-        text=clean_text,
-        entities=entities,
+        text=formatted_text,
+        parse_mode="HTML",
         reply_markup=reply_markup,
         disable_web_page_preview=disable_web_page_preview,
     )
@@ -630,14 +791,16 @@ async def _edit_emoji_text(
     reply_markup: Optional[InlineKeyboardMarkup] = None,
     disable_web_page_preview: Optional[bool] = None,
 ) -> Any:
-    clean_text, style_entities = _extract_style_entities(text)
-    emoji_entities = await _build_custom_emoji_entities(clean_text, context)
-    entities = sorted([*style_entities, *emoji_entities], key=lambda e: (e.offset, e.length))
+    text = _convert_square_brackets_to_html(text)
+    for old, new in ICON_REPLACEMENTS.items():
+        text = text.replace(old, new)
+    text = to_small_caps_auto(text)
+    formatted_text = await _format_custom_emojis_html(text, context)
     return await context.bot.edit_message_text(
         chat_id=chat_id,
         message_id=message_id,
-        text=clean_text,
-        entities=entities,
+        text=formatted_text,
+        parse_mode="HTML",
         reply_markup=reply_markup,
         disable_web_page_preview=disable_web_page_preview,
     )
@@ -650,13 +813,20 @@ async def _send_html_text(
     reply_markup: Optional[InlineKeyboardMarkup] = None,
     disable_web_page_preview: Optional[bool] = None,
 ) -> Any:
+    html_text = _convert_square_brackets_to_html(html_text)
+    for old, new in ICON_REPLACEMENTS.items():
+        html_text = html_text.replace(old, new)
+    html_text = to_small_caps_auto(html_text)
+    formatted_text = await _format_custom_emojis_html(html_text, context)
     return await context.bot.send_message(
         chat_id=chat_id,
-        text=html_text,
+        text=formatted_text,
         parse_mode="HTML",
         reply_markup=reply_markup,
         disable_web_page_preview=disable_web_page_preview,
     )
+
+
 
 
 def _is_owner(update: Update, cfg: Any) -> bool:
@@ -1025,22 +1195,23 @@ def _join_keyboard(channels: list[dict[str, Any]], recheck_code: str) -> InlineK
             url = f"https://t.me/{ch['username']}"
         if url:
             if mode == "request":
-                rows.append([InlineKeyboardButton(text=f"🛂 Send Join Request: {title}", url=url)])
+                rows.append([InlineKeyboardButton(text=f"🛂 ꜱᴇɴᴅ ᴊᴏɪɴ ʀᴇQᴜᴇꜱᴛ: {title}", url=url)])
             else:
-                rows.append([InlineKeyboardButton(text=f"📢 Join Channel: {title}", url=url)])
+                rows.append([InlineKeyboardButton(text=f"📢 ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ: {title}", url=url)])
         else:
-            rows.append([InlineKeyboardButton(text=f"🔒 Required: {title}", callback_data="noop")])
-    rows.append([InlineKeyboardButton(text="✅ I've Joined (Recheck)", callback_data=f"recheck:{recheck_code}")])
+            rows.append([InlineKeyboardButton(text=f"🔒 ʀᴇQᴜɪʀᴇᴅ: {title}", callback_data="noop")])
+    rows.append([InlineKeyboardButton(text="✅ ɪ'ᴠᴇ ᴊᴏɪɴᴇᴅ (ʀᴇᴄʜᴇᴄᴋ)", callback_data=f"recheck:{recheck_code}", style="success")])
     return InlineKeyboardMarkup(rows)
 
 
 def _access_link_keyboard(normal_url: str, premium_url: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [
-            [InlineKeyboardButton(text="🔓 Normal Link (With Ads)", url=normal_url)],
-            [InlineKeyboardButton(text="⚡ Premium Link (Instant / No Ads)", url=premium_url)],
+            [InlineKeyboardButton(text="🔓 ɴᴏʀᴍᴀʟ ʟɪɴᴋ (ᴡɪᴛʜ ᴀᴅꜱ)", url=normal_url)],
+            [InlineKeyboardButton(text="⚡ ᴘʀᴇᴍɪᴜᴍ ʟɪɴᴋ (ɪɴꜱᴛᴀɴᴛ / ɴᴏ ᴀᴅꜱ)", url=premium_url, style="success")],
         ]
     )
+
 
 
 def _parse_channel_ref(s: str) -> Optional[str | int]:
@@ -1248,17 +1419,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         db: Database = context.application.bot_data["db"]
         img_url = await db.get_setting(SETTINGS_START_IMG_URL)
         raw_text = _welcome_text()
-        text, style_entities = _extract_style_entities(raw_text)
-        emoji_entities = await _build_custom_emoji_entities(text, context)
-        entities = sorted([*style_entities, *emoji_entities], key=lambda e: (e.offset, e.length))
+        formatted_text = await _format_custom_emojis_html(raw_text, context)
         if img_url:
             try:
                 # Send image with caption as a single combined message.
-                await update.effective_chat.send_photo(photo=img_url, caption=text, caption_entities=entities)
+                await update.effective_chat.send_photo(photo=img_url, caption=formatted_text, parse_mode="HTML")
                 return
             except Exception as e:
                 logger.warning("start: send_photo failed (%s), showing text only", e)
-        await update.effective_chat.send_message(text=text, entities=entities)
+        await _send_emoji_text(update.effective_chat.id, text=formatted_text, parse_mode="HTML", context=context)
         return
 
     await _deliver_by_code(update, context, code)
@@ -1354,7 +1523,7 @@ async def _deliver_by_code(update: Update, context: ContextTypes.DEFAULT_TYPE, c
     if link["target_type"] == "file":
         file_row = await db.get_file(link["target_id"])
         if not file_row:
-            await chat.send_message("❌ File not found (may have been removed).")
+            await _send_emoji_text(chat.id, "❌ File not found (may have been removed, context=context).")
             return
         if not await _consume_premium_quota(link, user.id, chat.id, context, db, code):
             return
@@ -1365,10 +1534,10 @@ async def _deliver_by_code(update: Update, context: ContextTypes.DEFAULT_TYPE, c
     if link["target_type"] == "batch":
         file_ids = await db.get_batch_file_ids(link["target_id"])
         if not file_ids:
-            await chat.send_message("❌ Batch is empty.")
+            await _send_emoji_text(chat.id, "❌ Batch is empty.", context=context)
             return
         if len(file_ids) > 100:
-            await chat.send_message("⚠️ Batch too large to deliver.")
+            await _send_emoji_text(chat.id, "⚠️ Batch too large to deliver.", context=context)
             return
         if not await _consume_premium_quota(link, user.id, chat.id, context, db, code):
             return
@@ -1413,7 +1582,7 @@ async def _deliver_by_code(update: Update, context: ContextTypes.DEFAULT_TYPE, c
     if link["target_type"] == "msg":
         msg_row = await db.get_message(link["target_id"])
         if not msg_row:
-            await chat.send_message("❌ Message not found (may have been removed).")
+            await _send_emoji_text(chat.id, "❌ Message not found (may have been removed, context=context).")
             return
         if not await _consume_premium_quota(link, user.id, chat.id, context, db, code):
             return
@@ -1426,7 +1595,7 @@ async def _deliver_by_code(update: Update, context: ContextTypes.DEFAULT_TYPE, c
             await _maybe_schedule_autodelete(chat.id, m.message_id, context)
         except Exception as e:
             logger.error("Error delivering message (msg_id=%s from chat=%s): %s", msg_row.get("message_id"), msg_row.get("from_chat_id"), e)
-            await chat.send_message("❌ Unable to deliver this message (deleted or inaccessible).")
+            await _send_emoji_text(chat.id, "❌ Unable to deliver this message (deleted or inaccessible, context=context).")
             return
         await db.mark_link_used(code)
         return
@@ -1434,16 +1603,16 @@ async def _deliver_by_code(update: Update, context: ContextTypes.DEFAULT_TYPE, c
     if link["target_type"] == "chbatch":
         chb = await db.get_channel_batch(link["target_id"])
         if not chb:
-            await chat.send_message("❌ Batch not found.")
+            await _send_emoji_text(chat.id, "❌ Batch not found.", context=context)
             return
         if not await _bot_is_admin(chb["channel_id"], context):
-            await chat.send_message("🚫 Bot is not admin in the source channel.\n\nPehle bot ko admin banao, phir try karo.")
+            await _send_emoji_text(chat.id, "🚫 Bot is not admin in the source channel.\n\nPehle bot ko admin banao, phir try karo.", context=context)
             return
         start_id = int(chb["start_msg_id"])
         end_id = int(chb["end_msg_id"])
         total = end_id - start_id + 1
         if total <= 0 or total > MAX_CHANNEL_BATCH_POSTS:
-            await chat.send_message("⚠️ Batch range invalid or too large.")
+            await _send_emoji_text(chat.id, "⚠️ Batch range invalid or too large.", context=context)
             return
         if not await _consume_premium_quota(link, user.id, chat.id, context, db, code):
             return
@@ -1495,7 +1664,7 @@ async def _deliver_by_code(update: Update, context: ContextTypes.DEFAULT_TYPE, c
         await db.mark_link_used(code)
         return
 
-    await chat.send_message("❌ Unsupported link type.")
+    await _send_emoji_text(chat.id, "❌ Unsupported link type.", context=context)
 
 
 def _extract_media_file(update: Update) -> Optional[dict[str, str]]:
@@ -1642,7 +1811,7 @@ async def getlink(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     prem_code = new_code()
     if target_file_id is not None:
         if not await db.get_file(target_file_id):
-            await update.effective_chat.send_message("❌ File not found.")
+            await _send_emoji_text(update.effective_chat.id, "❌ File not found.", context=context)
             return
         await db.create_link(normal_code, "file", target_file_id, "normal", update.effective_user.id)
         await db.create_link(prem_code, "file", target_file_id, "premium", update.effective_user.id)
@@ -1769,7 +1938,7 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def batch(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     if not await _is_admin_or_owner(update, context):
-        await update.effective_chat.send_message("Not allowed.")
+        await _send_emoji_text(update.effective_chat.id, "Not allowed.", context=context)
         return
     if not update.effective_chat or not update.effective_user:
         return
@@ -1781,7 +1950,7 @@ async def batch(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 await context.bot.delete_message(chat_id=update.effective_chat.id, message_id=int(st["prompt_message_id"]))
             except Exception:
                 pass
-        await update.effective_chat.send_message("❌ Batch creation cancelled.")
+        await _send_emoji_text(update.effective_chat.id, "❌ Batch creation cancelled.", context=context)
         return
 
     # Channel-range batch (start/end post links).
@@ -1848,7 +2017,7 @@ async def batch_link_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
     if state.get("step") != "end":
         context.user_data.pop("chbatch_state", None)
-        await update.effective_chat.send_message("Batch state corrupted. Run /batch again.")
+        await _send_emoji_text(update.effective_chat.id, "Batch state corrupted. Run /batch again.", context=context)
         return
 
     if int(chat_id) != int(state.get("channel_id", 0)):
@@ -1911,7 +2080,7 @@ async def _batch_ui_edit(update: Update, context: ContextTypes.DEFAULT_TYPE, tex
         except Exception:
             pass
     # Fallback if edit not possible (message deleted etc.)
-    msg = await update.effective_chat.send_message(text)
+    msg = await _send_emoji_text(update.effective_chat.id, text, context=context)
     state["prompt_message_id"] = msg.message_id
     context.user_data["chbatch_state"] = state
 
@@ -1983,11 +2152,12 @@ def _custombatch_prompt_keyboard(session_id: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [
             [
-                InlineKeyboardButton(text="Generate Link", callback_data=f"cbgen:{session_id}"),
-                InlineKeyboardButton(text="Cancel Process", callback_data=f"cbcancel:{session_id}"),
+                InlineKeyboardButton(text="⚡ ɢᴇɴᴇʀᴀᴛᴇ ʟɪɴᴋ", callback_data=f"cbgen:{session_id}", style="success"),
+                InlineKeyboardButton(text="❌ ᴄᴀɴᴄᴇʟ ᴘʀᴏᴄᴇꜱꜱ", callback_data=f"cbcancel:{session_id}", style="danger"),
             ]
         ]
     )
+
 
 
 async def custombatch_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1996,7 +2166,7 @@ async def custombatch_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         return
     await q.answer()
     if not await _is_admin_or_owner(update, context):
-        await q.edit_message_text("Access denied. (Admin/Owner only)")
+        await _edit_emoji_text(q.message.chat.id, q.message.message_id, "Access denied. (Admin/Owner only, context=context)")
         return
 
     data = q.data or ""
@@ -2012,7 +2182,7 @@ async def custombatch_callback(update: Update, context: ContextTypes.DEFAULT_TYP
 
     if not state:
         try:
-            await q.edit_message_text("No active custom batch.\n\nStart it with: /custombatch")
+            await _edit_emoji_text(q.message.chat.id, q.message.message_id, "No active custom batch.\n\nStart it with: /custombatch", context=context)
         except Exception:
             pass
         return
@@ -2031,7 +2201,7 @@ async def custombatch_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             await q.delete_message()
         except Exception:
             try:
-                await q.edit_message_text("Custom batch cancelled.")
+                await _edit_emoji_text(q.message.chat.id, q.message.message_id, "Custom batch cancelled.", context=context)
             except Exception:
                 pass
         return
@@ -2039,7 +2209,7 @@ async def custombatch_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     if action == "cbgen":
         file_ids = state.get("file_ids") or []
         if not file_ids:
-            await q.edit_message_text("No files received yet.\n\nSend files first, or cancel.")
+            await _edit_emoji_text(q.message.chat.id, q.message.message_id, "No files received yet.\n\nSend files first, or cancel.", context=context)
             return
 
         db: Database = context.application.bot_data["db"]
@@ -2297,33 +2467,43 @@ async def gencode(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 def _gencode_keyboard(days: int, qty: int) -> InlineKeyboardMarkup:
-    d1 = "✅ 1 Day" if days == 1 else "1 Day"
-    d7 = "✅ 7 Days" if days == 7 else "7 Days"
-    d30 = "✅ 30 Days" if days == 30 else "30 Days"
-    d_custom = f"✅ Custom ({days}d)" if days not in (1, 7, 30) else "Custom Days"
+    d1 = "✔ 1 ᴅᴀʏ" if days == 1 else "1 ᴅᴀʏ"
+    d7 = "✔ 7 ᴅᴀʏꜱ" if days == 7 else "7 ᴅᴀʏꜱ"
+    d30 = "✔ 30 ᴅᴀʏꜱ" if days == 30 else "30 ᴅᴀʏꜱ"
+    d_custom = f"✔ ᴄᴜꜱᴛᴏᴍ ({days}ᴅ)" if days not in (1, 7, 30) else "ᴄᴜꜱᴛᴏᴍ ᴅᴀʏꜱ"
 
-    q1 = "✅ 1 Qty" if qty == 1 else "1 Qty"
-    q5 = "✅ 5 Qty" if qty == 5 else "5 Qty"
-    q10 = "✅ 10 Qty" if qty == 10 else "10 Qty"
-    q20 = "✅ 20 Qty" if qty == 20 else "20 Qty"
+    q1 = "✔ 1 Qᴛʏ" if qty == 1 else "1 Qᴛʏ"
+    q5 = "✔ 5 Qᴛʏ" if qty == 5 else "5 Qᴛʏ"
+    q10 = "✔ 10 Qᴛʏ" if qty == 10 else "10 Qᴛʏ"
+    q20 = "✔ 20 Qᴛʏ" if qty == 20 else "20 Qᴛʏ"
+
+    style_d1 = "primary" if days == 1 else None
+    style_d7 = "primary" if days == 7 else None
+    style_d30 = "primary" if days == 30 else None
+    style_dc = "primary" if days not in (1, 7, 30) else None
+
+    style_q1 = "primary" if qty == 1 else None
+    style_q5 = "primary" if qty == 5 else None
+    style_q10 = "primary" if qty == 10 else None
+    style_q20 = "primary" if qty == 20 else None
 
     return InlineKeyboardMarkup(
         [
             [
-                InlineKeyboardButton(d1, callback_data="gencodesel:days:1"),
-                InlineKeyboardButton(d7, callback_data="gencodesel:days:7"),
-                InlineKeyboardButton(d30, callback_data="gencodesel:days:30"),
+                InlineKeyboardButton(d1, callback_data="gencodesel:days:1", style=style_d1),
+                InlineKeyboardButton(d7, callback_data="gencodesel:days:7", style=style_d7),
+                InlineKeyboardButton(d30, callback_data="gencodesel:days:30", style=style_d30),
             ],
-            [InlineKeyboardButton(d_custom, callback_data="gencodesel:days:custom")],
+            [InlineKeyboardButton(d_custom, callback_data="gencodesel:days:custom", style=style_dc)],
             [
-                InlineKeyboardButton(q1, callback_data="gencodesel:qty:1"),
-                InlineKeyboardButton(q5, callback_data="gencodesel:qty:5"),
-                InlineKeyboardButton(q10, callback_data="gencodesel:qty:10"),
-                InlineKeyboardButton(q20, callback_data="gencodesel:qty:20"),
+                InlineKeyboardButton(q1, callback_data="gencodesel:qty:1", style=style_q1),
+                InlineKeyboardButton(q5, callback_data="gencodesel:qty:5", style=style_q5),
+                InlineKeyboardButton(q10, callback_data="gencodesel:qty:10", style=style_q10),
+                InlineKeyboardButton(q20, callback_data="gencodesel:qty:20", style=style_q20),
             ],
             [
-                InlineKeyboardButton("⚡ Generate Codes", callback_data="gencodesel:generate"),
-                InlineKeyboardButton("❌ Cancel", callback_data="gencodesel:cancel"),
+                InlineKeyboardButton("⚡ ɢᴇɴᴇʀᴀᴛᴇ ᴄᴏᴅᴇꜱ", callback_data="gencodesel:generate", style="success"),
+                InlineKeyboardButton("❌ ᴄᴀɴᴄᴇʟ", callback_data="gencodesel:cancel", style="danger"),
             ]
         ]
     )
@@ -2334,12 +2514,15 @@ async def _send_gencode_panel(update: Update, context: ContextTypes.DEFAULT_TYPE
     qty = context.user_data.get("gencode_qty", 1)
 
     text = (
-        "🎟️ [b]Premium Code Generator[/b]\n\n"
+        "<b>🎟️ ᴘʀᴇᴍɪᴜᴍ ᴄᴏᴅᴇ ɢᴇɴᴇʀᴀᴛᴏʀ</b>\n"
+        "━━━━━━━━━━━━━━\n\n"
         "Configure token settings using the buttons below:\n\n"
-        f"📅 [b]Duration Selected:[/b] {days} Day(s) Premium\n"
-        f"🔢 [b]Quantity Selected:[/b] {qty} Token(s)\n\n"
-        "👇 Customize options and click Generate:"
+        f"▸ <b>ᴅᴜʀᴀᴛɪᴏɴ</b>: <code>{days}</code> Day(s) Premium\n"
+        f"▸ <b>Qᴜᴀɴᴛɪᴛʏ</b>: <code>{qty}</code> Token(s)\n\n"
+        "━━━━━━━━━━━━━━\n"
+        "<i>Customize options and click Generate:</i>"
     )
+
 
     kb = _gencode_keyboard(days, qty)
 
@@ -2552,21 +2735,21 @@ def _pay_plan_keyboard(gateway: str = "manual", context: Optional[ContextTypes.D
     for key, plan in PAY_PLANS.items():
         limit = plan["daily_limit"]
         if limit == 999999:
-            limit_prefix = "👑 Unlimited Links"
+            limit_prefix = "👑 ᴜɴʟɪᴍɪᴛᴇᴅ ʟɪɴᴋꜱ"
         elif limit == 20:
-            limit_prefix = "🚀 20 Links/Day"
+            limit_prefix = "🚀 20 ʟɪɴᴋꜱ/ᴅᴀʏ"
         else:
-            limit_prefix = "💎 7 Links/Day"
+            limit_prefix = "💎 7 ʟɪɴᴋꜱ/ᴅᴀʏ"
 
         days = plan["days"]
         if days == 1:
-            duration = "1 Day"
+            duration = "1 ᴅᴀʏ"
         elif days == 7:
-            duration = "7 Days"
+            duration = "7 ᴅᴀʏꜱ"
         elif days == 30:
-            duration = "1 Month"
+            duration = "1 ᴍᴏɴᴛʜ"
         else:
-            duration = f"{days} Days"
+            duration = f"{days} ᴅᴀʏꜱ"
 
         # Label row (informational and non-clickable)
         label_text = f"🔹 {limit_prefix} ({duration}) 🔹"
@@ -2574,8 +2757,8 @@ def _pay_plan_keyboard(gateway: str = "manual", context: Optional[ContextTypes.D
         
         # Payment options row (UPI vs Telegram Stars)
         stars_price = plan.get("stars", plan["amount"])
-        pay_upi_btn = InlineKeyboardButton(f"💳 UPI (₹{plan['amount']})", callback_data=f"payplan:upi:{key}")
-        pay_stars_btn = InlineKeyboardButton(f"⭐ Stars ({stars_price})", callback_data=f"payplan:stars:{key}")
+        pay_upi_btn = InlineKeyboardButton(f"💳 ᴜᴘɪ (₹{plan['amount']})", callback_data=f"payplan:upi:{key}", style="success")
+        pay_stars_btn = InlineKeyboardButton(f"⭐ ꜱᴛᴀʀꜱ ({stars_price})", callback_data=f"payplan:stars:{key}", style="success")
         buttons.append([pay_upi_btn, pay_stars_btn])
         
     donation_url = None
@@ -2583,10 +2766,11 @@ def _pay_plan_keyboard(gateway: str = "manual", context: Optional[ContextTypes.D
         donation_url = context.application.bot_data.get("donation_invoice_link")
 
     if donation_url:
-        buttons.append([InlineKeyboardButton("💟 Donate 1 Star (Test Flow)", url=donation_url)])
+        buttons.append([InlineKeyboardButton("💟 ᴅᴏɴᴀᴛᴇ 1 ꜱᴛᴀʀ (ᴛᴇꜱᴛ ꜰʟᴏᴡ)", url=donation_url, style="success")])
     else:
-        buttons.append([InlineKeyboardButton("💟 Donate 1 Star (Test Flow)", callback_data="paydonation:1")])
+        buttons.append([InlineKeyboardButton("💟 ᴅᴏɴᴀᴛᴇ 1 ꜱᴛᴀʀ (ᴛᴇꜱᴛ ꜰʟᴏᴡ)", callback_data="paydonation:1", style="success")])
     return InlineKeyboardMarkup(buttons)
+
 
 
 def _upi_uri(upi_id: str, amount_rs: int, payee_name: str, note: str) -> str:
@@ -2682,7 +2866,8 @@ def _admin_contact_keyboard(context: ContextTypes.DEFAULT_TYPE) -> InlineKeyboar
     cfg = context.application.bot_data.get("cfg")
     owner_id = int(getattr(cfg, "owner_id", 0) or 0)
     url = f"tg://user?id={owner_id}" if owner_id else "https://t.me/"
-    return InlineKeyboardMarkup([[InlineKeyboardButton("Contact Admin", url=url)]])
+    return InlineKeyboardMarkup([[InlineKeyboardButton("👤 ᴄᴏɴᴛᴀᴄᴛ ᴀᴅᴍɪɴ", url=url, style="primary")]])
+
 
 
 async def _show_payment_timeout_ui(req: dict[str, Any], context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -5541,11 +5726,13 @@ async def revenue(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     date_to_str = now_ist.strftime("%d %B %Y")
 
     message = (
-        "📊 [b]Revenue Report[/b]\n\n"
-        f"gateway revenue: {gateway_rev}rs\n"
-        f"manual revenue: {manual_rev}\n"
-        f"star revenue: {star_rev}\n"
-        f"Date: {date_from_str} to {date_to_str}"
+        "📊 <b>ʀᴇᴠᴇɴᴜᴇ ʀᴇᴘᴏʀᴛ</b>\n"
+        "━━━━━━━━━━━━━━\n\n"
+        f"▸ <b>ɢᴀᴛᴇᴡᴀʏ ʀᴇᴠᴇɴᴜᴇ</b>: <code>{gateway_rev} rs</code>\n"
+        f"▸ <b>ᴍᴀɴᴜᴀʟ ʀᴇᴠᴇɴᴜᴇ</b>: <code>{manual_rev} rs</code>\n"
+        f"▸ <b>ꜱᴛᴀʀ ʀᴇᴠᴇɴᴜᴇ</b>: <code>{star_rev} Stars</code>\n"
+        f"▸ <b>ᴘᴇʀɪᴏᴅ</b>: <code>{date_from_str}</code> to <code>{date_to_str}</code>\n"
+        "━━━━━━━━━━━━━━"
     )
 
     await _send_emoji_text(update.effective_chat.id, message, context)

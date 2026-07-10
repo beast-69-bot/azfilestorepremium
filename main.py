@@ -47,19 +47,19 @@ async def _post_init(app: Application) -> None:
     # Note: Telegram bot commands are not access-controlled by Telegram itself; handlers still enforce permissions.
     # Show who can use which command in the command menu descriptions.
     commands = [
-        BotCommand("start", "Start / open link (User)"),
-        BotCommand("cancel", "Cancel current process (User/Admin)"),
-        BotCommand("redeem", "Redeem token (User)"),
-        BotCommand("plan", "View normal/premium plans (User)"),
-        BotCommand("pay", "Buy premium plan (User)"),
-        BotCommand("getlink", "Generate links (Admin/Owner)"),
-        BotCommand("batch", "Channel batch links (Admin/Owner)"),
-        BotCommand("custombatch", "Custom file batch (Admin/Owner)"),
-        BotCommand("bsettings", "Admin command guide panel (Admin/Owner)"),
-        BotCommand("extendlast24h", "Extend +1 day for last 24h buyers (Admin/Owner)"),
-        BotCommand("paylookup", "Lookup payment order details (Admin/Owner)"),
-        BotCommand("manualapprove", "Approve manual order by id (Admin/Owner)"),
-        BotCommand("revenue", "View monthly revenue stats (Admin/Owner)"),
+        BotCommand("start", "ꜱᴛᴀʀᴛ / ᴏᴘᴇɴ ʟɪɴᴋ (ᴜꜱᴇʀ)"),
+        BotCommand("cancel", "ᴄᴀɴᴄᴇʟ ᴄᴜʀʀᴇɴᴛ ᴘʀᴏᴄᴇꜱꜱ (ᴜꜱᴇʀ/ᴀᴅᴍɪɴ)"),
+        BotCommand("redeem", "ʀᴇᴅᴇᴇᴍ ᴛᴏᴋᴇɴ (ᴜꜱᴇʀ)"),
+        BotCommand("plan", "ᴠɪᴇᴡ ɴᴏʀᴍᴀʟ/ᴘʀᴇᴍɪᴜᴍ ᴘʟᴀɴꜱ (ᴜꜱᴇʀ)"),
+        BotCommand("pay", "ʙᴜʏ ᴘʀᴇᴍɪᴜᴍ ᴘʟᴀɴ (ᴜꜱᴇʀ)"),
+        BotCommand("getlink", "ɢᴇɴᴇʀᴀᴛᴇ ʟɪɴᴋꜱ (ᴀᴅᴍɪɴ/ᴏᴡɴᴇʀ)"),
+        BotCommand("batch", "ᴄʜᴀɴɴᴇʟ ʙᴀᴛᴄʜ ʟɪɴᴋꜱ (ᴀᴅᴍɪɴ/ᴏᴡɴᴇʀ)"),
+        BotCommand("custombatch", "ᴄᴜꜱᴛᴏᴍ ꜰɪʟᴇ ʙᴀᴛᴄʜ (ᴀᴅᴍɪɴ/ᴏᴡɴᴇʀ)"),
+        BotCommand("bsettings", "ᴀᴅᴍɪɴ ᴄᴏᴍᴍᴀɴᴅ ɢᴜɪᴅᴇ ᴘᴀɴᴇʟ (ᴀᴅᴍɪɴ/ᴏᴡɴᴇʀ)"),
+        BotCommand("extendlast24h", "ᴇxᴛᴇɴᴅ +1 ᴅᴀʏ ꜰᴏʀ ʟᴀꜱᴛ 24ʜ ʙᴜʏᴇʀꜱ (ᴀᴅᴍɪɴ/ᴏᴡɴᴇʀ)"),
+        BotCommand("paylookup", "ʟᴏᴏᴋᴜᴘ ᴘᴀʏᴍᴇɴᴛ ᴏʀᴅᴇʀ ᴅᴇᴛᴀɪʟꜱ (ᴀᴅᴍɪɴ/ᴏᴡɴᴇʀ)"),
+        BotCommand("manualapprove", "ᴀᴘᴘʀᴏᴠᴇ ᴍᴀɴᴜᴀʟ ᴏʀᴅᴇʀ ʙʏ ɪᴅ (ᴀᴅᴍɪɴ/ᴏᴡɴᴇʀ)"),
+        BotCommand("revenue", "ᴠɪᴇᴡ ᴍᴏɴᴛʜʟʏ ʀᴇᴠᴇɴᴜᴇ ꜱᴛᴀᴛꜱ (ᴀᴅᴍɪɴ/ᴏᴡɴᴇʀ)"),
     ]
     try:
         await app.bot.set_my_commands(commands)
