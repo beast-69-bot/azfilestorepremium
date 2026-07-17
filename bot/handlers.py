@@ -435,10 +435,10 @@ def _bsettings_keyboard(is_maintenance: bool = False) -> InlineKeyboardMarkup:
     for i in range(0, len(button_items), 2):
         row: list[InlineKeyboardButton] = []
         k1, label1, style1 = button_items[i]
-        row.append(InlineKeyboardButton(label1, callback_data=f"bset:{k1}", style=style1))
+        row.append(InlineKeyboardButton(label1, callback_data=f"bset:{k1}"))
         if i + 1 < len(button_items):
             k2, label2, style2 = button_items[i + 1]
-            row.append(InlineKeyboardButton(label2, callback_data=f"bset:{k2}", style=style2))
+            row.append(InlineKeyboardButton(label2, callback_data=f"bset:{k2}"))
         rows.append(row)
     return InlineKeyboardMarkup(rows)
 
@@ -447,14 +447,14 @@ def _bset_premiumch_panel_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [
             [
-                InlineKeyboardButton("➕ ᴀᴅᴅ", callback_data="bset:premiumch_add", style="success"),
+                InlineKeyboardButton("➕ ᴀᴅᴅ", callback_data="bset:premiumch_add"),
                 InlineKeyboardButton("📋 ʟɪꜱᴛ", callback_data="bset:premiumch_list"),
             ],
             [
-                InlineKeyboardButton("➖ ʀᴇᴍᴏᴠᴇ", callback_data="bset:premiumch_remove", style="danger"),
-                InlineKeyboardButton("🗑 ᴄʟᴇᴀʀ", callback_data="bset:premiumch_clear", style="danger"),
+                InlineKeyboardButton("➖ ʀᴇᴍᴏᴠᴇ", callback_data="bset:premiumch_remove"),
+                InlineKeyboardButton("🗑 ᴄʟᴇᴀʀ", callback_data="bset:premiumch_clear"),
             ],
-            [InlineKeyboardButton("🔙 ʙᴀᴄᴋ", callback_data="bset:back", style="danger")],
+            [InlineKeyboardButton("🔙 ʙᴀᴄᴋ", callback_data="bset:back")],
         ]
     )
 
@@ -489,14 +489,14 @@ def _bset_forcech_panel_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [
             [
-                InlineKeyboardButton("➕ ᴀᴅᴅ", callback_data="bset:forcech_add", style="success"),
+                InlineKeyboardButton("➕ ᴀᴅᴅ", callback_data="bset:forcech_add"),
                 InlineKeyboardButton("📋 ʟɪꜱᴛ", callback_data="bset:forcech_list"),
             ],
             [
-                InlineKeyboardButton("➖ ʀᴇᴍᴏᴠᴇ", callback_data="bset:forcech_remove", style="danger"),
-                InlineKeyboardButton("🗑 ʀᴇꜱᴇᴛ", callback_data="bset:forcech_reset", style="danger"),
+                InlineKeyboardButton("➖ ʀᴇᴍᴏᴠᴇ", callback_data="bset:forcech_remove"),
+                InlineKeyboardButton("🗑 ʀᴇꜱᴇᴛ", callback_data="bset:forcech_reset"),
             ],
-            [InlineKeyboardButton("🔙 ʙᴀᴄᴋ", callback_data="bset:back", style="danger")],
+            [InlineKeyboardButton("🔙 ʙᴀᴄᴋ", callback_data="bset:back")],
         ]
     )
 
@@ -527,28 +527,28 @@ def _bset_setpay_keyboard(gateway: str = "manual") -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [
             [
-                InlineKeyboardButton("👁 ᴠɪᴇᴡ ꜱᴛᴀᴛᴜꜱ", callback_data="bset:setpay_view", style="primary"),
+                InlineKeyboardButton("👁 ᴠɪᴇᴡ ꜱᴛᴀᴛᴜꜱ", callback_data="bset:setpay_view"),
             ],
             [
-                InlineKeyboardButton(f"💳 ᴍᴀɴᴜᴀʟ{active_indicator('manual')}", callback_data="bset:setpay_mode_manual", style=style_man),
-                InlineKeyboardButton(f"🔌 xᴡᴀʟʟᴇᴛ{active_indicator('xwallet')}", callback_data="bset:setpay_mode_xwallet", style=style_xwa),
-                InlineKeyboardButton(f"💳 ʀᴀᴢᴏʀᴘᴀʏ{active_indicator('razorpay')}", callback_data="bset:setpay_mode_razorpay", style=style_raz),
+                InlineKeyboardButton(f"💳 ᴍᴀɴᴜᴀʟ{active_indicator('manual')}", callback_data="bset:setpay_mode_manual"),
+                InlineKeyboardButton(f"🔌 xᴡᴀʟʟᴇᴛ{active_indicator('xwallet')}", callback_data="bset:setpay_mode_xwallet"),
+                InlineKeyboardButton(f"💳 ʀᴀᴢᴏʀᴘᴀʏ{active_indicator('razorpay')}", callback_data="bset:setpay_mode_razorpay"),
             ],
             [
-                InlineKeyboardButton("🆔 ꜱᴇᴛ ᴜᴘɪ ɪᴅ", callback_data="bset:setpay_upi", style="primary"),
-                InlineKeyboardButton("👤 ꜱᴇᴛ ɴᴀᴍᴇ", callback_data="bset:setpay_name", style="primary"),
+                InlineKeyboardButton("🆔 ꜱᴇᴛ ᴜᴘɪ ɪᴅ", callback_data="bset:setpay_upi"),
+                InlineKeyboardButton("👤 ꜱᴇᴛ ɴᴀᴍᴇ", callback_data="bset:setpay_name"),
             ],
             [
-                InlineKeyboardButton("🧾 ꜱᴇᴛ ɪɴꜱᴛʀᴜᴄᴛɪᴏɴꜱ", callback_data="bset:setpay_text", style="primary"),
-                InlineKeyboardButton("🎟 ꜱᴇᴛ xᴡᴀʟʟᴇᴛ ᴋᴇʏ", callback_data="bset:setpay_xwalletkey", style="primary"),
+                InlineKeyboardButton("🧾 ꜱᴇᴛ ɪɴꜱᴛʀᴜᴄᴛɪᴏɴꜱ", callback_data="bset:setpay_text"),
+                InlineKeyboardButton("🎟 ꜱᴇᴛ xᴡᴀʟʟᴇᴛ ᴋᴇʏ", callback_data="bset:setpay_xwalletkey"),
             ],
             [
-                InlineKeyboardButton("💳 ꜱᴇᴛ ʀᴀᴢᴏʀᴘᴀʏ ɪᴅ", callback_data="bset:setpay_razorpayid", style="primary"),
-                InlineKeyboardButton("🔑 ꜱᴇᴛ ʀᴀᴢᴏʀᴘᴀʏ ꜱᴇᴄʀᴇᴛ", callback_data="bset:setpay_razorpaysecret", style="primary"),
+                InlineKeyboardButton("💳 ꜱᴇᴛ ʀᴀᴢᴏʀᴘᴀʏ ɪᴅ", callback_data="bset:setpay_razorpayid"),
+                InlineKeyboardButton("🔑 ꜱᴇᴛ ʀᴀᴢᴏʀᴘᴀʏ ꜱᴇᴄʀᴇᴛ", callback_data="bset:setpay_razorpaysecret"),
             ],
             [
-                InlineKeyboardButton("🗑 ᴄʟᴇᴀʀ ᴜᴘɪ", callback_data="bset:setpay_clearupi", style="danger"),
-                InlineKeyboardButton("🔙 ʙᴀᴄᴋ", callback_data="bset:back", style="danger"),
+                InlineKeyboardButton("🗑 ᴄʟᴇᴀʀ ᴜᴘɪ", callback_data="bset:setpay_clearupi"),
+                InlineKeyboardButton("🔙 ʙᴀᴄᴋ", callback_data="bset:back"),
             ],
         ]
     )
@@ -1245,7 +1245,7 @@ def _join_keyboard(channels: list[dict[str, Any]], recheck_code: str) -> InlineK
                 rows.append([InlineKeyboardButton(text=f"📢 ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ: {title}", url=url)])
         else:
             rows.append([InlineKeyboardButton(text=f"🔒 ʀᴇQᴜɪʀᴇᴅ: {title}", callback_data="noop")])
-    rows.append([InlineKeyboardButton(text="✅ ɪ'ᴠᴇ ᴊᴏɪɴᴇᴅ (ʀᴇᴄʜᴇᴄᴋ)", callback_data=f"recheck:{recheck_code}", style="success")])
+    rows.append([InlineKeyboardButton(text="✅ ɪ'ᴠᴇ ᴊᴏɪɴᴇᴅ (ʀᴇᴄʜᴇᴄᴋ)", callback_data=f"recheck:{recheck_code}")])
     return InlineKeyboardMarkup(rows)
 
 
@@ -1253,7 +1253,7 @@ def _access_link_keyboard(normal_url: str, premium_url: str) -> InlineKeyboardMa
     return InlineKeyboardMarkup(
         [
             [InlineKeyboardButton(text="🔓 ɴᴏʀᴍᴀʟ ʟɪɴᴋ (ᴡɪᴛʜ ᴀᴅꜱ)", url=normal_url)],
-            [InlineKeyboardButton(text="⚡ ᴘʀᴇᴍɪᴜᴍ ʟɪɴᴋ (ɪɴꜱᴛᴀɴᴛ / ɴᴏ ᴀᴅꜱ)", url=premium_url, style="success")],
+            [InlineKeyboardButton(text="⚡ ᴘʀᴇᴍɪᴜᴍ ʟɪɴᴋ (ɪɴꜱᴛᴀɴᴛ / ɴᴏ ᴀᴅꜱ)", url=premium_url)],
         ]
     )
 
@@ -2226,8 +2226,8 @@ def _custombatch_prompt_keyboard(session_id: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [
             [
-                InlineKeyboardButton(text="⚡ ɢᴇɴᴇʀᴀᴛᴇ ʟɪɴᴋ", callback_data=f"cbgen:{session_id}", style="success"),
-                InlineKeyboardButton(text="❌ ᴄᴀɴᴄᴇʟ ᴘʀᴏᴄᴇꜱꜱ", callback_data=f"cbcancel:{session_id}", style="danger"),
+                InlineKeyboardButton(text="⚡ ɢᴇɴᴇʀᴀᴛᴇ ʟɪɴᴋ", callback_data=f"cbgen:{session_id}"),
+                InlineKeyboardButton(text="❌ ᴄᴀɴᴄᴇʟ ᴘʀᴏᴄᴇꜱꜱ", callback_data=f"cbcancel:{session_id}"),
             ]
         ]
     )
@@ -2564,20 +2564,20 @@ def _gencode_keyboard(days: int, qty: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [
             [
-                InlineKeyboardButton(d1, callback_data="gencodesel:days:1", style=style_d1),
-                InlineKeyboardButton(d7, callback_data="gencodesel:days:7", style=style_d7),
-                InlineKeyboardButton(d30, callback_data="gencodesel:days:30", style=style_d30),
+                InlineKeyboardButton(d1, callback_data="gencodesel:days:1"),
+                InlineKeyboardButton(d7, callback_data="gencodesel:days:7"),
+                InlineKeyboardButton(d30, callback_data="gencodesel:days:30"),
             ],
-            [InlineKeyboardButton(d_custom, callback_data="gencodesel:days:custom", style=style_dc)],
+            [InlineKeyboardButton(d_custom, callback_data="gencodesel:days:custom")],
             [
-                InlineKeyboardButton(q1, callback_data="gencodesel:qty:1", style=style_q1),
-                InlineKeyboardButton(q5, callback_data="gencodesel:qty:5", style=style_q5),
-                InlineKeyboardButton(q10, callback_data="gencodesel:qty:10", style=style_q10),
-                InlineKeyboardButton(q20, callback_data="gencodesel:qty:20", style=style_q20),
+                InlineKeyboardButton(q1, callback_data="gencodesel:qty:1"),
+                InlineKeyboardButton(q5, callback_data="gencodesel:qty:5"),
+                InlineKeyboardButton(q10, callback_data="gencodesel:qty:10"),
+                InlineKeyboardButton(q20, callback_data="gencodesel:qty:20"),
             ],
             [
-                InlineKeyboardButton("⚡ ɢᴇɴᴇʀᴀᴛᴇ ᴄᴏᴅᴇꜱ", callback_data="gencodesel:generate", style="success"),
-                InlineKeyboardButton("❌ ᴄᴀɴᴄᴇʟ", callback_data="gencodesel:cancel", style="danger"),
+                InlineKeyboardButton("⚡ ɢᴇɴᴇʀᴀᴛᴇ ᴄᴏᴅᴇꜱ", callback_data="gencodesel:generate"),
+                InlineKeyboardButton("❌ ᴄᴀɴᴄᴇʟ", callback_data="gencodesel:cancel"),
             ]
         ]
     )
@@ -2831,8 +2831,8 @@ def _pay_plan_keyboard(gateway: str = "manual", context: Optional[ContextTypes.D
         
         # Payment options row (UPI vs Telegram Stars)
         stars_price = plan.get("stars", plan["amount"])
-        pay_upi_btn = InlineKeyboardButton(f"💳 ᴜᴘɪ (₹{plan['amount']})", callback_data=f"payplan:upi:{key}", style="success")
-        pay_stars_btn = InlineKeyboardButton(f"⭐ ꜱᴛᴀʀꜱ ({stars_price})", callback_data=f"payplan:stars:{key}", style="success")
+        pay_upi_btn = InlineKeyboardButton(f"💳 ᴜᴘɪ (₹{plan['amount']})", callback_data=f"payplan:upi:{key}")
+        pay_stars_btn = InlineKeyboardButton(f"⭐ ꜱᴛᴀʀꜱ ({stars_price})", callback_data=f"payplan:stars:{key}")
         buttons.append([pay_upi_btn, pay_stars_btn])
         
     donation_url = None
@@ -2840,9 +2840,9 @@ def _pay_plan_keyboard(gateway: str = "manual", context: Optional[ContextTypes.D
         donation_url = context.application.bot_data.get("donation_invoice_link")
 
     if donation_url:
-        buttons.append([InlineKeyboardButton("💟 ᴅᴏɴᴀᴛᴇ 1 ꜱᴛᴀʀ (ᴛᴇꜱᴛ ꜰʟᴏᴡ)", url=donation_url, style="success")])
+        buttons.append([InlineKeyboardButton("💟 ᴅᴏɴᴀᴛᴇ 1 ꜱᴛᴀʀ (ᴛᴇꜱᴛ ꜰʟᴏᴡ)", url=donation_url)])
     else:
-        buttons.append([InlineKeyboardButton("💟 ᴅᴏɴᴀᴛᴇ 1 ꜱᴛᴀʀ (ᴛᴇꜱᴛ ꜰʟᴏᴡ)", callback_data="paydonation:1", style="success")])
+        buttons.append([InlineKeyboardButton("💟 ᴅᴏɴᴀᴛᴇ 1 ꜱᴛᴀʀ (ᴛᴇꜱᴛ ꜰʟᴏᴡ)", callback_data="paydonation:1")])
     return InlineKeyboardMarkup(buttons)
 
 
@@ -2940,7 +2940,7 @@ def _admin_contact_keyboard(context: ContextTypes.DEFAULT_TYPE) -> InlineKeyboar
     cfg = context.application.bot_data.get("cfg")
     owner_id = int(getattr(cfg, "owner_id", 0) or 0)
     url = f"tg://user?id={owner_id}" if owner_id else "https://t.me/"
-    return InlineKeyboardMarkup([[InlineKeyboardButton("👤 ᴄᴏɴᴛᴀᴄᴛ ᴀᴅᴍɪɴ", url=url, style="primary")]])
+    return InlineKeyboardMarkup([[InlineKeyboardButton("👤 ᴄᴏɴᴛᴀᴄᴛ ᴀᴅᴍɪɴ", url=url)]])
 
 
 
