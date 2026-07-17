@@ -6751,7 +6751,12 @@ async def listbots(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.effective_user.id if update.effective_user else 0
     db = context.application.bot_data["db"]
     bots = await db.list_sub_bots()
-    user_bots = [b for b in bots if b["added_by"] == user_id]
+    cfg = context.application.bot_data["cfg"]
+    is_main_owner = (int(user_id) == int(cfg.owner_id))
+    if is_main_owner:
+        user_bots = bots
+    else:
+        user_bots = [b for b in bots if b["added_by"] == user_id]
 
     if not user_bots:
         await _send_emoji_text(
@@ -6822,7 +6827,12 @@ async def delbot(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.effective_user.id if update.effective_user else 0
     db = context.application.bot_data["db"]
     bots = await db.list_sub_bots()
-    user_bots = [b for b in bots if b["added_by"] == user_id]
+    cfg = context.application.bot_data["cfg"]
+    is_main_owner = (int(user_id) == int(cfg.owner_id))
+    if is_main_owner:
+        user_bots = bots
+    else:
+        user_bots = [b for b in bots if b["added_by"] == user_id]
 
     if not user_bots:
         await _send_emoji_text(
