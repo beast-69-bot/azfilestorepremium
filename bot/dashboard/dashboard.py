@@ -34,7 +34,7 @@ async def mbot_callback_router(update: Update, context: ContextTypes.DEFAULT_TYP
     user_id = update.effective_user.id
     db: Database = context.application.bot_data["db"]
     cfg = context.application.bot_data["cfg"]
-    defaults = context.application.defaults
+    defaults = getattr(context.application, "_defaults", None)
 
     from bot.handlers import _welcome_text, _format_custom_emojis_html, start_sub_bot, stop_sub_bot, SETTINGS_START_IMG_URL
 

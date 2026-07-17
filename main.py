@@ -45,7 +45,7 @@ async def _post_init(app: Application) -> None:
 
     # Start sub-bot deployment queue worker
     from bot.deployment import start_queue_worker
-    await start_queue_worker(db, cfg, app.defaults)
+    await start_queue_worker(db, cfg, getattr(app, "_defaults", None))
 
     # Load and start all registered sub-bots in the background
     from bot.handlers import load_all_sub_bots
