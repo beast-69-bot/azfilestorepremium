@@ -36,6 +36,11 @@ async def mbot_callback_router(update: Update, context: ContextTypes.DEFAULT_TYP
     cfg = context.application.bot_data["cfg"]
     defaults = getattr(context.application, "_defaults", None)
 
+    is_admin = (int(user_id) == int(cfg.owner_id)) or (await db.is_admin(user_id))
+    if not is_admin:
+        await q.message.reply_text("❌ Access denied. Admins only.")
+        return
+
     from bot.handlers import _welcome_text, _format_custom_emojis_html, start_sub_bot, stop_sub_bot, SETTINGS_START_IMG_URL
 
     if data == "mbot_create":

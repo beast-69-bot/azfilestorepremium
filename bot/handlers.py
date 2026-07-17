@@ -6765,6 +6765,8 @@ async def load_all_sub_bots(app: Application) -> None:
 
 
 async def listbots(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not await _is_admin_or_owner(update, context):
+        return
     user_id = update.effective_user.id if update.effective_user else 0
     db = context.application.bot_data["db"]
     bots = await db.list_sub_bots()
@@ -6803,6 +6805,8 @@ async def listbots(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def addbot(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not await _is_admin_or_owner(update, context):
+        return
     user_id = update.effective_user.id if update.effective_user else 0
     db = context.application.bot_data["db"]
     bots = await db.list_sub_bots()
@@ -6832,6 +6836,8 @@ async def addbot(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def delbot(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not await _is_admin_or_owner(update, context):
+        return
     user_id = update.effective_user.id if update.effective_user else 0
     db = context.application.bot_data["db"]
     bots = await db.list_sub_bots()
