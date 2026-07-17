@@ -13,7 +13,7 @@ from typing import Any, Optional
 from urllib.parse import parse_qs, quote, urlparse
 
 import httpx
-from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup, MessageEntity, Update, LabeledPrice
+from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup, MessageEntity, Update, LabeledPrice, BotCommand
 from telegram.constants import ChatMemberStatus, MessageEntityType
 from telegram.error import Forbidden, RetryAfter
 from telegram.ext import (
