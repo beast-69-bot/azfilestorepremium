@@ -17,10 +17,16 @@ from bot.security import decrypt_token
 
 logger = logging.getLogger(__name__)
 
-async def _get_sub_bot_by_username(db: Database, username: str) -> Optional[dict[str, Any]]:
+async def _get_sub_bot_by_username(db: Database, username: str, user_id: Optional[int] = None, cfg: Optional[Any] = None) -> Optional[dict[str, Any]]:
     bots = await db.list_sub_bots()
     for b in bots:
         if b.get("bot_username") == username:
+            if user_id is not None and cfg is not None:
+                is_main_owner = (int(user_id) == int(cfg.owner_id))
+                if is_main_owner:
+                    doc = dict(b)
+                    doc["added_by"] = user_id
+                    return doc
             return b
     return None
 
@@ -96,7 +102,11 @@ async def mbot_callback_router(update: Update, context: ContextTypes.DEFAULT_TYP
 
     elif data == "mbot_list":
         bots = await db.list_sub_bots()
-        user_bots = [b for b in bots if b["added_by"] == user_id]
+        is_main_owner = (int(user_id) == int(cfg.owner_id))
+        if is_main_owner:
+            user_bots = bots
+        else:
+            user_bots = [b for b in bots if b["added_by"] == user_id]
         
         if not user_bots:
             await q.message.edit_text(
@@ -127,7 +137,7 @@ async def mbot_callback_router(update: Update, context: ContextTypes.DEFAULT_TYP
 
     elif data.startswith("mbot_dash:"):
         uname = data.split(":", 1)[1]
-        bot_doc = await _get_sub_bot_by_username(db, uname)
+        bot_doc = await _get_sub_bot_by_username(db, uname, user_id, cfg)
         if not bot_doc or bot_doc["added_by"] != user_id:
             await q.message.reply_text("❌ Bot not found or access denied.")
             return
@@ -173,7 +183,7 @@ async def mbot_callback_router(update: Update, context: ContextTypes.DEFAULT_TYP
 
     elif data.startswith("mbot_settings:"):
         uname = data.split(":", 1)[1]
-        bot_doc = await _get_sub_bot_by_username(db, uname)
+        bot_doc = await _get_sub_bot_by_username(db, uname, user_id, cfg)
         if not bot_doc or bot_doc["added_by"] != user_id:
             return
             
@@ -203,7 +213,7 @@ async def mbot_callback_router(update: Update, context: ContextTypes.DEFAULT_TYP
 
     elif data.startswith("mbot_logs:"):
         uname = data.split(":", 1)[1]
-        bot_doc = await _get_sub_bot_by_username(db, uname)
+        bot_doc = await _get_sub_bot_by_username(db, uname, user_id, cfg)
         if not bot_doc or bot_doc["added_by"] != user_id:
             return
             
@@ -222,7 +232,7 @@ async def mbot_callback_router(update: Update, context: ContextTypes.DEFAULT_TYP
 
     elif data.startswith("mbot_analytics:"):
         uname = data.split(":", 1)[1]
-        bot_doc = await _get_sub_bot_by_username(db, uname)
+        bot_doc = await _get_sub_bot_by_username(db, uname, user_id, cfg)
         if not bot_doc or bot_doc["added_by"] != user_id:
             return
             
@@ -244,7 +254,7 @@ async def mbot_callback_router(update: Update, context: ContextTypes.DEFAULT_TYP
 
     elif data.startswith("mbot_restart:"):
         uname = data.split(":", 1)[1]
-        bot_doc = await _get_sub_bot_by_username(db, uname)
+        bot_doc = await _get_sub_bot_by_username(db, uname, user_id, cfg)
         if not bot_doc or bot_doc["added_by"] != user_id:
             return
             
@@ -279,7 +289,7 @@ async def mbot_callback_router(update: Update, context: ContextTypes.DEFAULT_TYP
 
     elif data.startswith("mbot_dodel:"):
         uname = data.split(":", 1)[1]
-        bot_doc = await _get_sub_bot_by_username(db, uname)
+        bot_doc = await _get_sub_bot_by_username(db, uname, user_id, cfg)
         if bot_doc and bot_doc["added_by"] == user_id:
             token = bot_doc["token"]
             await stop_sub_bot(token)
@@ -292,7 +302,7 @@ async def mbot_callback_router(update: Update, context: ContextTypes.DEFAULT_TYP
 
     elif data.startswith("mbot_setchan:"):
         uname = data.split(":", 1)[1]
-        bot_doc = await _get_sub_bot_by_username(db, uname)
+        bot_doc = await _get_sub_bot_by_username(db, uname, user_id, cfg)
         if not bot_doc or bot_doc["added_by"] != user_id:
             return
             
@@ -308,7 +318,7 @@ async def mbot_callback_router(update: Update, context: ContextTypes.DEFAULT_TYP
 
     elif data.startswith("mbot_setowner:"):
         uname = data.split(":", 1)[1]
-        bot_doc = await _get_sub_bot_by_username(db, uname)
+        bot_doc = await _get_sub_bot_by_username(db, uname, user_id, cfg)
         if not bot_doc or bot_doc["added_by"] != user_id:
             return
             
@@ -325,7 +335,7 @@ async def mbot_callback_router(update: Update, context: ContextTypes.DEFAULT_TYP
 
     elif data.startswith("mbot_fsub:"):
         uname = data.split(":", 1)[1]
-        bot_doc = await _get_sub_bot_by_username(db, uname)
+        bot_doc = await _get_sub_bot_by_username(db, uname, user_id, cfg)
         if not bot_doc or bot_doc["added_by"] != user_id:
             return
             
@@ -355,7 +365,7 @@ async def mbot_callback_router(update: Update, context: ContextTypes.DEFAULT_TYP
 
     elif data.startswith("mbot_addfsub:"):
         uname = data.split(":", 1)[1]
-        bot_doc = await _get_sub_bot_by_username(db, uname)
+        bot_doc = await _get_sub_bot_by_username(db, uname, user_id, cfg)
         if not bot_doc or bot_doc["added_by"] != user_id:
             return
             
@@ -370,7 +380,7 @@ async def mbot_callback_router(update: Update, context: ContextTypes.DEFAULT_TYP
 
     elif data.startswith("mbot_remfsub:"):
         uname = data.split(":", 1)[1]
-        bot_doc = await _get_sub_bot_by_username(db, uname)
+        bot_doc = await _get_sub_bot_by_username(db, uname, user_id, cfg)
         if not bot_doc or bot_doc["added_by"] != user_id:
             return
             
@@ -396,7 +406,7 @@ async def mbot_callback_router(update: Update, context: ContextTypes.DEFAULT_TYP
         uname = parts[1]
         cid = int(parts[2])
         
-        bot_doc = await _get_sub_bot_by_username(db, uname)
+        bot_doc = await _get_sub_bot_by_username(db, uname, user_id, cfg)
         if bot_doc and bot_doc["added_by"] == user_id:
             await db.remove_force_channel(cid, uname)
             await q.message.reply_text("✅ Force channel removed successfully!")
@@ -410,7 +420,7 @@ async def mbot_callback_router(update: Update, context: ContextTypes.DEFAULT_TYP
         mode = parts[2]
         cid = int(parts[3])
         
-        bot_doc = await _get_sub_bot_by_username(db, uname)
+        bot_doc = await _get_sub_bot_by_username(db, uname, user_id, cfg)
         if not bot_doc or bot_doc["added_by"] != user_id:
             return
 
