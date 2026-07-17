@@ -251,7 +251,7 @@ class Database:
             )
             await self.conn.execute("DROP TABLE force_channels_old")
 
-        # Migrate sub_bots to support log_channel_id and bot_username
+        # Migrate sub_bots to support log_channel_id, bot_username, and owner_id
         cur = await self.conn.execute("PRAGMA table_info(sub_bots)")
         scols = await cur.fetchall()
         await cur.close()
@@ -260,6 +260,8 @@ class Database:
             await self.conn.execute("ALTER TABLE sub_bots ADD COLUMN log_channel_id INTEGER")
         if "bot_username" not in scol_names:
             await self.conn.execute("ALTER TABLE sub_bots ADD COLUMN bot_username TEXT")
+        if "owner_id" not in scol_names:
+            await self.conn.execute("ALTER TABLE sub_bots ADD COLUMN owner_id INTEGER")
 
         await self.conn.commit()
 
@@ -1109,18 +1111,20 @@ class Database:
         )
         await self.conn.commit()
 
-    async def add_sub_bot(self, token: str, added_by: int, log_channel_id: int | None = None, bot_username: str | None = None) -> None:
+    async def add_sub_bot(self, token: str, added_by: int, log_channel_id: int | None = None, bot_username: str | None = None, owner_id: int | None = None) -> None:
         now = _now()
+        final_owner = int(owner_id) if owner_id is not None else int(added_by)
         await self.conn.execute(
             """
-            INSERT INTO sub_bots(token, added_by, added_at, log_channel_id, bot_username) VALUES(?, ?, ?, ?, ?)
+            INSERT INTO sub_bots(token, added_by, added_at, log_channel_id, bot_username, owner_id) VALUES(?, ?, ?, ?, ?, ?)
             ON CONFLICT(token) DO UPDATE SET
                 added_by=excluded.added_by,
                 added_at=excluded.added_at,
                 log_channel_id=excluded.log_channel_id,
-                bot_username=excluded.bot_username
+                bot_username=excluded.bot_username,
+                owner_id=excluded.owner_id
             """,
-            (str(token), int(added_by), now, log_channel_id, bot_username),
+            (str(token), int(added_by), now, log_channel_id, bot_username, final_owner),
         )
         await self.conn.commit()
 
@@ -1128,6 +1132,13 @@ class Database:
         await self.conn.execute(
             "UPDATE sub_bots SET log_channel_id=? WHERE token=?",
             (int(log_channel_id), str(token)),
+        )
+        await self.conn.commit()
+
+    async def update_sub_bot_owner(self, token: str, owner_id: int) -> None:
+        await self.conn.execute(
+            "UPDATE sub_bots SET owner_id=? WHERE token=?",
+            (int(owner_id), str(token)),
         )
         await self.conn.commit()
 
@@ -1140,7 +1151,7 @@ class Database:
 
     async def list_sub_bots(self) -> list[dict[str, Any]]:
         cur = await self.conn.execute(
-            "SELECT token, added_by, added_at, log_channel_id, bot_username FROM sub_bots"
+            "SELECT token, added_by, added_at, log_channel_id, bot_username, owner_id FROM sub_bots"
         )
         rows = await cur.fetchall()
         await cur.close()
@@ -1152,6 +1163,7 @@ class Database:
                 "added_at": r[2],
                 "log_channel_id": r[3],
                 "bot_username": r[4],
+                "owner_id": r[5] if r[5] is not None else r[1],
             })
         return out
 

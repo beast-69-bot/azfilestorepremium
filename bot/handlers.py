@@ -2323,7 +2323,7 @@ async def custombatch_callback(update: Update, context: ContextTypes.DEFAULT_TYP
 async def addadmin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     cfg = context.application.bot_data["cfg"]
-    if not _is_owner(update, cfg):
+    if not _is_owner(update, cfg, context):
         await _send_emoji_text(update.effective_chat.id, "🚫 Owner only.", context)
         return
     if not context.args:
@@ -2342,7 +2342,7 @@ async def addadmin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def removeadmin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     cfg = context.application.bot_data["cfg"]
-    if not _is_owner(update, cfg):
+    if not _is_owner(update, cfg, context):
         await _send_emoji_text(update.effective_chat.id, "🚫 Owner only.", context)
         return
     if not context.args:
@@ -4886,7 +4886,7 @@ async def bsettings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return
     if data == "bset:addadmin_action":
         cfg = context.application.bot_data["cfg"]
-        if not _is_owner(update, cfg):
+        if not _is_owner(update, cfg, context):
             await q.answer("Owner only", show_alert=True)
             return
         context.user_data["bset_addadmin_wait"] = True
@@ -4903,7 +4903,7 @@ async def bsettings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return
     if data == "bset:removeadmin_action":
         cfg = context.application.bot_data["cfg"]
-        if not _is_owner(update, cfg):
+        if not _is_owner(update, cfg, context):
             await q.answer("Owner only", show_alert=True)
             return
         context.user_data["bset_removeadmin_wait"] = True
@@ -5136,7 +5136,7 @@ async def bsettings_owner_addadmin_input(update: Update, context: ContextTypes.D
     if not context.user_data.get("bset_addadmin_wait"):
         return
     cfg = context.application.bot_data["cfg"]
-    if not _is_owner(update, cfg):
+    if not _is_owner(update, cfg, context):
         context.user_data.pop("bset_addadmin_wait", None)
         return
 
@@ -5159,7 +5159,7 @@ async def bsettings_owner_removeadmin_input(update: Update, context: ContextType
     if not context.user_data.get("bset_removeadmin_wait"):
         return
     cfg = context.application.bot_data["cfg"]
-    if not _is_owner(update, cfg):
+    if not _is_owner(update, cfg, context):
         context.user_data.pop("bset_removeadmin_wait", None)
         return
 
@@ -6535,6 +6535,11 @@ async def unified_text_input_router(update: Update, context: ContextTypes.DEFAUL
         await mbot_new_channel_input(update, context)
         return
 
+    # 11.5. Multi-bot update owner ID input
+    if ud.get("mbot_setowner_wait"):
+        await mbot_new_owner_input(update, context)
+        return
+
     # 12. Multi-bot add force channel input
     if ud.get("mbot_fsub_wait"):
         await mbot_new_fsub_channel_input(update, context)
@@ -6645,7 +6650,7 @@ async def start_sub_bot(token: str, db, cfg, defaults) -> str:
     except Exception as e:
         logger.error("Failed to query sub-bot details from DB: %s", e)
 
-    owner_id = sub_doc["added_by"] if sub_doc else int(cfg.owner_id)
+    owner_id = sub_doc.get("owner_id", sub_doc["added_by"]) if sub_doc else int(cfg.owner_id)
     log_channel_id = sub_doc.get("log_channel_id") if sub_doc else None
 
     # 2. Build the Application
@@ -6843,7 +6848,7 @@ async def delbot(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 # Modular imports routed from creator, fsub, and dashboard packages
-from bot.creator import mbot_token_input, mbot_channel_input, mbot_new_channel_input
+from bot.creator import mbot_token_input, mbot_channel_input, mbot_new_channel_input, mbot_new_owner_input
 from bot.fsub import mbot_new_fsub_channel_input
 from bot.dashboard import mbot_callback_router
 

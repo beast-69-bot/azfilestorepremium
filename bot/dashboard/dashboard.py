@@ -157,10 +157,13 @@ async def mbot_callback_router(update: Update, context: ContextTypes.DEFAULT_TYP
                 ],
                 [
                     InlineKeyboardButton("📂 Log Channel", callback_data=f"mbot_setchan:{uname}"),
-                    InlineKeyboardButton("📊 Analytics", callback_data=f"mbot_analytics:{uname}"),
+                    InlineKeyboardButton("👑 Owner ID", callback_data=f"mbot_setowner:{uname}"),
                 ],
                 [
+                    InlineKeyboardButton("📊 Analytics", callback_data=f"mbot_analytics:{uname}"),
                     InlineKeyboardButton("🔄 Restart", callback_data=f"mbot_restart:{uname}"),
+                ],
+                [
                     InlineKeyboardButton("🗑 Delete", callback_data=f"mbot_del:{uname}"),
                 ],
                 [InlineKeyboardButton("🔙 Back to List", callback_data="mbot_list")]
@@ -178,11 +181,13 @@ async def mbot_callback_router(update: Update, context: ContextTypes.DEFAULT_TYP
         running = token in RUNNING_SUB_BOTS
         health = get_health_metrics(token, running)
         
+        owner_id = bot_doc.get("owner_id", bot_doc["added_by"])
         text = (
             f"⚙️ <b>ʙᴏᴛ ꜱᴇᴛᴛɪɴɢꜱ</b>\n"
             f"━━━━━━━━━━━━━━━━━━\n"
             f"◈ <b>Name:</b> {uname}\n"
             f"◈ <b>Username:</b> @{uname}\n"
+            f"◈ <b>Owner ID:</b> <code>{owner_id}</code>\n"
             f"◈ <b>Uptime:</b> {health['uptime']}\n"
             f"◈ <b>Memory:</b> {health['memory']}\n"
             f"◈ <b>CPU:</b> {health['cpu']}\n"
@@ -297,6 +302,23 @@ async def mbot_callback_router(update: Update, context: ContextTypes.DEFAULT_TYP
             f"Current channel: <code>{bot_doc.get('log_channel_id') or 'Not Set'}</code>\n\n"
             "Send the new channel ID (e.g. <code>-1001234567890</code>).\n"
             f"Make sure @{uname} is an Admin in the channel with post permissions.",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ ᴄᴀɴᴄᴇʟ", callback_data=f"mbot_dash:{uname}")]])
+        )
+
+    elif data.startswith("mbot_setowner:"):
+        uname = data.split(":", 1)[1]
+        bot_doc = await _get_sub_bot_by_username(db, uname)
+        if not bot_doc or bot_doc["added_by"] != user_id:
+            return
+            
+        context.user_data["mbot_setowner_wait"] = uname
+        owner_id = bot_doc.get("owner_id", bot_doc["added_by"])
+        await q.message.edit_text(
+            "👑 <b>ꜱᴇᴛ ᴏᴡɴᴇʀ ɪᴅ</b>\n━━━━━━━━━━━━━━━━━━\n\n"
+            f"Current Owner ID: <code>{owner_id}</code>\n\n"
+            "Send the new Owner Telegram User ID (e.g. <code>5831144522</code>).\n"
+            f"This user will get full admin permissions on @{uname}.",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ ᴄᴀɴᴄᴇʟ", callback_data=f"mbot_dash:{uname}")]])
         )

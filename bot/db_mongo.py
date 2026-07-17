@@ -899,11 +899,12 @@ class MongoDatabase:
             upsert=True
         )
 
-    async def add_sub_bot(self, token: str, added_by: int, log_channel_id: int | None = None, bot_username: str | None = None) -> None:
+    async def add_sub_bot(self, token: str, added_by: int, log_channel_id: int | None = None, bot_username: str | None = None, owner_id: int | None = None) -> None:
         now = _now()
+        final_owner = int(owner_id) if owner_id is not None else int(added_by)
         await self.db.sub_bots.update_one(
             {"token": str(token)},
-            {"$set": {"added_by": int(added_by), "added_at": now, "log_channel_id": log_channel_id, "bot_username": bot_username}},
+            {"$set": {"added_by": int(added_by), "added_at": now, "log_channel_id": log_channel_id, "bot_username": bot_username, "owner_id": final_owner}},
             upsert=True,
         )
 
@@ -911,6 +912,12 @@ class MongoDatabase:
         await self.db.sub_bots.update_one(
             {"token": str(token)},
             {"$set": {"log_channel_id": int(log_channel_id)}},
+        )
+
+    async def update_sub_bot_owner(self, token: str, owner_id: int) -> None:
+        await self.db.sub_bots.update_one(
+            {"token": str(token)},
+            {"$set": {"owner_id": int(owner_id)}},
         )
 
     async def remove_sub_bot(self, token: str) -> None:
@@ -926,6 +933,7 @@ class MongoDatabase:
                 "added_at": doc["added_at"],
                 "log_channel_id": doc.get("log_channel_id"),
                 "bot_username": doc.get("bot_username"),
+                "owner_id": doc.get("owner_id", doc["added_by"]),
             })
         return out
 

@@ -201,3 +201,43 @@ async def mbot_new_channel_input(update: Update, context: ContextTypes.DEFAULT_T
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 ᴅᴀꜱʜʙᴏᴀʀᴅ", callback_data=f"mbot_dash:{uname}")]])
     )
+
+
+async def mbot_new_owner_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    owner_text = (update.effective_message.text or "").strip()
+    user_id = update.effective_user.id
+    db: Database = context.application.bot_data["db"]
+    
+    uname = context.user_data.get("mbot_setowner_wait")
+    if not uname:
+        return
+        
+    try:
+        new_owner_id = int(owner_text)
+    except ValueError:
+        await update.effective_message.reply_text("❌ Invalid format. Please send a numeric Telegram User ID.")
+        return
+        
+    from bot.dashboard import _get_sub_bot_by_username
+    bot_doc = await _get_sub_bot_by_username(db, uname)
+    if not bot_doc or bot_doc["added_by"] != user_id:
+        return
+
+    status_msg = await update.effective_message.reply_text("⏳ Updating owner ID...")
+    
+    await db.update_sub_bot_owner(bot_doc["token"], new_owner_id)
+    
+    from bot.deployment import RUNNING_SUB_BOTS
+    running_app = RUNNING_SUB_BOTS.get(bot_doc["token"])
+    if running_app:
+        running_app.bot_data["sub_bot_info"]["owner_id"] = new_owner_id
+        
+    context.user_data.pop("mbot_setowner_wait", None)
+    
+    await status_msg.edit_text(
+        f"👑 <b>ᴏᴡɴᴇʀ ɪᴅ ᴜᴘᴅᴀᴛᴇᴅ</b>\n━━━━━━━━━━━━━━━━━━\n\n"
+        f"▸ <b>Bot:</b> @{uname}\n"
+        f"▸ <b>New Owner ID:</b> <code>{new_owner_id}</code>",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 ᴅᴀꜱʜʙᴏᴀʀᴅ", callback_data=f"mbot_dash:{uname}")]])
+    )
