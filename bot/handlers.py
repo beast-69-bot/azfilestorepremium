@@ -1466,39 +1466,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         raw_text = _welcome_text()
         formatted_text = await _format_custom_emojis_html(raw_text, context)
 
-        # If sub-bot, keep the traditional greeting
-        if context.application.bot_data.get("is_sub_bot"):
-            if img_url:
-                try:
-                    await update.effective_chat.send_photo(photo=img_url, caption=formatted_text, parse_mode="HTML")
-                    return
-                except Exception as e:
-                    logger.warning("start sub-bot: send_photo failed (%s), showing text only", e)
-            await _send_emoji_text(update.effective_chat.id, text=formatted_text, parse_mode="HTML", context=context)
-            return
-
-        # Main bot: add creator menu options
-        formatted_text += (
-            "\n\n🤖 <b>ᴄʟᴏɴᴇᴅ ʙᴏᴛ ᴄʀᴇᴀᴛᴏʀ</b>\n"
-            "━━━━━━━━━━━━━━━━━━\n"
-            "Aap is bot ki help se apna khud ka FileStore bot create kar sakte hain. "
-            "Niche diye buttons use karein:"
-        )
-        kb = InlineKeyboardMarkup(
-            [
-                [
-                    InlineKeyboardButton("⚡ ᴄʀᴇᴀᴛᴇ ʙᴏᴛ", callback_data="mbot_create"),
-                    InlineKeyboardButton("📋 ᴍʏ ʙᴏᴛꜱ", callback_data="mbot_list"),
-                ]
-            ]
-        )
         if img_url:
             try:
-                await update.effective_chat.send_photo(photo=img_url, caption=formatted_text, parse_mode="HTML", reply_markup=kb)
+                await update.effective_chat.send_photo(photo=img_url, caption=formatted_text, parse_mode="HTML")
                 return
             except Exception as e:
-                logger.warning("start main-bot: send_photo failed (%s), showing text only", e)
-        await _send_emoji_text(update.effective_chat.id, text=formatted_text, parse_mode="HTML", context=context, reply_markup=kb)
+                logger.warning("start: send_photo failed (%s), showing text only", e)
+        await _send_emoji_text(update.effective_chat.id, text=formatted_text, parse_mode="HTML", context=context)
         return
 
     await _deliver_by_code(update, context, code)
