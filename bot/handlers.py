@@ -6680,30 +6680,32 @@ async def start_sub_bot(token: str, db, cfg, defaults) -> str:
         BotCommand("batch", "ᴄʜᴀɴɴᴇʟ ʙᴀᴛᴄʜ ʟɪɴᴋꜱ (ᴀᴅᴍɪɴ/ᴏᴡɴᴇʀ)"),
         BotCommand("custombatch", "ᴄᴜꜱᴛᴏᴍ ꜰɪʟᴇ ʙᴀᴛᴄʜ (ᴀᴅᴍɪɴ/ᴏᴡɴᴇʀ)"),
     ]
-    try:
-        await sub_app.bot.set_my_commands(commands)
-    except Exception as e:
-        logger.warning("Failed to set sub-bot commands: %r", e)
-
-    # 5. Generate cached donation invoice link for Telegram Stars
-    try:
-        prices = [LabeledPrice(label="Donation", amount=1)]
-        donation_link = await sub_app.bot.create_invoice_link(
-            title="Support Bot / Test Stars",
-            description="Donate 1 Star to support development or test the payment flow.",
-            payload="donation:1",
-            provider_token="",
-            currency="XTR",
-            prices=prices,
-        )
-        sub_app.bot_data["donation_invoice_link"] = donation_link
-    except Exception:
-        pass
-
-    # 6. Initialize, start, and begin polling
+    # 5. Initialize, start, and begin polling
     await sub_app.initialize()
     await sub_app.start()
     await sub_app.updater.start_polling(allowed_updates=Update.ALL_TYPES)
+
+    # 6. Set commands and generate donation link in the background to speed up setup
+    async def post_start_setup():
+        try:
+            await sub_app.bot.set_my_commands(commands)
+        except Exception as e:
+            logger.warning("Failed to set sub-bot commands: %r", e)
+        try:
+            prices = [LabeledPrice(label="Donation", amount=1)]
+            donation_link = await sub_app.bot.create_invoice_link(
+                title="Support Bot / Test Stars",
+                description="Donate 1 Star to support development or test the payment flow.",
+                payload="donation:1",
+                provider_token="",
+                currency="XTR",
+                prices=prices,
+            )
+            sub_app.bot_data["donation_invoice_link"] = donation_link
+        except Exception:
+            pass
+
+    asyncio.create_task(post_start_setup())
 
     RUNNING_SUB_BOTS[token] = sub_app
     logger.info("Successfully started sub-bot: @%s", username)

@@ -100,9 +100,15 @@ async def mbot_channel_input(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return
 
     try:
-        temp_bot = Bot(token=token)
-        test_msg = await temp_bot.send_message(chat_id=channel_id, text="✅ Log Channel verified successfully!")
-        await temp_bot.delete_message(chat_id=channel_id, message_id=test_msg.message_id)
+        async with httpx.AsyncClient(timeout=8) as client:
+            send_url = f"https://api.telegram.org/bot{token}/sendMessage"
+            resp = await client.post(send_url, json={"chat_id": channel_id, "text": "✅ Log Channel verified successfully!"})
+            if resp.status_code != 200:
+                raise ValueError(resp.json().get("description") or "Failed to send verification message")
+            msg_id = resp.json()["result"]["message_id"]
+            
+            del_url = f"https://api.telegram.org/bot{token}/deleteMessage"
+            await client.post(del_url, json={"chat_id": channel_id, "message_id": msg_id})
     except Exception as e:
         await status_msg.edit_text(
             f"❌ <b>ᴄᴀɴɴᴏᴛ ᴀᴄᴄᴇꜱꜱ ᴄʜᴀɴɴᴇʟ</b>\n━━━━━━━━━━━━━━━━━━\n\n"
@@ -160,9 +166,15 @@ async def mbot_new_channel_input(update: Update, context: ContextTypes.DEFAULT_T
     
     try:
         decrypted_token = await decrypt_token(bot_doc["token"], db)
-        temp_bot = Bot(token=decrypted_token)
-        test_msg = await temp_bot.send_message(chat_id=channel_id, text="✅ New Log Channel verified successfully!")
-        await temp_bot.delete_message(chat_id=channel_id, message_id=test_msg.message_id)
+        async with httpx.AsyncClient(timeout=8) as client:
+            send_url = f"https://api.telegram.org/bot{decrypted_token}/sendMessage"
+            resp = await client.post(send_url, json={"chat_id": channel_id, "text": "✅ New Log Channel verified successfully!"})
+            if resp.status_code != 200:
+                raise ValueError(resp.json().get("description") or "Failed to send verification message")
+            msg_id = resp.json()["result"]["message_id"]
+            
+            del_url = f"https://api.telegram.org/bot{decrypted_token}/deleteMessage"
+            await client.post(del_url, json={"chat_id": channel_id, "message_id": msg_id})
     except Exception as e:
         await status_msg.edit_text(
             f"❌ <b>ᴄᴀɴɴᴏᴛ ᴀᴄᴄᴇꜱꜱ ᴄʜᴀɴɴᴇʟ</b>\n━━━━━━━━━━━━━━━━━━\n\n"
