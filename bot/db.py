@@ -66,13 +66,15 @@ class Database:
             );
 
             CREATE TABLE IF NOT EXISTS force_channels (
-              channel_id  INTEGER PRIMARY KEY,
+              channel_id  INTEGER,
+              bot_username TEXT NOT NULL DEFAULT '',
               mode        TEXT NOT NULL DEFAULT 'direct',
               invite_link TEXT,
               title       TEXT,
               username    TEXT,
               added_by    INTEGER NOT NULL,
-              added_at    INTEGER NOT NULL
+              added_at    INTEGER NOT NULL,
+              PRIMARY KEY (channel_id, bot_username)
             );
             CREATE TABLE IF NOT EXISTS force_join_requests (
               channel_id   INTEGER NOT NULL,
@@ -174,6 +176,13 @@ class Database:
                purchased_at INTEGER NOT NULL,
                PRIMARY KEY (user_id, link_code)
             );
+            CREATE TABLE IF NOT EXISTS sub_bots (
+               token        TEXT PRIMARY KEY,
+               added_by     INTEGER NOT NULL,
+               added_at     INTEGER NOT NULL,
+               log_channel_id INTEGER,
+               bot_username TEXT
+            );
             """
         )
         # Lightweight migrations for existing databases.
@@ -211,6 +220,47 @@ class Database:
             await self.conn.execute("ALTER TABLE payment_requests ADD COLUMN projected_premium_until INTEGER")
         if "gateway_extra" not in pcol_names:
             await self.conn.execute("ALTER TABLE payment_requests ADD COLUMN gateway_extra TEXT")
+
+        # Migrate force_channels to support compound primary key (channel_id, bot_username)
+        cur = await self.conn.execute("PRAGMA table_info(force_channels)")
+        fcols = await cur.fetchall()
+        await cur.close()
+        fcol_names = {str(r[1]) for r in fcols}
+        if "bot_username" not in fcol_names:
+            await self.conn.execute("ALTER TABLE force_channels RENAME TO force_channels_old")
+            await self.conn.execute(
+                """
+                CREATE TABLE force_channels (
+                  channel_id  INTEGER,
+                  bot_username TEXT NOT NULL DEFAULT '',
+                  mode        TEXT NOT NULL DEFAULT 'direct',
+                  invite_link TEXT,
+                  title       TEXT,
+                  username    TEXT,
+                  added_by    INTEGER NOT NULL,
+                  added_at    INTEGER NOT NULL,
+                  PRIMARY KEY (channel_id, bot_username)
+                );
+                """
+            )
+            await self.conn.execute(
+                """
+                INSERT OR IGNORE INTO force_channels(channel_id, bot_username, mode, invite_link, title, username, added_by, added_at)
+                SELECT channel_id, '', mode, invite_link, title, username, added_by, added_at FROM force_channels_old;
+                """
+            )
+            await self.conn.execute("DROP TABLE force_channels_old")
+
+        # Migrate sub_bots to support log_channel_id and bot_username
+        cur = await self.conn.execute("PRAGMA table_info(sub_bots)")
+        scols = await cur.fetchall()
+        await cur.close()
+        scol_names = {str(r[1]) for r in scols}
+        if "log_channel_id" not in scol_names:
+            await self.conn.execute("ALTER TABLE sub_bots ADD COLUMN log_channel_id INTEGER")
+        if "bot_username" not in scol_names:
+            await self.conn.execute("ALTER TABLE sub_bots ADD COLUMN bot_username TEXT")
+
         await self.conn.commit()
 
     # Users
@@ -445,19 +495,22 @@ class Database:
     async def add_force_channel(
         self,
         channel_id: int,
+        bot_username: str,
         mode: str,
         invite_link: str | None,
         title: str | None,
         username: str | None,
         added_by: int,
     ) -> None:
-        self._force_channels_cache = None
+        if not hasattr(self, "_force_channels_cache") or self._force_channels_cache is None:
+            self._force_channels_cache = {}
+        self._force_channels_cache.pop(bot_username, None)
         now = _now()
         await self.conn.execute(
             """
-            INSERT INTO force_channels(channel_id, mode, invite_link, title, username, added_by, added_at)
-            VALUES(?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(channel_id) DO UPDATE SET
+            INSERT INTO force_channels(channel_id, bot_username, mode, invite_link, title, username, added_by, added_at)
+            VALUES(?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(channel_id, bot_username) DO UPDATE SET
               mode=excluded.mode,
               invite_link=excluded.invite_link,
               title=excluded.title,
@@ -465,31 +518,43 @@ class Database:
               added_by=excluded.added_by,
               added_at=excluded.added_at
             """,
-            (int(channel_id), mode, invite_link, title, username, int(added_by), now),
+            (int(channel_id), bot_username, mode, invite_link, title, username, int(added_by), now),
         )
         await self.conn.commit()
 
-    async def remove_force_channel(self, channel_id: int) -> None:
-        self._force_channels_cache = None
-        await self.conn.execute("DELETE FROM force_channels WHERE channel_id=?", (int(channel_id),))
+    async def remove_force_channel(self, channel_id: int, bot_username: str) -> None:
+        if not hasattr(self, "_force_channels_cache") or self._force_channels_cache is None:
+            self._force_channels_cache = {}
+        self._force_channels_cache.pop(bot_username, None)
+        await self.conn.execute(
+            "DELETE FROM force_channels WHERE channel_id=? AND bot_username=?",
+            (int(channel_id), bot_username),
+        )
         await self.conn.commit()
 
-    async def clear_force_channels(self) -> None:
-        self._force_channels_cache = None
-        await self.conn.execute("DELETE FROM force_channels")
-        await self.conn.execute("DELETE FROM force_join_requests")
+    async def clear_force_channels(self, bot_username: str) -> None:
+        if not hasattr(self, "_force_channels_cache") or self._force_channels_cache is None:
+            self._force_channels_cache = {}
+        self._force_channels_cache.pop(bot_username, None)
+        await self.conn.execute("DELETE FROM force_channels WHERE bot_username=?", (bot_username,))
+        await self.conn.execute("DELETE FROM force_join_requests WHERE channel_id IN (SELECT channel_id FROM force_channels WHERE bot_username=?)", (bot_username,))
         await self.conn.commit()
 
-    async def list_force_channels(self) -> list[dict[str, Any]]:
-        if self._force_channels_cache is not None:
-            return self._force_channels_cache
-        cur = await self.conn.execute("SELECT channel_id, mode, invite_link, title, username FROM force_channels ORDER BY channel_id")
+    async def list_force_channels(self, bot_username: str = "") -> list[dict[str, Any]]:
+        if not hasattr(self, "_force_channels_cache") or self._force_channels_cache is None:
+            self._force_channels_cache = {}
+        if bot_username in self._force_channels_cache:
+            return self._force_channels_cache[bot_username]
+        cur = await self.conn.execute(
+            "SELECT channel_id, mode, invite_link, title, username FROM force_channels WHERE bot_username=? ORDER BY channel_id",
+            (bot_username,),
+        )
         rows = await cur.fetchall()
         await cur.close()
         out: list[dict[str, Any]] = []
         for r in rows:
             out.append({"channel_id": int(r[0]), "mode": r[1], "invite_link": r[2], "title": r[3], "username": r[4]})
-        self._force_channels_cache = out
+        self._force_channels_cache[bot_username] = out
         return out
 
     async def add_force_join_request(self, channel_id: int, user_id: int) -> None:
@@ -1043,4 +1108,51 @@ class Database:
             (int(user_id), str(link_code), now),
         )
         await self.conn.commit()
+
+    async def add_sub_bot(self, token: str, added_by: int, log_channel_id: int | None = None, bot_username: str | None = None) -> None:
+        now = _now()
+        await self.conn.execute(
+            """
+            INSERT INTO sub_bots(token, added_by, added_at, log_channel_id, bot_username) VALUES(?, ?, ?, ?, ?)
+            ON CONFLICT(token) DO UPDATE SET
+                added_by=excluded.added_by,
+                added_at=excluded.added_at,
+                log_channel_id=excluded.log_channel_id,
+                bot_username=excluded.bot_username
+            """,
+            (str(token), int(added_by), now, log_channel_id, bot_username),
+        )
+        await self.conn.commit()
+
+    async def update_sub_bot_channel(self, token: str, log_channel_id: int) -> None:
+        await self.conn.execute(
+            "UPDATE sub_bots SET log_channel_id=? WHERE token=?",
+            (int(log_channel_id), str(token)),
+        )
+        await self.conn.commit()
+
+    async def remove_sub_bot(self, token: str) -> None:
+        await self.conn.execute(
+            "DELETE FROM sub_bots WHERE token=?",
+            (str(token),),
+        )
+        await self.conn.commit()
+
+    async def list_sub_bots(self) -> list[dict[str, Any]]:
+        cur = await self.conn.execute(
+            "SELECT token, added_by, added_at, log_channel_id, bot_username FROM sub_bots"
+        )
+        rows = await cur.fetchall()
+        await cur.close()
+        out = []
+        for r in rows:
+            out.append({
+                "token": r[0],
+                "added_by": r[1],
+                "added_at": r[2],
+                "log_channel_id": r[3],
+                "bot_username": r[4],
+            })
+        return out
+
 

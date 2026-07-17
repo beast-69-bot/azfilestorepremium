@@ -13,7 +13,7 @@ from typing import Any, Optional
 from urllib.parse import parse_qs, quote, urlparse
 
 import httpx
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, MessageEntity, Update, LabeledPrice
+from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup, MessageEntity, Update, LabeledPrice
 from telegram.constants import ChatMemberStatus, MessageEntityType
 from telegram.error import Forbidden, RetryAfter
 from telegram.ext import (
@@ -24,6 +24,8 @@ from telegram.ext import (
     ContextTypes,
     MessageHandler,
     PreCheckoutQueryHandler,
+    TypeHandler,
+    ApplicationHandlerStop,
     filters,
 )
 
@@ -51,6 +53,7 @@ UI_EMOJI_CACHE_KEY = "_ui_emoji_map_cache"
 UI_EMOJI_CACHE_TS_KEY = "_ui_emoji_map_cache_ts"
 UI_EMOJI_CACHE_TTL_SECONDS = 120
 logger = logging.getLogger(__name__)
+from bot.deployment import RUNNING_SUB_BOTS
 PRESET_UI_EMOJI_IDS = {
     "info": "6059839048065750021",
     "timer": "5440621591387980068",
@@ -331,31 +334,6 @@ BSETTINGS_DOCS: dict[str, dict[str, str]] = {
             "• mode\n• joined\n• request\n• pass\n• error details"
         ),
     },
-    "broadcast": {
-        "title": "<b>📢 /broadcast</b>\n━━━━━━━━━━━━━━\n",
-        "body": (
-            "<i>Admin/Owner.</i>\n\n"
-            "▸ <b>uꜱᴀɢᴇ</b>\n"
-            "Reply to any message then send <code>/broadcast</code>\n\n"
-            "Bot copies that message to all known users."
-        ),
-    },
-    "stats": {
-        "title": "<b>📊 /stats</b>\n━━━━━━━━━━━━━━\n",
-        "body": "<i>Admin/Owner.</i>\n\nShows users, files, links, premium, tokens and other counts.",
-    },
-    "premiumdb": {
-        "title": "<b>📥 /premiumdb</b>\n━━━━━━━━━━━━━━\n",
-        "body": (
-            "<i>Admin/Owner.</i>\n\n"
-            "Exports full premium records to an Excel file.\n\n"
-            "▸ <b>ᴄᴏʟuᴍɴꜱ</b>\n"
-            "• user_id, name, username\n"
-            "• premium_until (unix + UTC)\n"
-            "• active status\n"
-            "• created_at, last_seen"
-        ),
-    },
     "setcaption": {
         "title": "<b>📝 /setcaption</b>\n━━━━━━━━━━━━━━\n",
         "body": (
@@ -426,8 +404,11 @@ BSETTINGS_DOCS: dict[str, dict[str, str]] = {
     },
 }
 
-def _bsettings_keyboard() -> InlineKeyboardMarkup:
+def _bsettings_keyboard(is_maintenance: bool = False) -> InlineKeyboardMarkup:
     # Intentionally exclude /getlink, /batch, /custombatch from this panel.
+    m_label = "🚧 ᴍᴀɪɴᴛᴇɴᴀɴᴄᴇ: ᴏɴ" if is_maintenance else "🚧 ᴍᴀɪɴᴛᴇɴᴀɴᴄᴇ: ᴏꜰꜰ"
+    m_style = "danger" if is_maintenance else "success"
+    
     button_items: list[tuple[str, str, str | None]] = [
         ("addadmin", "➕ ᴀᴅᴅ ᴀᴅᴍɪɴ", "success"),
         ("removeadmin", "🚫 ʀᴇᴍᴏᴠᴇ ᴀᴅᴍɪɴ", "danger"),
@@ -435,6 +416,7 @@ def _bsettings_keyboard() -> InlineKeyboardMarkup:
         ("removepremium", "❌ ʀᴇᴍᴏᴠᴇ ᴘʀᴇᴍɪᴜᴍ", "danger"),
         ("gencode", "🎟 ɢᴇɴᴇʀᴀᴛᴇ ᴄᴏᴅᴇꜱ", "primary"),
         ("forcech", "📣 ꜰᴏʀᴄᴇ ᴄʜᴀɴɴᴇʟ", "primary"),
+        ("premiumch", "💎 ᴘʀᴇᴍɪᴜᴍ ᴄʜᴀɴɴᴇʟꜱ", "primary"),
         ("forcechdebug", "🧪 ꜰᴏʀᴄᴇ ᴅᴇʙᴜɢ", None),
         ("broadcast", "📢 ʙʀᴏᴀᴅᴄᴀꜱᴛ", "primary"),
         ("stats", "📊 ꜱᴛᴀᴛɪꜱᴛɪᴄꜱ", None),
@@ -447,6 +429,7 @@ def _bsettings_keyboard() -> InlineKeyboardMarkup:
         ("getemojiid", "🆔 ᴇᴍᴏᴊɪ ɪᴅꜱ", None),
         ("setuitemoji", "😀 ᴜɪ ᴇᴍᴏᴊɪ", "primary"),
         ("setemojipreset", "✨ ᴇᴍᴏᴊɪ ᴘʀᴇꜱᴇᴛ", "primary"),
+        ("togglemaintenance_action", m_label, m_style),
     ]
     rows: list[list[InlineKeyboardButton]] = []
     for i in range(0, len(button_items), 2):
@@ -458,6 +441,48 @@ def _bsettings_keyboard() -> InlineKeyboardMarkup:
             row.append(InlineKeyboardButton(label2, callback_data=f"bset:{k2}", style=style2))
         rows.append(row)
     return InlineKeyboardMarkup(rows)
+
+
+def _bset_premiumch_panel_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton("➕ ᴀᴅᴅ", callback_data="bset:premiumch_add", style="success"),
+                InlineKeyboardButton("📋 ʟɪꜱᴛ", callback_data="bset:premiumch_list"),
+            ],
+            [
+                InlineKeyboardButton("➖ ʀᴇᴍᴏᴠᴇ", callback_data="bset:premiumch_remove", style="danger"),
+                InlineKeyboardButton("🗑 ᴄʟᴇᴀʀ", callback_data="bset:premiumch_clear", style="danger"),
+            ],
+            [InlineKeyboardButton("🔙 ʙᴀᴄᴋ", callback_data="bset:back", style="danger")],
+        ]
+    )
+
+
+async def _bset_premiumch_panel_text(db: Database) -> str:
+    raw = await db.get_setting(SETTINGS_PREMIUM_CHANNELS)
+    try:
+        channels = json.loads(raw) if raw else []
+    except Exception:
+        channels = []
+    
+    lines = []
+    for i, ch in enumerate(channels):
+        lines.append(f"{i+1}. <b>{html.escape(ch['name'])}</b>: {html.escape(ch.get('link', '-'))}")
+        
+    ch_list_text = "\n".join(lines) if lines else "<i>No premium channels set.</i>"
+    
+    return (
+        "<b>💎 ᴘʀᴇᴍɪᴜᴍ ᴄʜᴀɴɴᴇʟꜱ ᴍᴀɴᴀɢᴇʀ</b>\n"
+        "━━━━━━━━━━━━━━\n\n"
+        "Configure channels that premium users can join to get direct links.\n\n"
+        "<b>Current Channels:</b>\n"
+        f"{ch_list_text}\n\n"
+        "<i>ɪɴꜱᴛʀᴜᴄᴛɪᴏɴꜱ</i>\n"
+        "▸ Click <b>➕ ᴀᴅᴅ</b> to add a channel.\n"
+        "▸ Click <b>➖ ʀᴇᴍᴏᴠᴇ</b> to remove a channel."
+    )
+
 
 
 def _bset_forcech_panel_keyboard() -> InlineKeyboardMarkup:
@@ -541,6 +566,8 @@ def _clear_bsettings_wait_states(context: ContextTypes.DEFAULT_TYPE) -> None:
         "bset_settime_wait",
         "bset_setstartimg_wait",
         "bset_setpay_wait",
+        "bset_premiumch_add_wait",
+        "bset_premiumch_remove_wait",
     ):
         context.user_data.pop(k, None)
 
@@ -829,14 +856,23 @@ async def _send_html_text(
 
 
 
-def _is_owner(update: Update, cfg: Any) -> bool:
-    return bool(update.effective_user and update.effective_user.id == int(cfg.owner_id))
+def _is_owner(update: Update, cfg: Any, context: Optional[ContextTypes.DEFAULT_TYPE] = None) -> bool:
+    if not update.effective_user:
+        return False
+    if context and context.application.bot_data.get("is_sub_bot"):
+        sub_info = context.application.bot_data.get("sub_bot_info") or {}
+        sub_owner = sub_info.get("owner_id")
+        if sub_owner and update.effective_user.id == int(sub_owner):
+            return True
+    return update.effective_user.id == int(cfg.owner_id)
 
 
 async def _is_admin_or_owner(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
     cfg = context.application.bot_data["cfg"]
-    if _is_owner(update, cfg):
+    if _is_owner(update, cfg, context):
         return True
+    if context.application.bot_data.get("is_sub_bot"):
+        return False
     db: Database = context.application.bot_data["db"]
     uid = update.effective_user.id if update.effective_user else 0
     return await db.is_admin(uid)
@@ -973,8 +1009,14 @@ async def _joined_all_force_channels(user_id: int, context: ContextTypes.DEFAULT
     # Bot owner/admin should not be blocked by force-join checks.
     cfg = context.application.bot_data["cfg"]
     db: Database = context.application.bot_data["db"]
-    if int(user_id) == int(cfg.owner_id) or await db.is_admin(int(user_id)):
-        return True, []
+    if context.application.bot_data.get("is_sub_bot"):
+        sub_info = context.application.bot_data.get("sub_bot_info") or {}
+        sub_owner = sub_info.get("owner_id")
+        if sub_owner and int(user_id) == int(sub_owner):
+            return True, []
+    else:
+        if int(user_id) == int(cfg.owner_id) or await db.is_admin(int(user_id)):
+            return True, []
     ok, missing, _ = await _joined_all_force_channels_details(user_id, context)
     return ok, missing
 
@@ -983,7 +1025,10 @@ async def _joined_all_force_channels_details(
     user_id: int, context: ContextTypes.DEFAULT_TYPE
 ) -> tuple[bool, list[dict[str, Any]], list[dict[str, Any]]]:
     db: Database = context.application.bot_data["db"]
-    channels = await db.list_force_channels()
+    bot_username = context.application.bot_data.get("bot_username", "")
+    channels = await db.list_force_channels(bot_username)
+    if not channels and not context.application.bot_data.get("is_sub_bot"):
+        channels = await db.list_force_channels("")
     if not channels:
         return True, [], []
     bot = context.bot
@@ -1420,14 +1465,40 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         img_url = await db.get_setting(SETTINGS_START_IMG_URL)
         raw_text = _welcome_text()
         formatted_text = await _format_custom_emojis_html(raw_text, context)
+
+        # If sub-bot, keep the traditional greeting
+        if context.application.bot_data.get("is_sub_bot"):
+            if img_url:
+                try:
+                    await update.effective_chat.send_photo(photo=img_url, caption=formatted_text, parse_mode="HTML")
+                    return
+                except Exception as e:
+                    logger.warning("start sub-bot: send_photo failed (%s), showing text only", e)
+            await _send_emoji_text(update.effective_chat.id, text=formatted_text, parse_mode="HTML", context=context)
+            return
+
+        # Main bot: add creator menu options
+        formatted_text += (
+            "\n\n🤖 <b>ᴄʟᴏɴᴇᴅ ʙᴏᴛ ᴄʀᴇᴀᴛᴏʀ</b>\n"
+            "━━━━━━━━━━━━━━━━━━\n"
+            "Aap is bot ki help se apna khud ka FileStore bot create kar sakte hain. "
+            "Niche diye buttons use karein:"
+        )
+        kb = InlineKeyboardMarkup(
+            [
+                [
+                    InlineKeyboardButton("⚡ ᴄʀᴇᴀᴛᴇ ʙᴏᴛ", callback_data="mbot_create"),
+                    InlineKeyboardButton("📋 ᴍʏ ʙᴏᴛꜱ", callback_data="mbot_list"),
+                ]
+            ]
+        )
         if img_url:
             try:
-                # Send image with caption as a single combined message.
-                await update.effective_chat.send_photo(photo=img_url, caption=formatted_text, parse_mode="HTML")
+                await update.effective_chat.send_photo(photo=img_url, caption=formatted_text, parse_mode="HTML", reply_markup=kb)
                 return
             except Exception as e:
-                logger.warning("start: send_photo failed (%s), showing text only", e)
-        await _send_emoji_text(update.effective_chat.id, text=formatted_text, parse_mode="HTML", context=context)
+                logger.warning("start main-bot: send_photo failed (%s), showing text only", e)
+        await _send_emoji_text(update.effective_chat.id, text=formatted_text, parse_mode="HTML", context=context, reply_markup=kb)
         return
 
     await _deliver_by_code(update, context, code)
@@ -1667,8 +1738,7 @@ async def _deliver_by_code(update: Update, context: ContextTypes.DEFAULT_TYPE, c
     await _send_emoji_text(chat.id, "❌ Unsupported link type.", context=context)
 
 
-def _extract_media_file(update: Update) -> Optional[dict[str, str]]:
-    m = update.effective_message
+def _extract_media_file_from_msg(m) -> Optional[dict[str, str]]:
     if not m:
         return None
     if m.document:
@@ -1703,6 +1773,10 @@ def _extract_media_file(update: Update) -> Optional[dict[str, str]]:
     return None
 
 
+def _extract_media_file(update: Update) -> Optional[dict[str, str]]:
+    return _extract_media_file_from_msg(update.effective_message)
+
+
 async def admin_media_ingest(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _upsert_user(update, context)
     if not await _is_admin_or_owner(update, context):
@@ -1711,6 +1785,32 @@ async def admin_media_ingest(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if not media or not update.effective_chat or not update.effective_user:
         return
     db: Database = context.application.bot_data["db"]
+
+    # For sub-bot: copy message to sub-bot log channel first
+    if context.application.bot_data.get("is_sub_bot"):
+        sub_info = context.application.bot_data.get("sub_bot_info") or {}
+        log_channel = sub_info.get("log_channel_id")
+        if not log_channel:
+            await update.effective_chat.send_message("⚠️ Log channel not configured for this bot. Please set it up in the dashboard.")
+            return
+        try:
+            copied_msg = await context.bot.copy_message(
+                chat_id=int(log_channel),
+                from_chat_id=update.effective_chat.id,
+                message_id=update.effective_message.message_id
+            )
+            # Extract media using the copied message to get the new file ID
+            media = _extract_media_file_from_msg(copied_msg)
+            if not media:
+                await update.effective_chat.send_message("❌ Failed to extract media details from log channel message.")
+                return
+        except Exception as e:
+            logger.exception("Error copying file to sub-bot log channel:")
+            await update.effective_chat.send_message(
+                f"❌ Failed to store file in log channel: {e}\n"
+                "Please ensure the bot is an admin in your log channel and has post permissions."
+            )
+            return
     file_db_id = await db.save_file(
         tg_file_id=media["file_id"],
         file_unique_id=media.get("unique_id"),
@@ -4860,14 +4960,100 @@ async def bsettings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
             reply_markup=kb,
         )
         return
+    if data == "bset:premiumch":
+        context.user_data.pop("bset_premiumch_add_wait", None)
+        context.user_data.pop("bset_premiumch_remove_wait", None)
+        db: Database = context.application.bot_data["db"]
+        text = await _bset_premiumch_panel_text(db)
+        await _edit_emoji_text(
+            update.effective_chat.id,
+            q.message.message_id,
+            text,
+            context,
+            reply_markup=_bset_premiumch_panel_keyboard(),
+            disable_web_page_preview=True,
+        )
+        return
+    if data == "bset:premiumch_add":
+        context.user_data.pop("bset_premiumch_remove_wait", None)
+        context.user_data["bset_premiumch_add_wait"] = True
+        await _edit_emoji_text(
+            update.effective_chat.id,
+            q.message.message_id,
+            "➕ [b]Premium Channel Add[/b]\n\nSend in format: [c]<name> <link>[/c]\nExample: [c]VIP_Channel https://t.me/joinlink[/c]",
+            context,
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back", callback_data="bset:premiumch")]]),
+        )
+        return
+    if data == "bset:premiumch_remove":
+        context.user_data.pop("bset_premiumch_add_wait", None)
+        context.user_data["bset_premiumch_remove_wait"] = True
+        await _edit_emoji_text(
+            update.effective_chat.id,
+            q.message.message_id,
+            "➖ [b]Premium Channel Remove[/b]\n\nSend the exact name of the channel to remove:",
+            context,
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back", callback_data="bset:premiumch")]]),
+        )
+        return
+    if data == "bset:premiumch_clear":
+        db: Database = context.application.bot_data["db"]
+        await db.set_setting(SETTINGS_PREMIUM_CHANNELS, json.dumps([]))
+        context.user_data.pop("bset_premiumch_add_wait", None)
+        context.user_data.pop("bset_premiumch_remove_wait", None)
+        await _edit_emoji_text(
+            update.effective_chat.id,
+            q.message.message_id,
+            "🗑 [b]Premium channels cleared.[/b]",
+            context,
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back", callback_data="bset:premiumch")]]),
+        )
+        return
+    if data == "bset:premiumch_list":
+        db: Database = context.application.bot_data["db"]
+        raw = await db.get_setting(SETTINGS_PREMIUM_CHANNELS)
+        try:
+            channels = json.loads(raw) if raw else []
+        except Exception:
+            channels = []
+        if not channels:
+            text = "💎 [b]Premium Channels[/b]\n\nNo premium channels set."
+        else:
+            lines = [f"{i+1}. <a href='{ch['link']}'>{ch['name']}</a>" if ch.get("link") else f"{i+1}. {ch['name']}" for i, ch in enumerate(channels)]
+            text = "💎 [b]Premium Channels:[/b]\n\n" + "\n".join(lines)
+        await _edit_emoji_text(
+            update.effective_chat.id,
+            q.message.message_id,
+            text,
+            context,
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back", callback_data="bset:premiumch")]]),
+            disable_web_page_preview=True,
+        )
+        return
     if data == "bset:back":
         _clear_bsettings_wait_states(context)
+        db: Database = context.application.bot_data["db"]
+        is_m = (await db.get_setting("maintenance_mode")) == "true"
         await _edit_emoji_text(
             update.effective_chat.id,
             q.message.message_id,
             "⚙️ [b]Admin Settings Panel[/b]\n\nTap any option below to open guided actions.",
             context,
-            reply_markup=_bsettings_keyboard(),
+            reply_markup=_bsettings_keyboard(is_m),
+        )
+        return
+    if data == "bset:togglemaintenance_action":
+        db: Database = context.application.bot_data["db"]
+        current = await db.get_setting("maintenance_mode")
+        new_val = "true" if current != "true" else "false"
+        await db.set_setting("maintenance_mode", new_val)
+        is_m = (new_val == "true")
+        await _edit_emoji_text(
+            update.effective_chat.id,
+            q.message.message_id,
+            "⚙️ [b]Admin Settings Panel[/b]\n\nTap any option below to open guided actions.",
+            context,
+            reply_markup=_bsettings_keyboard(is_m),
         )
         return
     if not data.startswith("bset:"):
@@ -5151,6 +5337,75 @@ async def bsettings_misc_input(update: Update, context: ContextTypes.DEFAULT_TYP
         context.user_data.pop("bset_setstartimg_wait", None)
         return
 
+    if context.user_data.get("bset_premiumch_add_wait"):
+        parts = text.split(None, 1)
+        if len(parts) < 2:
+            await _send_emoji_text(
+                update.effective_chat.id,
+                "❌ Format invalid. Send: <code>&lt;Name&gt; &lt;Link&gt;</code>\nExample: <code>VIP_Channel https://t.me/joinlink</code>",
+                context,
+                parse_mode="HTML"
+            )
+            return
+        name = parts[0]
+        link = parts[1]
+        raw = await db.get_setting(SETTINGS_PREMIUM_CHANNELS)
+        try:
+            channels = json.loads(raw) if raw else []
+        except Exception:
+            channels = []
+            
+        if any(ch["name"].lower() == name.lower() for ch in channels):
+            await _send_emoji_text(
+                update.effective_chat.id,
+                f"⚠️ '{html.escape(name)}' already exists. Please remove it first.",
+                context,
+                parse_mode="HTML"
+            )
+            return
+            
+        channels.append({"name": name, "link": link})
+        await db.set_setting(SETTINGS_PREMIUM_CHANNELS, json.dumps(channels))
+        context.user_data.pop("bset_premiumch_add_wait", None)
+        
+        await _send_emoji_text(
+            update.effective_chat.id,
+            f"✅ Premium channel added: <b>{html.escape(name)}</b>\n{html.escape(link)}",
+            context,
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back to Premium Channels", callback_data="bset:premiumch")]])
+        )
+        return
+
+    if context.user_data.get("bset_premiumch_remove_wait"):
+        name = text.strip()
+        raw = await db.get_setting(SETTINGS_PREMIUM_CHANNELS)
+        try:
+            channels = json.loads(raw) if raw else []
+        except Exception:
+            channels = []
+            
+        before = len(channels)
+        channels = [ch for ch in channels if ch["name"].lower() != name.lower()]
+        if len(channels) == before:
+            await _send_emoji_text(
+                update.effective_chat.id,
+                f"❌ '[b]{name}[/b]' was not found. Send the exact name to remove:",
+                context,
+            )
+            return
+            
+        await db.set_setting(SETTINGS_PREMIUM_CHANNELS, json.dumps(channels))
+        context.user_data.pop("bset_premiumch_remove_wait", None)
+        
+        await _send_emoji_text(
+            update.effective_chat.id,
+            f"✅ Premium channel removed: <b>{html.escape(name)}</b>",
+            context,
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back to Premium Channels", callback_data="bset:premiumch")]])
+        )
+        return
 
     mode = context.user_data.get("bset_setpay_wait")
     if mode:
@@ -6273,7 +6528,16 @@ async def unified_text_input_router(update: Update, context: ContextTypes.DEFAUL
         return
 
     # 7. Misc inputs
-    if ud.get("bset_misc_wait"):
+    if (
+        ud.get("bset_misc_wait")
+        or ud.get("bset_addpremium_wait")
+        or ud.get("bset_removepremium_wait")
+        or ud.get("bset_setcaption_wait")
+        or ud.get("bset_settime_wait")
+        or ud.get("bset_setstartimg_wait")
+        or ud.get("bset_premiumch_add_wait")
+        or ud.get("bset_premiumch_remove_wait")
+    ):
         await bsettings_misc_input(update, context)
         return
 
@@ -6282,8 +6546,270 @@ async def unified_text_input_router(update: Update, context: ContextTypes.DEFAUL
         await forcech_input(update, context)
         return
 
+    # 9. Multi-bot creation token input
+    if ud.get("addbot_state") == "awaiting_token":
+        await mbot_token_input(update, context)
+        return
+
+    # 10. Multi-bot creation log channel input
+    if ud.get("addbot_state") == "awaiting_channel":
+        await mbot_channel_input(update, context)
+        return
+
+    # 11. Multi-bot update log channel input
+    if ud.get("mbot_setchan_wait"):
+        await mbot_new_channel_input(update, context)
+        return
+
+    # 12. Multi-bot add force channel input
+    if ud.get("mbot_fsub_wait"):
+        await mbot_new_fsub_channel_input(update, context)
+        return
+
+
+async def maintenance_middleware_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    # 1. Skip if no effective user
+    if not update.effective_user:
+        return
+        
+    db = context.application.bot_data.get("db")
+    cfg = context.application.bot_data.get("cfg")
+    if not db or not cfg:
+        return
+
+    # 2. Check if maintenance mode is active in database
+    is_maintenance = (await db.get_setting("maintenance_mode")) == "true"
+    if not is_maintenance:
+        return
+
+    # 3. Bypass owners & admins
+    user_id = update.effective_user.id
+    if user_id == int(cfg.owner_id) or await db.is_admin(user_id):
+        return
+
+    # 4. If sub-bot, also bypass sub-bot owner
+    if context.application.bot_data.get("is_sub_bot"):
+        sub_info = context.application.bot_data.get("sub_bot_info") or {}
+        sub_owner = sub_info.get("owner_id")
+        if sub_owner and user_id == int(sub_owner):
+            return
+
+    # 5. Block update with premium small caps typography notice
+    text = (
+        "🚧 <b>ᴜɴᴅᴇʀ ᴍᴀɪɴᴛᴇɴᴀɴᴄᴇ</b>\n"
+        "━━━━━━━━━━━━━━━━━━\n\n"
+        "ꜱᴇʀᴠᴇʀꜱ ᴀʀᴇ ᴄᴜʀʀᴇɴᴛʟʏ ᴜɴᴅᴇʀɢᴏɪɴɢ ꜱᴄʜᴇᴅᴜʟᴇᴅ ᴍᴀɪɴᴛᴇɴᴀɴᴄᴇ.\n"
+        "ᴘʟᴇᴀꜱᴇ ᴄʜᴇᴄᴋ ʙᴀᴄᴋ ʟᴀᴛᴇʀ."
+    )
+    
+    if update.callback_query:
+        try:
+            await update.callback_query.answer("🚧 Servers are undergoing maintenance. Please check back later.", show_alert=True)
+        except Exception:
+            pass
+    elif update.effective_chat:
+        try:
+            await _send_emoji_text(update.effective_chat.id, text, context=context, parse_mode="HTML")
+        except Exception:
+            pass
+
+    # Stop further propagation of this update
+    raise ApplicationHandlerStop()
+
+
+def build_sub_bot_handlers(app: Application) -> None:
+    app.add_handler(TypeHandler(Update, maintenance_middleware_handler), group=-1)
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("cancel", cancel))
+    app.add_handler(CallbackQueryHandler(recheck_callback, pattern=r"^(recheck:|noop)"))
+    app.add_handler(CallbackQueryHandler(bsettings_callback, pattern=r"^bset:"))
+    app.add_handler(CallbackQueryHandler(custombatch_callback, pattern=r"^(cbgen|cbcancel)(:.+)?$"))
+
+    # Unified input router for guided text/media inputs
+    app.add_handler(
+        MessageHandler(
+            (filters.TEXT | filters.PHOTO | filters.Document.ALL) & ~filters.COMMAND,
+            unified_text_input_router
+        ),
+        group=0
+    )
+    # /batch uses non-command text inputs (start/end post links).
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, batch_link_input), group=1)
+
+    app.add_handler(CommandHandler("getlink", getlink))
+    app.add_handler(CommandHandler("batch", batch))
+    app.add_handler(CommandHandler("custombatch", custombatch))
+
+    media_filter = filters.Document.ALL | filters.VIDEO | filters.AUDIO | filters.PHOTO
+    app.add_handler(MessageHandler(filters.ALL & media_filter, admin_media_ingest))
+    app.add_error_handler(on_error)
+
+
+async def start_sub_bot(token: str, db, cfg, defaults) -> str:
+    # 1. Validate the token and fetch bot info
+    async with httpx.AsyncClient(timeout=10) as client:
+        url = f"https://api.telegram.org/bot{token}/getMe"
+        resp = await client.get(url)
+        if resp.status_code != 200:
+            raise ValueError(f"Invalid bot token or network issue (HTTP {resp.status_code})")
+        data = resp.json()
+        if not data.get("ok"):
+            raise ValueError(f"Invalid bot token response: {data.get('description')}")
+        bot_info = data["result"]
+        username = bot_info["username"]
+
+    # Query log channel and owner from DB
+    sub_doc = None
+    try:
+        from bot.security import decrypt_token
+        bots = await db.list_sub_bots()
+        for b in bots:
+            decrypted = await decrypt_token(b["token"], db)
+            if decrypted == token:
+                sub_doc = b
+                break
+    except Exception as e:
+        logger.error("Failed to query sub-bot details from DB: %s", e)
+
+    owner_id = sub_doc["added_by"] if sub_doc else int(cfg.owner_id)
+    log_channel_id = sub_doc.get("log_channel_id") if sub_doc else None
+
+    # 2. Build the Application
+    sub_app = (
+        Application.builder()
+        .token(token)
+        .connect_timeout(10)
+        .read_timeout(30)
+        .write_timeout(30)
+        .pool_timeout(10)
+        .concurrent_updates(64)
+        .defaults(defaults)
+        .build()
+    )
+    sub_app.bot_data["db"] = db
+    sub_app.bot_data["cfg"] = cfg
+    sub_app.bot_data["bot_username"] = username
+    sub_app.bot_data["is_sub_bot"] = True
+    sub_app.bot_data["sub_bot_info"] = {
+        "owner_id": owner_id,
+        "log_channel_id": log_channel_id
+    }
+
+    # 3. Add handlers
+    build_sub_bot_handlers(sub_app)
+
+    # 4. Set command menu for the sub-bot
+    commands = [
+        BotCommand("start", "ꜱᴛᴀʀᴛ / ᴏᴘᴇɴ ʟɪɴᴋ (ᴜꜱᴇʀ)"),
+        BotCommand("cancel", "ᴄᴀɴᴄᴇʟ ᴄᴜʀʀᴇɴᴛ ᴘʀᴏᴄᴇꜱꜱ (ᴜꜱᴇʀ/ᴀᴅᴍɪɴ)"),
+        BotCommand("getlink", "ɢᴇɴᴇʀᴀᴛᴇ ʟɪɴᴋꜱ (ᴀᴅᴍɪɴ/ᴏᴡɴᴇʀ)"),
+        BotCommand("batch", "ᴄʜᴀɴɴᴇʟ ʙᴀᴛᴄʜ ʟɪɴᴋꜱ (ᴀᴅᴍɪɴ/ᴏᴡɴᴇʀ)"),
+        BotCommand("custombatch", "ᴄᴜꜱᴛᴏᴍ ꜰɪʟᴇ ʙᴀᴛᴄʜ (ᴀᴅᴍɪɴ/ᴏᴡɴᴇʀ)"),
+    ]
+    try:
+        await sub_app.bot.set_my_commands(commands)
+    except Exception as e:
+        logger.warning("Failed to set sub-bot commands: %r", e)
+
+    # 5. Generate cached donation invoice link for Telegram Stars
+    try:
+        prices = [LabeledPrice(label="Donation", amount=1)]
+        donation_link = await sub_app.bot.create_invoice_link(
+            title="Support Bot / Test Stars",
+            description="Donate 1 Star to support development or test the payment flow.",
+            payload="donation:1",
+            provider_token="",
+            currency="XTR",
+            prices=prices,
+        )
+        sub_app.bot_data["donation_invoice_link"] = donation_link
+    except Exception:
+        pass
+
+    # 6. Initialize, start, and begin polling
+    await sub_app.initialize()
+    await sub_app.start()
+    await sub_app.updater.start_polling(allowed_updates=Update.ALL_TYPES)
+
+    RUNNING_SUB_BOTS[token] = sub_app
+    logger.info("Successfully started sub-bot: @%s", username)
+    return username
+
+
+async def stop_sub_bot(token: str) -> None:
+    sub_app = RUNNING_SUB_BOTS.pop(token, None)
+    if sub_app:
+        try:
+            if sub_app.updater and sub_app.updater.running:
+                await sub_app.updater.stop()
+            await sub_app.stop()
+            await sub_app.shutdown()
+            logger.info("Successfully stopped sub-bot")
+        except Exception as e:
+            logger.error("Error stopping sub-bot: %s", e)
+
+
+async def load_all_sub_bots(app: Application) -> None:
+    db = app.bot_data["db"]
+    try:
+        bots = await db.list_sub_bots()
+        for b in bots:
+            token = b["token"]
+            try:
+                from bot.deployment import enqueue_deployment
+                await enqueue_deployment(token)
+            except Exception as e:
+                logger.error("Failed to enqueue auto-start sub-bot: %s", e)
+    except Exception as e:
+        logger.error("Failed to query sub-bots from DB: %s", e)
+
+
+async def listbots(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user_id = update.effective_user.id if update.effective_user else 0
+    db = context.application.bot_data["db"]
+    bots = await db.list_sub_bots()
+    user_bots = [b for b in bots if b["added_by"] == user_id]
+
+    if not user_bots:
+        await _send_emoji_text(
+            update.effective_chat.id,
+            "📋 <b>ᴍʏ ʙᴏᴛꜱ</b>\n━━━━━━━━━━━━━━━━━━\n\n"
+            "Aapne abhi tak koi cloned bot nahi banaya hai.\n"
+            "Niche diye button se bot banayein:",
+            context=context,
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("⚡ ᴄʀᴇᴀᴛᴇ ʙᴏᴛ", callback_data="mbot_create")],
+                [InlineKeyboardButton("🔙 ᴍᴀɪɴ ᴍᴇɴᴜ", callback_data="mbot_main")]
+            ])
+        )
+        return
+
+    from bot.deployment import get_status
+    buttons = []
+    for b in user_bots:
+        uname = b.get("bot_username") or "unknown"
+        status = get_status(b["token"])
+        status_indicator = "🟢" if "Running" in status else ("🔴" if "Offline" in status else "🟡")
+        buttons.append([InlineKeyboardButton(f"{status_indicator} @{uname}", callback_data=f"mbot_dash:{uname}")])
+
+    buttons.append([InlineKeyboardButton("🔙 ᴍᴀɪɴ ᴍᴇɴᴜ", callback_data="mbot_main")])
+    await _send_emoji_text(
+        update.effective_chat.id,
+        "📋 <b>ᴍʏ ʙᴏᴛꜱ</b>\n━━━━━━━━━━━━━━━━━━\n\n"
+        "Select a bot to configure settings:",
+        context=context,
+        reply_markup=InlineKeyboardMarkup(buttons)
+    )
+
+
+# Modular imports routed from creator, fsub, and dashboard packages
+from bot.creator import mbot_token_input, mbot_channel_input, mbot_new_channel_input
+from bot.fsub import mbot_new_fsub_channel_input
+from bot.dashboard import mbot_callback_router
+
 
 def build_handlers(app: Application) -> None:
+    app.add_handler(TypeHandler(Update, maintenance_middleware_handler), group=-1)
     app.add_handler(PreCheckoutQueryHandler(pre_checkout_callback))
     app.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment_callback))
     app.add_handler(CommandHandler("start", start))
@@ -6340,6 +6866,11 @@ def build_handlers(app: Application) -> None:
     app.add_handler(CommandHandler("setpay", setpay))
     app.add_handler(CommandHandler("setpremiumch", setpremiumch))
     app.add_handler(CommandHandler("bsettings", bsettings))
+    app.add_handler(CallbackQueryHandler(mbot_callback_router, pattern=r"^mbot_"))
+    app.add_handler(CommandHandler("addbot", addbot))
+    app.add_handler(CommandHandler("delbot", delbot))
+    app.add_handler(CommandHandler("listbots", listbots))
+    app.add_handler(CommandHandler("mybots", listbots))
 
     # PTB v20+ uses uppercase filter shortcuts (VIDEO/AUDIO/PHOTO). Document is namespaced.
     media_filter = filters.Document.ALL | filters.VIDEO | filters.AUDIO | filters.PHOTO

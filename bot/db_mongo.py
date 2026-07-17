@@ -60,11 +60,16 @@ class MongoDatabase:
         await self.db.links.create_index("code", unique=True)
         await self.db.links.create_index("created_at")
         await self.db.tokens.create_index("token", unique=True)
-        await self.db.force_channels.create_index("channel_id", unique=True)
+        try:
+            await self.db.force_channels.drop_index("channel_id_1")
+        except Exception:
+            pass
+        await self.db.force_channels.create_index([("channel_id", 1), ("bot_username", 1)], unique=True)
         await self.db.force_join_requests.create_index([("channel_id", 1), ("user_id", 1)], unique=True)
         await self.db.payment_requests.create_index("id", unique=True)
         await self.db.payment_requests.create_index("expires_at")
         await self.db.payment_requests.create_index([("user_id", 1), ("status", 1)])
+        await self.db.sub_bots.create_index("token", unique=True)
 
     async def _next_id(self, name: str) -> int:
         doc = await self.db.counters.find_one_and_update(
@@ -318,19 +323,23 @@ class MongoDatabase:
     async def add_force_channel(
         self,
         channel_id: int,
+        bot_username: str,
         mode: str,
         invite_link: str | None,
         title: str | None,
         username: str | None,
         added_by: int,
     ) -> None:
-        self._force_channels_cache = None
+        if not hasattr(self, "_force_channels_cache") or self._force_channels_cache is None:
+            self._force_channels_cache = {}
+        self._force_channels_cache.pop(bot_username, None)
         now = _now()
         await self.db.force_channels.update_one(
-            {"channel_id": int(channel_id)},
+            {"channel_id": int(channel_id), "bot_username": bot_username},
             {
                 "$set": {
                     "channel_id": int(channel_id),
+                    "bot_username": bot_username,
                     "mode": mode,
                     "invite_link": invite_link,
                     "title": title,
@@ -342,19 +351,29 @@ class MongoDatabase:
             upsert=True,
         )
 
-    async def remove_force_channel(self, channel_id: int) -> None:
-        self._force_channels_cache = None
-        await self.db.force_channels.delete_one({"channel_id": int(channel_id)})
+    async def remove_force_channel(self, channel_id: int, bot_username: str) -> None:
+        if not hasattr(self, "_force_channels_cache") or self._force_channels_cache is None:
+            self._force_channels_cache = {}
+        self._force_channels_cache.pop(bot_username, None)
+        await self.db.force_channels.delete_one({"channel_id": int(channel_id), "bot_username": bot_username})
 
-    async def clear_force_channels(self) -> None:
-        self._force_channels_cache = None
-        await self.db.force_channels.delete_many({})
-        await self.db.force_join_requests.delete_many({})
+    async def clear_force_channels(self, bot_username: str) -> None:
+        if not hasattr(self, "_force_channels_cache") or self._force_channels_cache is None:
+            self._force_channels_cache = {}
+        self._force_channels_cache.pop(bot_username, None)
+        # Fetch the channel IDs to clean requests
+        cursor = self.db.force_channels.find({"bot_username": bot_username}, {"channel_id": 1, "_id": 0})
+        ch_ids = [int(r["channel_id"]) async for r in cursor]
+        await self.db.force_channels.delete_many({"bot_username": bot_username})
+        if ch_ids:
+            await self.db.force_join_requests.delete_many({"channel_id": {"$in": ch_ids}})
 
-    async def list_force_channels(self) -> list[dict[str, Any]]:
-        if self._force_channels_cache is not None:
-            return self._force_channels_cache
-        rows = self.db.force_channels.find({}, {"_id": 0}).sort("channel_id", 1)
+    async def list_force_channels(self, bot_username: str = "") -> list[dict[str, Any]]:
+        if not hasattr(self, "_force_channels_cache") or self._force_channels_cache is None:
+            self._force_channels_cache = {}
+        if bot_username in self._force_channels_cache:
+            return self._force_channels_cache[bot_username]
+        rows = self.db.force_channels.find({"bot_username": bot_username}, {"_id": 0}).sort("channel_id", 1)
         out: list[dict[str, Any]] = []
         async for r in rows:
             out.append(
@@ -366,7 +385,7 @@ class MongoDatabase:
                     "username": r.get("username"),
                 }
             )
-        self._force_channels_cache = out
+        self._force_channels_cache[bot_username] = out
         return out
 
     async def add_force_join_request(self, channel_id: int, user_id: int) -> None:
@@ -879,4 +898,35 @@ class MongoDatabase:
             {"$set": {"purchased_at": now}},
             upsert=True
         )
+
+    async def add_sub_bot(self, token: str, added_by: int, log_channel_id: int | None = None, bot_username: str | None = None) -> None:
+        now = _now()
+        await self.db.sub_bots.update_one(
+            {"token": str(token)},
+            {"$set": {"added_by": int(added_by), "added_at": now, "log_channel_id": log_channel_id, "bot_username": bot_username}},
+            upsert=True,
+        )
+
+    async def update_sub_bot_channel(self, token: str, log_channel_id: int) -> None:
+        await self.db.sub_bots.update_one(
+            {"token": str(token)},
+            {"$set": {"log_channel_id": int(log_channel_id)}},
+        )
+
+    async def remove_sub_bot(self, token: str) -> None:
+        await self.db.sub_bots.delete_one({"token": str(token)})
+
+    async def list_sub_bots(self) -> list[dict[str, Any]]:
+        cursor = self.db.sub_bots.find({})
+        out = []
+        async for doc in cursor:
+            out.append({
+                "token": doc["token"],
+                "added_by": doc["added_by"],
+                "added_at": doc["added_at"],
+                "log_channel_id": doc.get("log_channel_id"),
+                "bot_username": doc.get("bot_username"),
+            })
+        return out
+
 

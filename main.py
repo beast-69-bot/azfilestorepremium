@@ -43,6 +43,14 @@ async def _post_init(app: Application) -> None:
     import asyncio
     asyncio.create_task(resume_pending_payments_polling(app))
 
+    # Start sub-bot deployment queue worker
+    from bot.deployment import start_queue_worker
+    await start_queue_worker(db, cfg, app.defaults)
+
+    # Load and start all registered sub-bots in the background
+    from bot.handlers import load_all_sub_bots
+    asyncio.create_task(load_all_sub_bots(app))
+
     # Set command menu (visible in Telegram UI).
     # Note: Telegram bot commands are not access-controlled by Telegram itself; handlers still enforce permissions.
     # Show who can use which command in the command menu descriptions.
@@ -52,6 +60,7 @@ async def _post_init(app: Application) -> None:
         BotCommand("redeem", "ʀᴇᴅᴇᴇᴍ ᴛᴏᴋᴇɴ (ᴜꜱᴇʀ)"),
         BotCommand("plan", "ᴠɪᴇᴡ ɴᴏʀᴍᴀʟ/ᴘʀᴇᴍɪᴜᴍ ᴘʟᴀɴꜱ (ᴜꜱᴇʀ)"),
         BotCommand("pay", "ʙᴜʏ ᴘʀᴇᴍɪᴜᴍ ᴘʟᴀɴ (ᴜꜱᴇʀ)"),
+        BotCommand("mybots", "ᴍᴀɴᴀɢᴇ ᴍʏ ᴄʟᴏɴᴇᴅ ʙᴏᴛꜱ (ᴜꜱᴇʀ)"),
         BotCommand("getlink", "ɢᴇɴᴇʀᴀᴛᴇ ʟɪɴᴋꜱ (ᴀᴅᴍɪɴ/ᴏᴡɴᴇʀ)"),
         BotCommand("batch", "ᴄʜᴀɴɴᴇʟ ʙᴀᴛᴄʜ ʟɪɴᴋꜱ (ᴀᴅᴍɪɴ/ᴏᴡɴᴇʀ)"),
         BotCommand("custombatch", "ᴄᴜꜱᴛᴏᴍ ꜰɪʟᴇ ʙᴀᴛᴄʜ (ᴀᴅᴍɪɴ/ᴏᴡɴᴇʀ)"),
@@ -71,6 +80,15 @@ async def _post_shutdown(app: Application) -> None:
     db = app.bot_data.get("db")
     if db:
         await db.close()
+
+    # Shut down all sub-bots
+    try:
+        from bot.handlers import RUNNING_SUB_BOTS, stop_sub_bot
+        tokens = list(RUNNING_SUB_BOTS.keys())
+        for token in tokens:
+            await stop_sub_bot(token)
+    except Exception:
+        pass
 
     try:
         from bot import razorpay_service, xwallet_service

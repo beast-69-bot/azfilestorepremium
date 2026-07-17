@@ -1,0 +1,1 @@
+from .fsub_manager import mbot_new_fsub_channel_input
