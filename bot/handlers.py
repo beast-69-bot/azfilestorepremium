@@ -6802,6 +6802,64 @@ async def listbots(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
+async def addbot(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user_id = update.effective_user.id if update.effective_user else 0
+    db = context.application.bot_data["db"]
+    bots = await db.list_sub_bots()
+    user_bots = [b for b in bots if b["added_by"] == user_id]
+    
+    if len(user_bots) >= 5:
+        await _send_emoji_text(
+            update.effective_chat.id,
+            "❌ <b>ʟɪᴍɪᴛ ʀᴇᴀᴄʜᴇᴅ</b>\n\nYou have reached the limit of 5 cloned bots.",
+            context=context
+        )
+        return
+
+    context.user_data["addbot_state"] = "awaiting_token"
+    context.user_data["addbot_data"] = {}
+    
+    kb = InlineKeyboardMarkup([[InlineKeyboardButton("❌ ᴄᴀɴᴄᴇʟ", callback_data="mbot_cancel")]])
+    await _send_emoji_text(
+        update.effective_chat.id,
+        "🤖 <b>ᴄʀᴇᴀᴛᴇ ᴀ ɴᴇᴡ ʙᴏᴛ</b>\n━━━━━━━━━━━━━━━━━━\n\n"
+        "Send me your Bot Token.\n\n"
+        "You can get a bot token from @BotFather.\n"
+        "Example: <code>123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ</code>",
+        context=context,
+        reply_markup=kb
+    )
+
+
+async def delbot(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user_id = update.effective_user.id if update.effective_user else 0
+    db = context.application.bot_data["db"]
+    bots = await db.list_sub_bots()
+    user_bots = [b for b in bots if b["added_by"] == user_id]
+
+    if not user_bots:
+        await _send_emoji_text(
+            update.effective_chat.id,
+            "📋 <b>ᴅᴇʟᴇᴛᴇ ʙᴏᴛ</b>\n━━━━━━━━━━━━━━━━━━\n\nAapne abhi tak koi cloned bot nahi banaya hai.",
+            context=context
+        )
+        return
+
+    buttons = []
+    for b in user_bots:
+        uname = b.get("bot_username") or "unknown"
+        buttons.append([InlineKeyboardButton(f"🗑️ @{uname}", callback_data=f"mbot_del:{uname}")])
+
+    buttons.append([InlineKeyboardButton("🔙 ᴍᴀɪɴ ᴍᴇɴᴜ", callback_data="mbot_main")])
+    await _send_emoji_text(
+        update.effective_chat.id,
+        "🗑️ <b>ᴅᴇʟᴇᴛᴇ ʙᴏᴛ</b>\n━━━━━━━━━━━━━━━━━━\n\n"
+        "Select the bot you want to delete:",
+        context=context,
+        reply_markup=InlineKeyboardMarkup(buttons)
+    )
+
+
 # Modular imports routed from creator, fsub, and dashboard packages
 from bot.creator import mbot_token_input, mbot_channel_input, mbot_new_channel_input
 from bot.fsub import mbot_new_fsub_channel_input
