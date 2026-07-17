@@ -181,7 +181,8 @@ class Database:
                added_by     INTEGER NOT NULL,
                added_at     INTEGER NOT NULL,
                log_channel_id INTEGER,
-               bot_username TEXT
+               bot_username TEXT,
+               owner_id     INTEGER
             );
             """
         )
