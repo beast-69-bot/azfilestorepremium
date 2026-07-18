@@ -52,7 +52,8 @@ async def mbot_new_fsub_channel_input(update: Update, context: ContextTypes.DEFA
         return
 
     try:
-        member = await sub_bot_client.get_chat_member(chat_id=chat.id, user_id=sub_bot_client.id)
+        sub_bot_me = await sub_bot_client.get_me()
+        member = await sub_bot_client.get_chat_member(chat_id=chat.id, user_id=sub_bot_me.id)
         if member.status not in (ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.OWNER):
             await status_msg.edit_text(f"❌ Bot @{uname} is not an Admin in this channel. Add it as admin and try again.")
             return
