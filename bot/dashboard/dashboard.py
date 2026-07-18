@@ -18,16 +18,19 @@ from bot.security import decrypt_token
 logger = logging.getLogger(__name__)
 
 async def _get_sub_bot_by_username(db: Database, username: str, user_id: Optional[int] = None, cfg: Optional[Any] = None) -> Optional[dict[str, Any]]:
+    logger.info("Querying sub-bot: username=%s, user_id=%s, owner_id=%s", username, user_id, cfg.owner_id if cfg else None)
     bots = await db.list_sub_bots()
     for b in bots:
         if b.get("bot_username") == username:
             if user_id is not None and cfg is not None:
                 is_main_owner = (int(user_id) == int(cfg.owner_id))
+                logger.info("Found bot username=%s, added_by=%s, is_main_owner=%s", username, b.get("added_by"), is_main_owner)
                 if is_main_owner:
                     doc = dict(b)
                     doc["added_by"] = user_id
                     return doc
             return b
+    logger.info("Bot NOT found for username=%s", username)
     return None
 
 async def mbot_callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -137,10 +140,18 @@ async def mbot_callback_router(update: Update, context: ContextTypes.DEFAULT_TYP
 
     elif data.startswith("mbot_dash:"):
         uname = data.split(":", 1)[1]
+        logger.info("Dashboard requested for bot: %s by user: %s", uname, user_id)
         bot_doc = await _get_sub_bot_by_username(db, uname, user_id, cfg)
-        if not bot_doc or bot_doc["added_by"] != user_id:
+        if not bot_doc:
+            logger.warning("Access Denied or Bot not found: bot_doc is None")
             await q.message.reply_text("❌ Bot not found or access denied.")
             return
+        if bot_doc["added_by"] != user_id:
+            logger.warning("Access Denied: bot_doc['added_by']=%s != user_id=%s", bot_doc["added_by"], user_id)
+            await q.message.reply_text("❌ Bot not found or access denied.")
+            return
+            
+        logger.info("Access granted. Fetching status and metrics...")
             
         token = bot_doc["token"]
         status = get_status(token)

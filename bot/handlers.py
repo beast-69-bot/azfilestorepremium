@@ -4260,6 +4260,7 @@ async def on_error(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     # Expected runtime cases: blocked users, transient retries, etc.
     if isinstance(context.error, Forbidden):
         return
+    logger.error("Exception in update handler: %s", context.error, exc_info=context.error)
 
 
 async def pay_admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
