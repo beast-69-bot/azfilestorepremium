@@ -1465,7 +1465,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 return
             except Exception as e:
                 logger.warning("start: send_photo failed (%s), showing text only", e)
-        await _send_emoji_text(update.effective_chat.id, text=formatted_text, parse_mode="HTML", context=context)
+        await _send_emoji_text(update.effective_chat.id, text=formatted_text, context=context)
         return
 
     await _deliver_by_code(update, context, code)
@@ -6582,7 +6582,7 @@ async def maintenance_middleware_handler(update: Update, context: ContextTypes.D
             pass
     elif update.effective_chat:
         try:
-            await _send_emoji_text(update.effective_chat.id, text, context=context, parse_mode="HTML")
+            await _send_emoji_text(update.effective_chat.id, text, context=context)
         except Exception:
             pass
 
