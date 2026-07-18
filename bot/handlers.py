@@ -5339,7 +5339,6 @@ async def bsettings_misc_input(update: Update, context: ContextTypes.DEFAULT_TYP
                 update.effective_chat.id,
                 f"⚠️ '{html.escape(name)}' already exists. Please remove it first.",
                 context,
-                parse_mode="HTML"
             )
             return
             
@@ -5351,7 +5350,6 @@ async def bsettings_misc_input(update: Update, context: ContextTypes.DEFAULT_TYP
             update.effective_chat.id,
             f"✅ Premium channel added: <b>{html.escape(name)}</b>\n{html.escape(link)}",
             context,
-            parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back to Premium Channels", callback_data="bset:premiumch")]])
         )
         return
@@ -5381,7 +5379,6 @@ async def bsettings_misc_input(update: Update, context: ContextTypes.DEFAULT_TYP
             update.effective_chat.id,
             f"✅ Premium channel removed: <b>{html.escape(name)}</b>",
             context,
-            parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back to Premium Channels", callback_data="bset:premiumch")]])
         )
         return
