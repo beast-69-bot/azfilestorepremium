@@ -1869,7 +1869,7 @@ async def getlink(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             update.effective_chat.id,
             "ℹ️ How to use /getlink\n\n"
             "1) Reply to any message/file and send /getlink\n"
-            "2) Or use: /getlink <file_id>",
+            "2) Or use: /getlink &lt;file_id&gt;",
             context,
         )
         return
@@ -2320,7 +2320,7 @@ async def addadmin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await _send_emoji_text(update.effective_chat.id, "🚫 Owner only.", context)
         return
     if not context.args:
-        await _send_emoji_text(update.effective_chat.id, "ℹ️ Usage: /addadmin <user_id>", context)
+        await _send_emoji_text(update.effective_chat.id, "ℹ️ Usage: /addadmin &lt;user_id&gt;", context)
         return
     try:
         uid = int(context.args[0])
@@ -2339,7 +2339,7 @@ async def removeadmin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         await _send_emoji_text(update.effective_chat.id, "🚫 Owner only.", context)
         return
     if not context.args:
-        await _send_emoji_text(update.effective_chat.id, "ℹ️ Usage: /removeadmin <user_id>", context)
+        await _send_emoji_text(update.effective_chat.id, "ℹ️ Usage: /removeadmin &lt;user_id&gt;", context)
         return
     try:
         uid = int(context.args[0])
@@ -2357,7 +2357,7 @@ async def addpremium(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         await _send_emoji_text(update.effective_chat.id, "🚫 Access denied. (Admin/Owner only)", context)
         return
     if not context.args:
-        await _send_emoji_text(update.effective_chat.id, "ℹ️ Usage: /addpremium <user_id> [days]", context)
+        await _send_emoji_text(update.effective_chat.id, "ℹ️ Usage: /addpremium &lt;user_id&gt; [days]", context)
         return
     try:
         uid = int(context.args[0])
@@ -2401,7 +2401,7 @@ async def removepremium(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         await _send_emoji_text(update.effective_chat.id, "🚫 Access denied. (Admin/Owner only)", context)
         return
     if not context.args:
-        await _send_emoji_text(update.effective_chat.id, "ℹ️ Usage: /removepremium <user_id>", context)
+        await _send_emoji_text(update.effective_chat.id, "ℹ️ Usage: /removepremium &lt;user_id&gt;", context)
         return
     try:
         uid = int(context.args[0])
@@ -4396,7 +4396,7 @@ async def paylookup(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await _send_emoji_text(update.effective_chat.id, "\U0001f6ab Access denied. (Admin/Owner only)", context)
         return
     if not context.args:
-        await _send_emoji_text(update.effective_chat.id, "\u2139\ufe0f Usage: /paylookup <order_id>", context)
+        await _send_emoji_text(update.effective_chat.id, "\u2139\ufe0f Usage: /paylookup &lt;order_id&gt;", context)
         return
     try:
         rid = int(context.args[0])
@@ -4441,7 +4441,7 @@ async def manualapprove(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         await _send_emoji_text(update.effective_chat.id, "\U0001f6ab Access denied. (Admin/Owner only)", context)
         return
     if not context.args:
-        await _send_emoji_text(update.effective_chat.id, "\u2139\ufe0f Usage: /manualapprove <order_id>", context)
+        await _send_emoji_text(update.effective_chat.id, "\u2139\ufe0f Usage: /manualapprove &lt;order_id&gt;", context)
         return
     try:
         rid = int(context.args[0])
@@ -4569,7 +4569,7 @@ async def setpay(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
     if sub == "upi":
         if len(context.args) < 2:
-            await _send_emoji_text(update.effective_chat.id, "❌ Usage: /setpay upi <upi_id>", context)
+            await _send_emoji_text(update.effective_chat.id, "❌ Usage: /setpay upi &lt;upi_id&gt;", context)
             return
         v = context.args[1].strip()
         await db.set_setting(SETTINGS_PAY_UPI, v)
@@ -4577,7 +4577,7 @@ async def setpay(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
     if sub == "name":
         if len(context.args) < 2:
-            await _send_emoji_text(update.effective_chat.id, "❌ Usage: /setpay name <payee_name>", context)
+            await _send_emoji_text(update.effective_chat.id, "❌ Usage: /setpay name &lt;payee_name&gt;", context)
             return
         v = " ".join(context.args[1:]).strip()
         await db.set_setting(SETTINGS_PAY_NAME, v)
@@ -4604,7 +4604,7 @@ async def setpay(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
     if sub == "xwalletkey":
         if len(context.args) < 2:
-            await _send_emoji_text(update.effective_chat.id, "❌ Usage: /setpay xwalletkey <key>", context)
+            await _send_emoji_text(update.effective_chat.id, "❌ Usage: /setpay xwalletkey &lt;key&gt;", context)
             return
         v = context.args[1].strip()
         await db.set_setting("xwallet_api_key", v)
@@ -4612,7 +4612,7 @@ async def setpay(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
     if sub == "razorpayid":
         if len(context.args) < 2:
-            await _send_emoji_text(update.effective_chat.id, "❌ Usage: /setpay razorpayid <id>", context)
+            await _send_emoji_text(update.effective_chat.id, "❌ Usage: /setpay razorpayid &lt;id&gt;", context)
             return
         v = context.args[1].strip()
         await db.set_setting("razorpay_key_id", v)
@@ -4620,7 +4620,7 @@ async def setpay(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
     if sub == "razorpaysecret":
         if len(context.args) < 2:
-            await _send_emoji_text(update.effective_chat.id, "❌ Usage: /setpay razorpaysecret <secret>", context)
+            await _send_emoji_text(update.effective_chat.id, "❌ Usage: /setpay razorpaysecret &lt;secret&gt;", context)
             return
         v = context.args[1].strip()
         await db.set_setting("razorpay_key_secret", v)
@@ -4657,7 +4657,7 @@ async def bsettings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await _edit_emoji_text(
             update.effective_chat.id,
             q.message.message_id,
-            "⭐ [b]Add Premium[/b]\n\nSend in format: [c]<user_id> [days][/c]\nExample: [c]123456789 7[/c]",
+            "⭐ [b]Add Premium[/b]\n\nSend in format: [c]&lt;user_id&gt; [days][/c]\nExample: [c]123456789 7[/c]",
             context,
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back", callback_data="bset:back")]]),
         )
@@ -4948,7 +4948,7 @@ async def bsettings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await _edit_emoji_text(
             update.effective_chat.id,
             q.message.message_id,
-            "➕ [b]Premium Channel Add[/b]\n\nSend in format: [c]<name> <link>[/c]\nExample: [c]VIP_Channel https://t.me/joinlink[/c]",
+            "➕ [b]Premium Channel Add[/b]\n\nSend in format: [c]&lt;name&gt; &lt;link&gt;[/c]\nExample: [c]VIP_Channel https://t.me/joinlink[/c]",
             context,
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back", callback_data="bset:premiumch")]]),
         )
@@ -5241,7 +5241,7 @@ async def bsettings_misc_input(update: Update, context: ContextTypes.DEFAULT_TYP
             uid = int(parts[0])
             days = int(parts[1]) if len(parts) > 1 else 1
         except Exception:
-            await _send_emoji_text(update.effective_chat.id, "❌ Invalid format. Use: <user_id> [days]", context)
+            await _send_emoji_text(update.effective_chat.id, "❌ Invalid format. Use: &lt;user_id&gt; [days]", context)
             return
         days = max(1, days)
         until = await db.add_premium_seconds(uid, days * DAY_SECONDS)
@@ -5470,7 +5470,7 @@ async def forcechdebug(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await _send_emoji_text(update.effective_chat.id, "🚫 Access denied. (Admin/Owner only)", context)
         return
     if not context.args:
-        await _send_emoji_text(update.effective_chat.id, "ℹ️ Usage: /forcechdebug <user_id>", context)
+        await _send_emoji_text(update.effective_chat.id, "ℹ️ Usage: /forcechdebug &lt;user_id&gt;", context)
         return
     try:
         uid = int(context.args[0])
@@ -5652,7 +5652,7 @@ async def setcaption(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     if not text:
         await _send_emoji_text(
             update.effective_chat.id,
-            "ℹ️ Usage: /setcaption <text> (or reply to a text message)\n"
+            "ℹ️ Usage: /setcaption &lt;text&gt; (or reply to a text message)\n"
             "HTML styles supported, e.g. `<b>bold</b> <i>italic</i> <code>code</code>`",
             context,
         )
@@ -5713,7 +5713,7 @@ async def setstartimg(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             "🖼️ Start Image\n\n"
             "Set an image URL that will be shown with `/start` message.\n\n"
             "✅ Usage:\n"
-            "• /setstartimg <image_url>\n"
+            "• /setstartimg &lt;image_url&gt;\n"
             "• /setstartimg off",
             context,
         )
@@ -5798,7 +5798,7 @@ async def getemojiid(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         "✅ Custom Emoji IDs Found\n\n"
         f"{out}\n\n"
         "Set for UI:\n"
-        "• /setuitemoji <name> <custom_emoji_id>\n"
+        "• /setuitemoji &lt;name&gt; &lt;custom_emoji_id&gt;\n"
         "Example: /setuitemoji lock 54545454545454545",
         context,
     )
@@ -5818,8 +5818,8 @@ async def setuitemoji(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             update.effective_chat.id,
             "🧩 UI Emoji Settings\n\n"
             "✅ Usage:\n"
-            "• /setuitemoji <name> <custom_emoji_id>\n"
-            "• /setuitemoji <name> off\n\n"
+            "• /setuitemoji &lt;name&gt; &lt;custom_emoji_id&gt;\n"
+            "• /setuitemoji &lt;name&gt; off\n\n"
             "Example:\n"
             "• /setuitemoji lock 54545454545454545",
             context,
@@ -5832,7 +5832,7 @@ async def setuitemoji(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         return
 
     if len(context.args) < 2:
-        await _send_emoji_text(update.effective_chat.id, "ℹ️ Missing value. Use: /setuitemoji <name> <custom_emoji_id|off>", context)
+        await _send_emoji_text(update.effective_chat.id, "ℹ️ Missing value. Use: /setuitemoji &lt;name&gt; &lt;custom_emoji_id|off&gt;", context)
         return
 
     val = context.args[1].strip()
@@ -6060,8 +6060,8 @@ async def setpremiumch(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     """Admin command to manage premium content channels shown in approval messages.
 
     Usage:
-      /setpremiumch add <name> <link>   -- channel add karo
-      /setpremiumch remove <name>       -- channel remove karo
+      /setpremiumch add &lt;name&gt; &lt;link&gt;   -- channel add karo
+      /setpremiumch remove &lt;name&gt;       -- channel remove karo
       /setpremiumch list                -- list dekho
       /setpremiumch clear               -- sab clear
     """
@@ -6078,8 +6078,8 @@ async def setpremiumch(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             update.effective_chat.id,
             "ℹ️ [b]Premium Channels Manager[/b]\n\n"
             "Usage:\n"
-            "• [c]/setpremiumch add <name> <link>[/c]\n"
-            "• [c]/setpremiumch remove <name>[/c]\n"
+            "• [c]/setpremiumch add &lt;name&gt; &lt;link&gt;[/c]\n"
+            "• [c]/setpremiumch remove &lt;name&gt;[/c]\n"
             "• [c]/setpremiumch list[/c]\n"
             "• [c]/setpremiumch clear[/c]\n\n"
             "Example:\n"
@@ -6117,7 +6117,7 @@ async def setpremiumch(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         if len(args) < 3:
             await _send_emoji_text(
                 update.effective_chat.id,
-                "❌ Format: [c]/setpremiumch add <name> <link>[/c]",
+                "❌ Format: [c]/setpremiumch add &lt;name&gt; &lt;link&gt;[/c]",
                 context,
             )
             return
@@ -6144,7 +6144,7 @@ async def setpremiumch(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         if len(args) < 2:
             await _send_emoji_text(
                 update.effective_chat.id,
-                "❌ Format: [c]/setpremiumch remove <name>[/c]",
+                "❌ Format: [c]/setpremiumch remove &lt;name&gt;[/c]",
                 context,
             )
             return
