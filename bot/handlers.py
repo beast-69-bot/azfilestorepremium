@@ -1455,6 +1455,18 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     code = _normalize_start_code(code)
     if not code:
         db: Database = context.application.bot_data["db"]
+        is_sub = context.application.bot_data.get("is_sub_bot", False)
+        if is_sub:
+            formatted_text = (
+                "🤖 <b>ᴡᴇʟᴄᴏᴍᴇ ᴛᴏ ꜰɪʟᴇ ꜱᴛᴏʀᴇ ʙᴏᴛ</b>\n"
+                "━━━━━━━━━━━━━━━━━━\n\n"
+                "👋 Use deep-links to access files securely.\n"
+                "If you are the owner, send files/media to generate sharing links.\n\n"
+                "✨ <i>Fast & Secure File Distribution</i>"
+            )
+            await _send_emoji_text(update.effective_chat.id, text=formatted_text, context=context)
+            return
+
         img_url = await db.get_setting(SETTINGS_START_IMG_URL)
         raw_text = _welcome_text()
         formatted_text = await _format_custom_emojis_html(raw_text, context)
