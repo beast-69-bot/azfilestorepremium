@@ -168,14 +168,7 @@ _ORIGINAL_BUTTON_INIT = InlineKeyboardButton.__init__
 def _wrapped_button_init(self, text: str, *args, **kwargs):
     t_lower = text.lower()
     
-    style = kwargs.get("style")
-    if style is None:
-        if any(w in t_lower for w in ["save", "confirm", "start", "enable", "activate", "upload", "resume", "approve", "publish", "join", "recheck", "submit", "accept"]):
-            kwargs["style"] = "success"
-        elif any(w in t_lower for w in ["delete", "remove", "stop", "disable", "cancel", "reset", "logout", "clear", "deactivate"]):
-            kwargs["style"] = "danger"
-        elif any(w in t_lower for w in ["home", "setting", "continue", "next", "open", "dashboard", "manage", "menu", "back"]):
-            kwargs["style"] = "primary"
+    kwargs.pop("style", None)
             
     emoji_map = {
         "settings": "⚙️",
@@ -1555,7 +1548,7 @@ async def _deliver_by_code(update: Update, context: ContextTypes.DEFAULT_TYPE, c
                 chat.id,
                 "⭐ [b]Premium Required[/b]\n\n"
                 "This link is for premium users only.\n"
-                "• Redeem token: [c]/redeem <token>[/c]\n"
+                "• Redeem token: [c]/redeem &lt;token&gt;[/c]\n"
                 "• Plan buy karo: [c]/pay[/c]\n"
                 "• Access this link in 1 TG Star ⭐",
                 context,
@@ -2742,7 +2735,7 @@ async def redeem(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.effective_chat or not update.effective_user:
         return
     if not context.args:
-        await _send_emoji_text(update.effective_chat.id, "ℹ️ Usage: /redeem <token>", context)
+        await _send_emoji_text(update.effective_chat.id, "ℹ️ Usage: /redeem &lt;token&gt;", context)
         return
     token = context.args[0].strip()
     db: Database = context.application.bot_data["db"]
