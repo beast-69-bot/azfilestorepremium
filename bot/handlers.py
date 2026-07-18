@@ -5324,7 +5324,6 @@ async def bsettings_misc_input(update: Update, context: ContextTypes.DEFAULT_TYP
                 update.effective_chat.id,
                 "❌ Format invalid. Send: <code>&lt;Name&gt; &lt;Link&gt;</code>\nExample: <code>VIP_Channel https://t.me/joinlink</code>",
                 context,
-                parse_mode="HTML"
             )
             return
         name = parts[0]
